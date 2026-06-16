@@ -64,25 +64,45 @@ public struct ConfigLine: Sendable, Equatable {
 public struct ConfigFile: Sendable, Equatable {
     /// The path as referenced (may be a symlink or a relative include).
     public let path: String
-    /// The symlink-resolved canonical path (the inode the writer must edit, R20).
+    /// The symlink-resolved canonical path (the real file the writer edits, R20).
     public let resolvedPath: String
     public var lines: [ConfigLine]
     /// "\n" or "\r\n", preserved for byte-exact round-trips (R23).
     public let lineEnding: String
     /// Whether the file ended with a trailing newline (R23).
     public let hasTrailingNewline: Bool
+    /// Whether the file began with a UTF-8 BOM, re-emitted on serialize (R23).
+    public let hasBOM: Bool
+    /// On-disk identity captured at read time; nil for in-memory files. The
+    /// writer uses this to detect external changes before overwriting (R22).
+    public var identity: FileIdentity?
 
-    public init(path: String, resolvedPath: String, lines: [ConfigLine], lineEnding: String, hasTrailingNewline: Bool) {
+    public init(
+        path: String,
+        resolvedPath: String,
+        lines: [ConfigLine],
+        lineEnding: String,
+        hasTrailingNewline: Bool,
+        hasBOM: Bool = false,
+        identity: FileIdentity? = nil
+    ) {
         self.path = path
         self.resolvedPath = resolvedPath
         self.lines = lines
         self.lineEnding = lineEnding
         self.hasTrailingNewline = hasTrailingNewline
+        self.hasBOM = hasBOM
+        self.identity = identity
     }
 
-    /// Parse file text into classified lines, detecting the line ending and
-    /// trailing-newline state so the result can be re-emitted byte-for-byte.
-    public static func parse(text: String, path: String, resolvedPath: String? = nil) -> ConfigFile {
+    private static let bom = "\u{FEFF}"
+
+    /// Parse file text into classified lines, detecting the BOM, line ending,
+    /// and trailing-newline state so the result can be re-emitted byte-for-byte.
+    public static func parse(text rawText: String, path: String, resolvedPath: String? = nil) -> ConfigFile {
+        let hasBOM = rawText.hasPrefix(bom)
+        let text = hasBOM ? String(rawText.dropFirst()) : rawText
+
         let lineEnding = text.contains("\r\n") ? "\r\n" : "\n"
         let hasTrailing = text.hasSuffix(lineEnding) || (lineEnding == "\n" && text.hasSuffix("\n"))
 
@@ -101,7 +121,8 @@ public struct ConfigFile: Sendable, Equatable {
             resolvedPath: resolvedPath ?? path,
             lines: lines,
             lineEnding: lineEnding,
-            hasTrailingNewline: hasTrailing
+            hasTrailingNewline: hasTrailing,
+            hasBOM: hasBOM
         )
     }
 
@@ -110,7 +131,21 @@ public struct ConfigFile: Sendable, Equatable {
     public func serialized() -> String {
         var out = lines.map(\.raw).joined(separator: lineEnding)
         if hasTrailingNewline { out += lineEnding }
+        if hasBOM { out = Self.bom + out }
         return out
+    }
+
+    /// A copy with the line list replaced (used by the writer).
+    public func replacingLines(_ newLines: [ConfigLine]) -> ConfigFile {
+        ConfigFile(
+            path: path,
+            resolvedPath: resolvedPath,
+            lines: newLines,
+            lineEnding: lineEnding,
+            hasTrailingNewline: hasTrailingNewline,
+            hasBOM: hasBOM,
+            identity: identity
+        )
     }
 
     /// All setting lines for a key, in file order (additive keys yield many).

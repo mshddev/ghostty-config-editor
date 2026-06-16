@@ -82,6 +82,10 @@ public final class AppModel {
                 merged = reader.merge(model: empty, catalog: catalog)
                 configMissing = true
             }
+            // Crash recovery: clear any temp left by a prior interrupted write.
+            if !configMissing {
+                ConfigWriter().sweepStaleTempFiles(inDirectoryOf: merged.model.primary.resolvedPath)
+            }
             browser = CatalogBrowser(merged: merged, catalog: catalog)
             contentState = .loaded
             lintReport = await ConfigLinter().analyze(

@@ -156,8 +156,13 @@ public struct ConfigReader: Sendable {
         guard let data = fileManager.contents(atPath: path) else {
             throw ConfigReadError.unreadable(path: path)
         }
+        let resolved = canonicalPath(path)
         let text = String(decoding: data, as: UTF8.self)
-        return ConfigFile.parse(text: text, path: path, resolvedPath: canonicalPath(path))
+        var file = ConfigFile.parse(text: text, path: path, resolvedPath: resolved)
+        // Capture the read-time identity stamp so the writer can detect external
+        // changes and preserve permissions (R22, R23).
+        file.identity = FileIdentity.capture(path: resolved, fileManager: fileManager)
+        return file
     }
 
     /// Resolve a `config-file` directive to an absolute path. Handles the `?`
