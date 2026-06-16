@@ -1,0 +1,47 @@
+Andale Mono
+  Andale Mono
+
+Courier New
+  Courier New
+  Courier New Bold
+  Courier New Bold Italic
+  Courier New Italic
+
+Fira Code
+  Fira Code Bold
+  Fira Code Light
+  Fira Code Medium
+  Fira Code Regular
+  Fira Code Retina
+  Fira Code SemiBold
+
+Lantinghei TC
+  Lantinghei TC Demibold
+  Lantinghei TC Extralight
+  Lantinghei TC Heavy
+
+Menlo
+  Menlo Bold
+  Menlo Bold Italic
+  Menlo Italic
+  Menlo Regular
+
+MesloLGS NF
+  MesloLGS NF Bold
+  MesloLGS NF Bold Italic
+  MesloLGS NF Italic
+  MesloLGS NF Regular
+
+Monaco
+  Monaco
+
+Osaka
+  Osaka-Mono
+
+PCMyungjo
+  PCMyungjo Regular
+
+PT Mono
+  PT Mono
+  PT Mono Bold
+
