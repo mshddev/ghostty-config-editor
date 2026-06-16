@@ -15,6 +15,22 @@ struct SidebarView: View {
                     .tag(SidebarSelection.customized)
                 Label("Not Using Yet", systemImage: "sparkles")
                     .tag(SidebarSelection.unused)
+                Label {
+                    HStack {
+                        Text("Problems")
+                        if model.problemCount > 0 {
+                            Spacer()
+                            Text("\(model.problemCount)")
+                                .font(.caption.monospacedDigit())
+                                .padding(.horizontal, 6).padding(.vertical, 1)
+                                .background(.orange, in: Capsule())
+                                .foregroundStyle(.white)
+                        }
+                    }
+                } icon: {
+                    Image(systemName: "exclamationmark.triangle")
+                }
+                .tag(SidebarSelection.problems)
             }
             Section("Categories") {
                 ForEach(model.categories, id: \.self) { category in

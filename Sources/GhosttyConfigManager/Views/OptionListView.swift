@@ -33,6 +33,7 @@ struct OptionListView: View {
         case .category(let c): return c
         case .customized: return "Customized"
         case .unused: return "Not Using Yet"
+        case .problems: return "Problems"
         case .all, .none: return "All Options"
         }
     }

@@ -50,9 +50,19 @@ struct RootView: View {
         NavigationSplitView {
             SidebarView()
         } content: {
-            OptionListView()
+            if model.selection == .problems {
+                ProblemsView()
+            } else {
+                OptionListView()
+            }
         } detail: {
-            OptionDetailView()
+            if model.selection == .problems {
+                ContentUnavailableView("Config health",
+                                       systemImage: "stethoscope",
+                                       description: Text("Validation runs against your live config via `ghostty +validate-config`."))
+            } else {
+                OptionDetailView()
+            }
         }
         .toolbar {
             ToolbarItem(placement: .status) {

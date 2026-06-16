@@ -7,6 +7,7 @@ public enum SidebarSelection: Hashable {
     case all
     case customized
     case unused
+    case problems
     case category(String)
 }
 
@@ -35,6 +36,8 @@ public final class AppModel {
     public private(set) var environmentState: EnvironmentState = .loading
     public private(set) var contentState: ContentState = .idle
     public private(set) var browser: CatalogBrowser?
+    /// Validation + footgun report for the loaded config (R15, R16).
+    public private(set) var lintReport: LintReport?
     /// True when no config file exists yet — discovery still works against an
     /// all-unset view (R6, first-launch state).
     public private(set) var configMissing = false
@@ -81,9 +84,22 @@ public final class AppModel {
             }
             browser = CatalogBrowser(merged: merged, catalog: catalog)
             contentState = .loaded
+            lintReport = await ConfigLinter().analyze(
+                model: merged.model,
+                cli: configMissing ? nil : environment.cli
+            )
         } catch {
             contentState = .failed(error.localizedDescription)
         }
+    }
+
+    /// Count of actionable problems (validation errors + non-info footguns).
+    public var problemCount: Int {
+        guard let report = lintReport else { return 0 }
+        let validationErrors = (report.validation?.isValid == false)
+            ? (report.validation?.messages.count ?? 0) : 0
+        let footguns = report.findings.filter { $0.severity != .info }.count
+        return validationErrors + footguns
     }
 
     // MARK: - Derived view data
@@ -106,6 +122,8 @@ public final class AppModel {
             return browser.customizedOptions
         case .unused:
             return browser.unusedOptions
+        case .problems:
+            return [] // rendered by ProblemsView, not the option list
         case .all, .none:
             return browser.merged.options.sorted { $0.option.name < $1.option.name }
         }
