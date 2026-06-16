@@ -255,6 +255,61 @@ final class ConfigWriterTests: XCTestCase {
         XCTAssertEqual(try String(contentsOf: path, encoding: .utf8), "font-size = 16\n", "config untouched")
     }
 
+    // MARK: - U7 apply flow
+
+    func testChangeScopeDetectedFromDocs() throws {
+        let catalog = CatalogParser.parse(try Fixture.text("show-config-default-docs", "txt"))
+        // "only applies to new windows" → newSurface (AE5).
+        let titlebar = try XCTUnwrap(catalog.option(named: "macos-titlebar-style"))
+        XCTAssertEqual(titlebar.changeScope, .newSurface)
+        XCTAssertNotNil(titlebar.applyNotice)
+        // "requires restarting Ghostty completely" → restart.
+        XCTAssertEqual(catalog.option(named: "background-opacity")?.changeScope, .restart)
+    }
+
+    func testGitContextDetectsWorkingTree() throws {
+        let dir = try tempDir()
+        try write("font-size = 16\n", dir, "config")
+        XCTAssertFalse(GitContext.isInsideWorkingTree(path: dir.appendingPathComponent("config").path))
+
+        try FileManager.default.createDirectory(at: dir.appendingPathComponent(".git"), withIntermediateDirectories: true)
+        XCTAssertTrue(GitContext.isInsideWorkingTree(path: dir.appendingPathComponent("config").path),
+                      "a file under a dir containing .git is in a working tree")
+    }
+
+    func testValidateAndApplyRejectsInvalidWithoutWriting() async throws {
+        guard let binary = BinaryLocator.locateOnSystem() else { throw XCTSkip("Ghostty not installed") }
+        let dir = try tempDir()
+        let path = dir.appendingPathComponent("config")
+        try write("font-size = 16\n", dir, "config")
+        let m = try ConfigReader().readModel(primaryPath: path.path)
+
+        do {
+            _ = try await makeWriter().validateAndApply(
+                optionName: "font-size", values: ["definitely-not-a-number"],
+                isRepeatable: false, in: m, cli: GhosttyCLI(binaryPath: binary))
+            XCTFail("expected validation to reject the bad value")
+        } catch ConfigWriteError.validationFailed(let messages) {
+            XCTAssertTrue(messages.contains { $0.key == "font-size" })
+        }
+        // The real file was never touched.
+        XCTAssertEqual(try String(contentsOf: path, encoding: .utf8), "font-size = 16\n")
+    }
+
+    func testValidateAndApplyRoundTripsValidChange() async throws {
+        guard let binary = BinaryLocator.locateOnSystem() else { throw XCTSkip("Ghostty not installed") }
+        let dir = try tempDir()
+        let path = dir.appendingPathComponent("config")
+        try write("font-size = 16\n", dir, "config")
+        let m = try ConfigReader().readModel(primaryPath: path.path)
+
+        try await makeWriter().validateAndApply(
+            optionName: "font-size", values: ["18"],
+            isRepeatable: false, in: m, cli: GhosttyCLI(binaryPath: binary))
+
+        XCTAssertEqual(try String(contentsOf: path, encoding: .utf8), "font-size = 18\n")
+    }
+
     // MARK: - Helpers
 
     /// A writer whose backups go to a fresh temp dir outside any config dir.

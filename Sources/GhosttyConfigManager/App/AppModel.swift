@@ -33,6 +33,16 @@ public final class AppModel {
         case failed(String)
     }
 
+    /// Lifecycle of an in-flight apply (R17).
+    public enum ApplyState: Equatable {
+        case idle
+        case applying
+        /// Saved successfully. `notice` carries a new-surface/restart hint (AE5);
+        /// `gitTracked` is true when the file lives in a git working tree (U7).
+        case succeeded(notice: String?, gitTracked: Bool)
+        case failed(String)
+    }
+
     public private(set) var environmentState: EnvironmentState = .loading
     public private(set) var contentState: ContentState = .idle
     public private(set) var browser: CatalogBrowser?
@@ -41,13 +51,20 @@ public final class AppModel {
     /// True when no config file exists yet — discovery still works against an
     /// all-unset view (R6, first-launch state).
     public private(set) var configMissing = false
+    public private(set) var applyState: ApplyState = .idle
 
     public var binaryOverride: String?
     public var selection: SidebarSelection? = .all
     public var query: String = ""
     public var selectedOptionName: String?
 
+    private var environment: GhosttyEnvironment?
+    private var catalog: OptionCatalog?
+    private var lastReceipt: WriteReceipt?
+
     public init() {}
+
+    public var canUndo: Bool { lastReceipt?.previousText != nil }
 
     /// Locate Ghostty, then load the catalog and merge the user's config.
     public func bootstrap() async {
@@ -55,6 +72,7 @@ public final class AppModel {
         contentState = .idle
         do {
             let environment = try await GhosttyEnvironment.discover(userOverride: binaryOverride)
+            self.environment = environment
             environmentState = .ready(environment)
             await loadContent(environment)
         } catch GhosttyCLIError.binaryNotFound {
@@ -71,30 +89,86 @@ public final class AppModel {
         do {
             let provider = CatalogProvider.live(environment)
             let catalog = try await provider.catalog(forVersion: environment.version)
-            let reader = ConfigReader()
-            let merged: MergedConfig
-            do {
-                merged = try reader.read(catalog: catalog)
-                configMissing = false
-            } catch ConfigReadError.notFound {
-                // No config yet: present an all-unset view so discovery works.
-                let empty = ConfigModel(primary: ConfigFile.parse(text: "", path: ""))
-                merged = reader.merge(model: empty, catalog: catalog)
-                configMissing = true
-            }
-            // Crash recovery: clear any temp left by a prior interrupted write.
-            if !configMissing {
-                ConfigWriter().sweepStaleTempFiles(inDirectoryOf: merged.model.primary.resolvedPath)
-            }
-            browser = CatalogBrowser(merged: merged, catalog: catalog)
+            self.catalog = catalog
+            await refreshConfig(environment: environment, catalog: catalog)
             contentState = .loaded
-            lintReport = await ConfigLinter().analyze(
-                model: merged.model,
-                cli: configMissing ? nil : environment.cli
-            )
         } catch {
             contentState = .failed(error.localizedDescription)
         }
+    }
+
+    /// Re-read the config from disk, rebuild the browser, and re-run validation.
+    /// Used on first load and after every apply/undo so the UI reflects disk.
+    private func refreshConfig(environment: GhosttyEnvironment, catalog: OptionCatalog) async {
+        let reader = ConfigReader()
+        let merged: MergedConfig
+        do {
+            merged = try reader.read(catalog: catalog)
+            configMissing = false
+        } catch ConfigReadError.notFound {
+            let empty = ConfigModel(primary: ConfigFile.parse(text: "", path: ""))
+            merged = reader.merge(model: empty, catalog: catalog)
+            configMissing = true
+        } catch {
+            merged = reader.merge(model: ConfigModel(primary: ConfigFile.parse(text: "", path: "")), catalog: catalog)
+            configMissing = true
+        }
+        if !configMissing {
+            // Crash recovery: clear any temp left by a prior interrupted write.
+            ConfigWriter().sweepStaleTempFiles(inDirectoryOf: merged.model.primary.resolvedPath)
+        }
+        browser = CatalogBrowser(merged: merged, catalog: catalog)
+        lintReport = await ConfigLinter().analyze(
+            model: merged.model,
+            cli: configMissing ? nil : environment.cli
+        )
+    }
+
+    // MARK: - Apply (U7)
+
+    /// Validate a proposed change against the live binary, write it safely (U6),
+    /// then reload so the UI reflects disk. Surfaces explicit feedback (R17).
+    public func applyEdit(option: MergedOption, values: [String]) async {
+        guard let environment, let browser else { return }
+        applyState = .applying
+        let writer = ConfigWriter()
+        do {
+            let receipt = try await writer.validateAndApply(
+                optionName: option.option.name,
+                values: values,
+                isRepeatable: option.option.isRepeatable,
+                in: browser.merged.model,
+                cli: environment.cli
+            )
+            lastReceipt = receipt
+            let gitTracked = GitContext.isInsideWorkingTree(path: receipt.resolvedPath)
+            if let catalog { await refreshConfig(environment: environment, catalog: catalog) }
+            applyState = .succeeded(notice: option.option.applyNotice, gitTracked: gitTracked)
+        } catch ConfigWriteError.validationFailed(let messages) {
+            applyState = .failed(messages.first?.message ?? "The change didn't validate.")
+        } catch ConfigWriteError.staleOnDisk {
+            applyState = .failed("This file changed on disk since it was read. Reload and try again.")
+        } catch {
+            applyState = .failed(error.localizedDescription)
+        }
+    }
+
+    /// Revert the last applied write (R10).
+    public func undoLastApply() async {
+        guard let environment, let catalog, let receipt = lastReceipt else { return }
+        applyState = .applying
+        do {
+            _ = try ConfigWriter().restore(from: receipt)
+            lastReceipt = nil
+            await refreshConfig(environment: environment, catalog: catalog)
+            applyState = .succeeded(notice: "Reverted to the previous value.", gitTracked: false)
+        } catch {
+            applyState = .failed(error.localizedDescription)
+        }
+    }
+
+    public func resetApplyState() {
+        applyState = .idle
     }
 
     /// Count of actionable problems (validation errors + non-info footguns).

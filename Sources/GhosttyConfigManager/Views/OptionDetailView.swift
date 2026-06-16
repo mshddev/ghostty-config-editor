@@ -29,6 +29,8 @@ struct OptionDetailView: View {
                 if !option.option.enumValues.isEmpty {
                     enumSection(option)
                 }
+                Divider()
+                editorSection(option)
                 docSection(option)
                 Spacer(minLength: 0)
             }
@@ -101,6 +103,21 @@ struct OptionDetailView: View {
         }
     }
 
+    @ViewBuilder
+    private func editorSection(_ option: MergedOption) -> some View {
+        if option.option.isRepeatable {
+            GroupBox {
+                Label("This option can repeat (\(option.userValues.count) currently set). In-app list editing is coming; for now use Copy snippet or Reveal in editor.",
+                      systemImage: "list.bullet")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+            }
+        } else {
+            OptionEditorView(option: option)
+        }
+    }
+
     private func docSection(_ option: MergedOption) -> some View {
         VStack(alignment: .leading, spacing: 6) {
             Text("Documentation").font(.headline)
@@ -137,6 +154,115 @@ struct OptionDetailView: View {
         Task {
             try? await Task.sleep(for: .seconds(1.5))
             copied = false
+        }
+    }
+}
+
+// MARK: - Editor (U7)
+
+/// Type-appropriate editing controls for a scalar option, with apply feedback
+/// (R13, R17). Validates against the live binary before writing (via AppModel).
+struct OptionEditorView: View {
+    @Environment(AppModel.self) private var model
+    let option: MergedOption
+    @State private var draft: String = ""
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            Text("Edit").font(.headline)
+            control
+            HStack(spacing: 12) {
+                Button("Apply") {
+                    Task { await model.applyEdit(option: option, values: [draft]) }
+                }
+                .keyboardShortcut(.return, modifiers: [])
+                .disabled(!isDirty || isApplying)
+
+                if isDirty {
+                    Button("Reset") { draft = currentValue }
+                        .buttonStyle(.link)
+                }
+                Spacer()
+            }
+            feedback
+        }
+        .padding(.vertical, 2)
+        .onAppear { draft = currentValue }
+        .onChange(of: option.id) { _, _ in
+            draft = currentValue
+            model.resetApplyState()
+        }
+    }
+
+    private var currentValue: String {
+        option.isSet ? (option.userValues.first ?? "") : option.option.defaultValue
+    }
+    private var isDirty: Bool { draft != currentValue }
+    private var isApplying: Bool { model.applyState == .applying }
+
+    @ViewBuilder
+    private var control: some View {
+        switch option.option.valueType {
+        case .boolean:
+            Toggle(isOn: boolBinding) { Text(draft == "true" ? "Enabled" : "Disabled") }
+                .toggleStyle(.switch)
+        case .enumeration:
+            Picker("Value", selection: $draft) {
+                ForEach(option.option.enumValues, id: \.self) { Text($0).tag($0) }
+            }
+            .pickerStyle(.menu)
+            .labelsHidden()
+            .fixedSize()
+        case .number:
+            HStack(spacing: 8) {
+                TextField("value", text: $draft)
+                    .textFieldStyle(.roundedBorder)
+                    .frame(width: 120)
+                Stepper("", value: numberBinding, step: 1).labelsHidden()
+            }
+        default:
+            TextField("value", text: $draft)
+                .textFieldStyle(.roundedBorder)
+                .frame(maxWidth: 320)
+        }
+    }
+
+    private var boolBinding: Binding<Bool> {
+        Binding(get: { draft == "true" }, set: { draft = $0 ? "true" : "false" })
+    }
+
+    private var numberBinding: Binding<Double> {
+        Binding(
+            get: { Double(draft) ?? 0 },
+            set: { value in
+                draft = value.truncatingRemainder(dividingBy: 1) == 0 ? String(Int(value)) : String(value)
+            }
+        )
+    }
+
+    @ViewBuilder
+    private var feedback: some View {
+        switch model.applyState {
+        case .idle:
+            EmptyView()
+        case .applying:
+            HStack(spacing: 6) { ProgressView().controlSize(.small); Text("Validating and saving…").font(.caption) }
+        case .succeeded(let notice, let gitTracked):
+            VStack(alignment: .leading, spacing: 3) {
+                Label("Saved", systemImage: "checkmark.circle.fill").foregroundStyle(.green).font(.callout)
+                if let notice { Text(notice).font(.caption).foregroundStyle(.secondary) }
+                if gitTracked {
+                    Text("This file is git-tracked — commit it in your dotfiles repo.")
+                        .font(.caption).foregroundStyle(.secondary)
+                }
+                if model.canUndo {
+                    Button("Undo") { Task { await model.undoLastApply() } }.buttonStyle(.link)
+                }
+            }
+        case .failed(let message):
+            Label(message, systemImage: "xmark.octagon.fill")
+                .foregroundStyle(.red).font(.caption)
+                .fixedSize(horizontal: false, vertical: true)
         }
     }
 }

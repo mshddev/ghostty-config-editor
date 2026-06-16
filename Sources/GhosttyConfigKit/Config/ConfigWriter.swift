@@ -3,6 +3,8 @@ import Foundation
 public enum ConfigWriteError: Error, Equatable, Sendable {
     /// The file changed on disk since it was read — refuse rather than clobber (R22).
     case staleOnDisk(path: String)
+    /// The proposed config failed `+validate-config`; nothing was written (R15).
+    case validationFailed([ValidationMessage])
     case backupFailed(String)
     case stageFailed(String)
     case renameFailed(String)
@@ -119,6 +121,40 @@ public struct ConfigWriter: Sendable {
     public func apply(optionName: String, values: [String], isRepeatable: Bool, in model: ConfigModel) throws -> WriteReceipt {
         let edited = editedFile(setting: optionName, to: values, isRepeatable: isRepeatable, in: model)
         return try commit(edited)
+    }
+
+    /// Validate the proposed change against the live binary BEFORE writing, then
+    /// commit only if it's valid (R15, R17). Throws `.validationFailed` without
+    /// touching the real file when the result wouldn't validate.
+    @discardableResult
+    public func validateAndApply(
+        optionName: String,
+        values: [String],
+        isRepeatable: Bool,
+        in model: ConfigModel,
+        cli: GhosttyCLI?,
+        linter: ConfigLinter = ConfigLinter()
+    ) async throws -> WriteReceipt {
+        let edited = editedFile(setting: optionName, to: values, isRepeatable: isRepeatable, in: model)
+        if let cli {
+            let validation = try await validatePreview(edited, cli: cli, linter: linter)
+            guard validation.isValid else {
+                throw ConfigWriteError.validationFailed(validation.messages)
+            }
+        }
+        return try commit(edited)
+    }
+
+    /// Write the proposed content to a throwaway temp file and validate it,
+    /// leaving the real config untouched.
+    private func validatePreview(_ file: ConfigFile, cli: GhosttyCLI, linter: ConfigLinter) async throws -> ValidationResult {
+        let dir = URL(fileURLWithPath: NSTemporaryDirectory())
+            .appendingPathComponent("gcm-validate-\(UUID().uuidString)")
+        try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: dir) }
+        let temp = dir.appendingPathComponent("config")
+        try Data(file.serialized().utf8).write(to: temp)
+        return try await linter.validate(cli: cli, configFile: temp.path)
     }
 
     /// Write `newFile` to its resolved real path with the full safety contract.

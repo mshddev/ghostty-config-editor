@@ -48,6 +48,39 @@ public struct CatalogOption: Sendable, Hashable, Identifiable, Codable {
     }
 }
 
+public extension CatalogOption {
+    /// When a change to this option takes effect, inferred from its docs (R17).
+    enum ChangeScope: String, Sendable, Equatable {
+        case live        // applies immediately on reload
+        case newSurface  // only applies to new terminals/windows/tabs
+        case restart     // requires fully restarting Ghostty
+    }
+
+    var changeScope: ChangeScope {
+        let d = documentation.lowercased()
+        if d.contains("requires restart") || d.contains("requires restarting")
+            || d.contains("fully restart") || d.contains("full restart")
+            || d.contains("full application restart") {
+            return .restart
+        }
+        if d.contains("only applies to new") || d.contains("new windows")
+            || d.contains("new surface") || d.contains("new terminal")
+            || d.contains("only takes effect for new") {
+            return .newSurface
+        }
+        return .live
+    }
+
+    /// A human-facing notice for non-live changes (AE5), or nil when live.
+    var applyNotice: String? {
+        switch changeScope {
+        case .live: return nil
+        case .newSurface: return "This affects new terminals, not the current session."
+        case .restart: return "This takes effect after you fully restart Ghostty."
+        }
+    }
+}
+
 /// The full set of options for a given Ghostty version (R1).
 public struct OptionCatalog: Sendable, Codable {
     public let options: [CatalogOption]
