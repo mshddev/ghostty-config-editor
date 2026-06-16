@@ -38,6 +38,16 @@ final class ConfigWriterTests: XCTestCase {
                        "palette = 0=#000000\npalette = 2=#222222\nfont-size = 16\n")
     }
 
+    func testPaletteInteriorReconcileChangesOnlyThatLine() {
+        // Same count, one interior value changes → only that line's raw differs.
+        let cfg = "palette = 0=#000000\npalette = 1=#111111\npalette = 2=#222222\n"
+        let edited = writer.editedFile(setting: "palette",
+                                       to: ["0=#000000", "1=#ABCDEF", "2=#222222"],
+                                       isRepeatable: true, in: model(cfg))
+        XCTAssertEqual(edited.serialized(),
+                       "palette = 0=#000000\npalette = 1=#ABCDEF\npalette = 2=#222222\n")
+    }
+
     func testPaletteAddAppendsAfterExistingBlock() {
         let cfg = "palette = 0=#000000\nfont-size = 16\n"
         let edited = writer.editedFile(setting: "palette",
@@ -239,6 +249,53 @@ final class ConfigWriterTests: XCTestCase {
 
         XCTAssertTrue(try w.restore(from: receipt))
         XCTAssertEqual(try String(contentsOf: path, encoding: .utf8), "font-size = 16\n")
+    }
+
+    func testRestoreBacksUpCurrentBytesBeforeReverting() throws {
+        let dir = try tempDir()
+        let backupDir = try tempDir()
+        let path = dir.appendingPathComponent("config")
+        try write("font-size = 16\n", dir, "config")
+        let m = try ConfigReader().readModel(primaryPath: path.path)
+        let w = ConfigWriter(backupDirectory: backupDir)
+
+        let receipt = try w.apply(optionName: "font-size", values: ["18"], isRepeatable: false, in: m)
+        // An external edit lands AFTER the apply.
+        try "font-size = 42\n".write(to: path, atomically: true, encoding: .utf8)
+
+        try w.restore(from: receipt) // reverts to 16, but must not lose the 42 forever
+        XCTAssertEqual(try String(contentsOf: path, encoding: .utf8), "font-size = 16\n")
+
+        // The pre-revert bytes (42) were backed up, so the undo is itself recoverable.
+        let folder = backupDir.appendingPathComponent(ConfigWriter.backupFolderName(for: m.primary.resolvedPath))
+        let backups = try FileManager.default.contentsOfDirectory(atPath: folder.path)
+        let contents = try backups.map { try String(contentsOf: folder.appendingPathComponent($0), encoding: .utf8) }
+        XCTAssertTrue(contents.contains("font-size = 42\n"),
+                      "restore must back up the bytes it is about to overwrite")
+    }
+
+    func testPermissionsPreservedThroughRestore() throws {
+        let dir = try tempDir()
+        let backupDir = try tempDir()
+        let path = dir.appendingPathComponent("config")
+        try write("font-size = 16\n", dir, "config")
+        try FileManager.default.setAttributes([.posixPermissions: NSNumber(value: 0o600)], ofItemAtPath: path.path)
+        let m = try ConfigReader().readModel(primaryPath: path.path)
+        let w = ConfigWriter(backupDirectory: backupDir)
+
+        let receipt = try w.apply(optionName: "font-size", values: ["18"], isRepeatable: false, in: m)
+        try w.restore(from: receipt)
+
+        let perms = try FileManager.default.attributesOfItem(atPath: path.path)[.posixPermissions] as? NSNumber
+        XCTAssertEqual(perms?.uint16Value, 0o600, "restore must preserve 0600 (R23)")
+    }
+
+    func testBackupFolderNameIsDeterministic() {
+        // Stable across calls (and thus across launches) — never randomized.
+        XCTAssertEqual(ConfigWriter.backupFolderName(for: "/a/b/config"),
+                       ConfigWriter.backupFolderName(for: "/a/b/config"))
+        XCTAssertNotEqual(ConfigWriter.backupFolderName(for: "/a/b/config"),
+                          ConfigWriter.backupFolderName(for: "/a/c/config"))
     }
 
     func testCrashRecoverySweepsStaleTempsButLeavesConfig() throws {

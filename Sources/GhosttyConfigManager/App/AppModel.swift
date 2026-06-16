@@ -66,6 +66,7 @@ public final class AppModel {
     // Themes (U8)
     private var themeProvider: ThemeProvider?
     private var colorsInFlight: Set<String> = []
+    private var failedThemes: Set<String> = []
     public private(set) var themes: [ThemeRef] = []
     public private(set) var themeColors: [String: ThemeColors] = [:]
     public private(set) var fonts: [String] = []
@@ -113,12 +114,11 @@ public final class AppModel {
         do {
             merged = try reader.read(catalog: catalog)
             configMissing = false
-        } catch ConfigReadError.notFound {
-            let empty = ConfigModel(primary: ConfigFile.parse(text: "", path: ""))
-            merged = reader.merge(model: empty, catalog: catalog)
-            configMissing = true
         } catch {
-            merged = reader.merge(model: ConfigModel(primary: ConfigFile.parse(text: "", path: "")), catalog: catalog)
+            // No readable config yet: present an all-unset view, but point the
+            // empty model at the real primary path so a first edit creates the
+            // file in the right place (R6, first-launch state).
+            merged = reader.merge(model: Self.emptyModel(), catalog: catalog)
             configMissing = true
         }
         if !configMissing {
@@ -130,6 +130,14 @@ public final class AppModel {
             model: merged.model,
             cli: configMissing ? nil : environment.cli
         )
+    }
+
+    /// An empty config model targeting the real primary config path, so a
+    /// first-ever write lands at `~/.config/ghostty/config`.
+    private static func emptyModel() -> ConfigModel {
+        let path = ConfigReader.configDirectory()
+            .appendingPathComponent(ConfigReader.candidateFilenames.first ?? "config").path
+        return ConfigModel(primary: ConfigFile.parse(text: "", path: path, resolvedPath: ConfigReader.canonicalPath(path)))
     }
 
     // MARK: - Apply (U7)
@@ -199,12 +207,17 @@ public final class AppModel {
     public func ensureColors(for theme: ThemeRef) {
         guard themeColors[theme.name] == nil,
               !colorsInFlight.contains(theme.name),
+              !failedThemes.contains(theme.name), // don't re-fetch a known-bad file every redraw
               let themeProvider else { return }
         colorsInFlight.insert(theme.name)
         Task {
             let colors = try? await themeProvider.colors(for: theme)
             colorsInFlight.remove(theme.name)
-            if let colors { themeColors[theme.name] = colors }
+            if let colors {
+                themeColors[theme.name] = colors
+            } else {
+                failedThemes.insert(theme.name)
+            }
         }
     }
 

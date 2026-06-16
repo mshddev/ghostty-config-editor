@@ -40,7 +40,8 @@ public struct IntentMap: Sendable {
         var result: [String] = []
         var seen = Set<String>()
         for entry in entries where entry.phrases.contains(where: { phrase in
-            let p = phrase.lowercased()
+            let p = phrase.lowercased().trimmingCharacters(in: .whitespaces)
+            guard !p.isEmpty else { return false } // an empty phrase must not match everything
             return p.contains(q) || q.contains(p)
         }) {
             for option in entry.options where seen.insert(option).inserted {
@@ -117,7 +118,7 @@ public struct CatalogBrowser: Sendable {
     }
 
     public var categories: [String] {
-        OptionCatalog(options: merged.options.map(\.option), version: nil).categories
+        OptionCategorizer.orderedCategories(present: Set(merged.options.map(\.option.category)))
     }
 
     public func options(in category: String) -> [MergedOption] {

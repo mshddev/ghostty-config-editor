@@ -33,6 +33,36 @@ final class ConfigReaderTests: XCTestCase {
         XCTAssertEqual(withoutNL.serialized(), "a = 1")
     }
 
+    func testMixedLineEndingsClassifyEachSettingIndependently() {
+        // A file mixing LF and CRLF must still split every line, not fold one
+        // setting into another's value, and round-trip byte-for-byte.
+        let text = "font-family = Menlo\nfont-size = 16\r\ncursor-style = bar\r\n"
+        let file = ConfigFile.parse(text: text, path: "p")
+        XCTAssertEqual(file.serialized(), text, "mixed endings round-trip exactly")
+        XCTAssertEqual(file.settingLines(for: "font-family").first?.value, "Menlo")
+        XCTAssertEqual(file.settingLines(for: "font-size").first?.value, "16")
+        XCTAssertEqual(file.settingLines(for: "cursor-style").first?.value, "bar")
+    }
+
+    func testNonUTF8ConfigIsRefusedNotLossilyDecoded() throws {
+        let dir = try makeTempConfigDir()
+        // 0xFF 0xFE is invalid UTF-8.
+        let url = dir.appendingPathComponent("config")
+        try Data([0xFF, 0xFE, 0x66, 0x6F, 0x6F]).write(to: url)
+        XCTAssertThrowsError(try reader.readModel(primaryPath: url.path)) { error in
+            XCTAssertEqual(error as? ConfigReadError, .unreadable(path: url.path))
+        }
+    }
+
+    func testQuotedIncludePathResolves() throws {
+        let dir = try makeTempConfigDir()
+        try write("config-file = \"extra.conf\"\n", to: dir, "config")
+        try write("cursor-style = bar\n", to: dir, "extra.conf")
+        let model = try reader.readModel(primaryPath: dir.appendingPathComponent("config").path)
+        let merged = reader.merge(model: model, catalog: catalog)
+        XCTAssertEqual(merged.option(named: "cursor-style")?.userValues, ["bar"])
+    }
+
     func testCommentsBlanksAndUnknownLinesClassified() {
         let file = ConfigFile.parse(text: "# hi\n\nfont-size = 16\n@@@ junk", path: "p")
         XCTAssertEqual(file.lines.map(\.kind), [

@@ -14,12 +14,18 @@ struct ThemeBrowserView: View {
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
             } else {
                 List(model.themes) { theme in
-                    ThemeRow(theme: theme,
-                             colors: model.themeColors[theme.name],
-                             isCurrent: model.currentTheme == theme.name)
-                        .onAppear { model.ensureColors(for: theme) }
-                        .contentShape(Rectangle())
-                        .onTapGesture { Task { await model.applyTheme(theme.name) } }
+                    Button {
+                        Task { await model.applyTheme(theme.name) }
+                    } label: {
+                        ThemeRow(theme: theme,
+                                 colors: model.themeColors[theme.name],
+                                 isCurrent: model.currentTheme == theme.name)
+                    }
+                    .buttonStyle(.plain)
+                    .onAppear { model.ensureColors(for: theme) }
+                    .accessibilityElement(children: .combine)
+                    .accessibilityLabel(model.currentTheme == theme.name ? "\(theme.name), current theme" : theme.name)
+                    .accessibilityHint("Apply this theme")
                 }
             }
             if case .failed(let message) = model.applyState {
@@ -64,11 +70,12 @@ private struct ThemeRow: View {
                 Text(theme.source).font(.caption).foregroundStyle(.tertiary)
             }
             Spacer()
-            Button("Apply") { /* handled by row tap; explicit affordance */ }
-                .buttonStyle(.borderless)
-                .opacity(0) // keep layout; tap-to-apply is the gesture
+            Image(systemName: "chevron.right")
+                .font(.caption2)
+                .foregroundStyle(.tertiary)
         }
         .padding(.vertical, 3)
+        .contentShape(Rectangle())
     }
 
     @ViewBuilder
@@ -101,17 +108,23 @@ private struct ThemeRow: View {
 }
 
 extension Color {
-    /// Build a Color from a `#rrggbb` (or `#rgb`) hex string.
+    /// Build a Color from a hex string. Accepts an optional `#`/`0x` prefix and
+    /// 3- (rgb), 6- (rrggbb), or 8-digit (rrggbbaa) forms.
     init?(hex: String?) {
         guard var hex else { return nil }
-        hex = hex.trimmingCharacters(in: .whitespaces)
+        hex = hex.trimmingCharacters(in: .whitespaces).lowercased()
         if hex.hasPrefix("#") { hex.removeFirst() }
-        guard hex.count == 6 || hex.count == 3, let value = UInt64(
-            hex.count == 3 ? hex.map { "\($0)\($0)" }.joined() : hex, radix: 16
-        ) else { return nil }
-        let r = Double((value & 0xFF0000) >> 16) / 255
-        let g = Double((value & 0x00FF00) >> 8) / 255
-        let b = Double(value & 0x0000FF) / 255
-        self = Color(red: r, green: g, blue: b)
+        else if hex.hasPrefix("0x") { hex.removeFirst(2) }
+
+        let expanded = hex.count == 3 ? hex.map { "\($0)\($0)" }.joined() : hex
+        guard expanded.count == 6 || expanded.count == 8,
+              let value = UInt64(expanded, radix: 16) else { return nil }
+
+        let hasAlpha = expanded.count == 8
+        let r = Double((value >> (hasAlpha ? 24 : 16)) & 0xFF) / 255
+        let g = Double((value >> (hasAlpha ? 16 : 8)) & 0xFF) / 255
+        let b = Double((value >> (hasAlpha ? 8 : 0)) & 0xFF) / 255
+        let a = hasAlpha ? Double(value & 0xFF) / 255 : 1
+        self = Color(red: r, green: g, blue: b, opacity: a)
     }
 }

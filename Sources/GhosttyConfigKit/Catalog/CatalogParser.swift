@@ -57,7 +57,7 @@ public enum CatalogParser {
                 continue
             }
 
-            guard let (key, value) = parseKeyValueLine(line) else {
+            guard let (key, value) = ConfigLine.splitSetting(line) else {
                 // Tolerate garbled / unexpected lines (skip, never fatal).
                 continue
             }
@@ -95,24 +95,6 @@ public enum CatalogParser {
         return OptionCatalog(options: options, version: version)
     }
 
-    // MARK: - Line parsing
-
-    /// Split a `key = value` line. The separator is the first `=`; the value is
-    /// everything after it (with one leading separator space removed), preserving
-    /// any further `=` characters (e.g., `keybind = super+,=open_config`).
-    static func parseKeyValueLine(_ line: String) -> (key: String, value: String)? {
-        guard let eq = line.firstIndex(of: "=") else { return nil }
-        let key = line[line.startIndex..<eq].trimmingCharacters(in: .whitespaces)
-        guard !key.isEmpty, isValidOptionName(key) else { return nil }
-        var value = String(line[line.index(after: eq)...])
-        if value.hasPrefix(" ") { value.removeFirst() }
-        return (key, value)
-    }
-
-    private static func isValidOptionName(_ s: String) -> Bool {
-        s.allSatisfy { $0.isLetter || $0.isNumber || $0 == "-" || $0 == "." || $0 == "_" }
-    }
-
     // MARK: - Docs
 
     private static func stripCommentMarker(_ line: String) -> String {
@@ -128,28 +110,42 @@ public enum CatalogParser {
 
     // MARK: - Enum extraction
 
-    /// Pull enumerated values from a "Valid values are:" section: backtick-quoted
-    /// tokens on bullet lines (`* \`block\``). Tolerant of a blank line between
-    /// the sentinel and the bullets, and of per-bullet descriptions.
+    /// Pull enumerated values from a doc section. Handles both Ghostty doc styles:
+    ///  - bulleted: "Valid values are:" followed by `* \`block\`` lines
+    ///  - inline:   "Available values are: \"native\", \"transparent\", …"
+    /// Tolerant of a blank line before the bullets and of per-bullet descriptions.
     static func extractEnumValues(_ documentation: String) -> [String] {
+        enum Mode { case none, bulleted, inline }
         var values: [String] = []
-        var collecting = false
+        var mode: Mode = .none
         for rawLine in documentation.split(separator: "\n", omittingEmptySubsequences: false) {
             let line = rawLine.trimmingCharacters(in: .whitespaces)
-            if line.lowercased().contains("valid values are") {
-                collecting = true
+            let lower = line.lowercased()
+            if lower.contains("valid values are") {
+                mode = .bulleted
                 continue
             }
-            guard collecting else { continue }
-            if line.hasPrefix("* ") || line.hasPrefix("- ") {
-                if let token = firstBacktickToken(line) {
-                    values.append(token)
-                }
+            if lower.contains("available values are") || lower.contains("possible values are") {
+                // Inline form: quoted choices on this and following lines until a
+                // paragraph break (the list often wraps across lines).
+                mode = .inline
+                values.append(contentsOf: quotedTokens(line))
+                continue
             }
-            // Non-bullet lines (prose, blanks) are skipped, not terminators, so
-            // wrapped bullet descriptions don't cut the list short.
+            switch mode {
+            case .none:
+                continue
+            case .bulleted:
+                // Skip blanks/prose (not terminators) so wrapped bullet
+                // descriptions don't cut the list short.
+                if line.hasPrefix("* ") || line.hasPrefix("- ") {
+                    if let token = firstBacktickToken(line) { values.append(token) }
+                }
+            case .inline:
+                if line.isEmpty { mode = .none } // paragraph break ends the inline list
+                else { values.append(contentsOf: quotedTokens(line)) }
+            }
         }
-        // De-dup while preserving order.
         var seen = Set<String>()
         return values.filter { seen.insert($0).inserted }
     }
@@ -158,8 +154,25 @@ public enum CatalogParser {
         guard let open = line.firstIndex(of: "`") else { return nil }
         let afterOpen = line.index(after: open)
         guard let close = line[afterOpen...].firstIndex(of: "`") else { return nil }
-        let token = String(line[afterOpen..<close])
+        // Reject empty/whitespace-only tokens (e.g. a `* \` \` (blank)` bullet).
+        let token = String(line[afterOpen..<close]).trimmingCharacters(in: .whitespaces)
         return token.isEmpty ? nil : token
+    }
+
+    /// Extract double-quoted or backtick-quoted tokens from an inline sentence.
+    private static func quotedTokens(_ line: String) -> [String] {
+        var tokens: [String] = []
+        for quote: Character in ["\"", "`"] {
+            var remainder = Substring(line)
+            while let open = remainder.firstIndex(of: quote) {
+                let afterOpen = remainder.index(after: open)
+                guard let close = remainder[afterOpen...].firstIndex(of: quote) else { break }
+                let token = String(remainder[afterOpen..<close]).trimmingCharacters(in: .whitespaces)
+                if !token.isEmpty { tokens.append(token) }
+                remainder = remainder[remainder.index(after: close)...]
+            }
+        }
+        return tokens
     }
 
     // MARK: - Type inference

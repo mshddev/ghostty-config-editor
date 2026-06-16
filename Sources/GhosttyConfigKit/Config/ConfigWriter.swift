@@ -1,4 +1,5 @@
 import Foundation
+import CryptoKit
 
 public enum ConfigWriteError: Error, Equatable, Sendable {
     /// The file changed on disk since it was read — refuse rather than clobber (R22).
@@ -160,31 +161,39 @@ public struct ConfigWriter: Sendable {
     /// Write `newFile` to its resolved real path with the full safety contract.
     @discardableResult
     public func commit(_ newFile: ConfigFile, fileManager: FileManager = .default) throws -> WriteReceipt {
-        let realPath = newFile.resolvedPath
+        // Lock on the canonical real path so every spelling of the same inode
+        // (symlink, ".."-laden, in-memory default) converges on one lock (H4).
+        let realPath = ConfigReader.canonicalPath(newFile.resolvedPath)
         return try Self.locks.withLock(path: realPath) {
             try performCommit(newFile, realPath: realPath, fileManager: fileManager)
         }
     }
 
     private func performCommit(_ newFile: ConfigFile, realPath: String, fileManager: FileManager) throws -> WriteReceipt {
-        // 1. Stale-overwrite guard (R22).
-        let current = FileIdentity.capture(path: realPath, fileManager: fileManager)
+        // ONE read of the live file drives both the stale check and the backup,
+        // so there is no window for an external write to slip between them (H1).
+        let existing = fileManager.contents(atPath: realPath)
+        let currentHash = existing.map { Self.sha256($0) }
+
+        // Stale-overwrite guard (R22): the single read must match the read-time stamp.
         if let readStamp = newFile.identity {
-            guard let current, current.contentMatches(readStamp) else {
+            guard let currentHash, currentHash == readStamp.sha256 else {
                 throw ConfigWriteError.staleOnDisk(path: realPath)
             }
-        } else if current != nil {
+        } else if existing != nil {
             // We thought this was a new file, but something created it since.
             throw ConfigWriteError.staleOnDisk(path: realPath)
         }
 
         let newData = Data(newFile.serialized().utf8)
         let dirURL = URL(fileURLWithPath: realPath).deletingLastPathComponent()
+        // For a first write (no config yet) make sure the directory exists.
+        try? fileManager.createDirectory(at: dirURL, withIntermediateDirectories: true)
 
-        // 2. Out-of-repo backup of the existing bytes (R24). Abort if it fails.
+        // Out-of-repo backup of the exact bytes we just read (R24). Abort if it fails.
         var backupURL: URL?
         var previousText: String?
-        if let existing = fileManager.contents(atPath: realPath) {
+        if let existing {
             previousText = String(decoding: existing, as: UTF8.self)
             do {
                 backupURL = try makeBackup(of: existing, realPath: realPath, fileManager: fileManager)
@@ -193,28 +202,9 @@ public struct ConfigWriter: Sendable {
             }
         }
 
-        // 3. Stage a temp file in the SAME directory (R21, R23).
-        let tempURL = dirURL.appendingPathComponent(".gcm-\(UUID().uuidString).tmp")
-        do {
-            try newData.write(to: tempURL)
-            let perms = newFile.identity?.permissions ?? 0o644
-            try? fileManager.setAttributes([.posixPermissions: NSNumber(value: perms)], ofItemAtPath: tempURL.path)
-            Self.copyExtendedAttributes(from: realPath, to: tempURL.path)
-            Self.fsyncPath(tempURL.path)
-        } catch {
-            try? fileManager.removeItem(at: tempURL)
-            throw ConfigWriteError.stageFailed("\(error)")
-        }
-
-        // 4. Atomic rename onto the resolved real path (R20, R21). The symlink at
-        //    the original path — if any — keeps pointing here, still a symlink.
-        guard rename(tempURL.path, realPath) == 0 else {
-            let err = String(cString: strerror(errno))
-            try? fileManager.removeItem(at: tempURL)
-            throw ConfigWriteError.renameFailed(err)
-        }
-        // 5. fsync the directory so the rename is durable.
-        Self.fsyncPath(dirURL.path)
+        // Stage + atomic rename, preserving permissions/xattrs (R20, R21, R23).
+        try stageAndRename(newData, to: realPath, dirURL: dirURL,
+                           fallbackPermissions: newFile.identity?.permissions, fileManager: fileManager)
 
         return WriteReceipt(
             resolvedPath: realPath,
@@ -224,24 +214,50 @@ public struct ConfigWriter: Sendable {
         )
     }
 
-    /// Restore the bytes captured in a receipt (last-write undo, R10). Writes via
-    /// the same atomic mechanism; skips the stale check since this is a revert.
+    /// Restore the bytes captured in a receipt (last-write undo, R10). Backs up
+    /// the CURRENT bytes first, so the undo is itself undoable and never blindly
+    /// destroys an external edit made since the apply (H2); preserves attributes (H3).
     @discardableResult
     public func restore(from receipt: WriteReceipt, fileManager: FileManager = .default) throws -> Bool {
         guard let previous = receipt.previousText else { return false }
-        let realPath = receipt.resolvedPath
+        let realPath = ConfigReader.canonicalPath(receipt.resolvedPath)
         return try Self.locks.withLock(path: realPath) {
             let dirURL = URL(fileURLWithPath: realPath).deletingLastPathComponent()
-            let tempURL = dirURL.appendingPathComponent(".gcm-\(UUID().uuidString).tmp")
-            try Data(previous.utf8).write(to: tempURL)
-            Self.fsyncPath(tempURL.path)
-            guard rename(tempURL.path, realPath) == 0 else {
-                try? fileManager.removeItem(at: tempURL)
-                throw ConfigWriteError.renameFailed(String(cString: strerror(errno)))
+            if let current = fileManager.contents(atPath: realPath) {
+                _ = try? makeBackup(of: current, realPath: realPath, fileManager: fileManager)
             }
-            Self.fsyncPath(dirURL.path)
+            try stageAndRename(Data(previous.utf8), to: realPath, dirURL: dirURL,
+                               fallbackPermissions: nil, fileManager: fileManager)
             return true
         }
+    }
+
+    /// Stage `data` to a same-dir temp with the live file's permissions/xattrs,
+    /// full-sync it, atomically rename onto `realPath`, then full-sync the dir.
+    /// Aborts with the temp removed (live file untouched) on any failure.
+    private func stageAndRename(_ data: Data, to realPath: String, dirURL: URL, fallbackPermissions: UInt16?, fileManager: FileManager) throws {
+        let livePermissions = Self.permissions(ofPath: realPath)
+        let permissions = livePermissions ?? fallbackPermissions ?? 0o644
+        let tempURL = dirURL.appendingPathComponent(".gcm-\(UUID().uuidString).tmp")
+        do {
+            // Non-atomic write: we own atomicity via our own rename below, and
+            // this avoids Foundation leaving a differently-named temp on crash.
+            try data.write(to: tempURL, options: [])
+            try? fileManager.setAttributes([.posixPermissions: NSNumber(value: permissions)], ofItemAtPath: tempURL.path)
+            if fileManager.fileExists(atPath: realPath) {
+                Self.copyExtendedAttributes(from: realPath, to: tempURL.path)
+            }
+            Self.fullSyncPath(tempURL.path) // F_FULLFSYNC: flush to stable media (R21)
+        } catch {
+            try? fileManager.removeItem(at: tempURL)
+            throw ConfigWriteError.stageFailed("\(error)")
+        }
+        guard rename(tempURL.path, realPath) == 0 else {
+            let err = String(cString: strerror(errno))
+            try? fileManager.removeItem(at: tempURL)
+            throw ConfigWriteError.renameFailed(err)
+        }
+        Self.fullSyncPath(dirURL.path)
     }
 
     /// Remove orphaned write temps left behind by a crashed prior write (crash
@@ -268,33 +284,47 @@ public struct ConfigWriter: Sendable {
     }
 
     private func pruneBackups(in dir: URL, fileManager: FileManager) {
-        guard let entries = try? fileManager.contentsOfDirectory(
-            at: dir, includingPropertiesForKeys: [.creationDateKey], options: [.skipsHiddenFiles]
-        ) else { return }
-        guard entries.count > retentionLimit else { return }
-        let sorted = entries.sorted { lhs, rhs in
-            let l = (try? lhs.resourceValues(forKeys: [.creationDateKey]).creationDate) ?? .distantPast
-            let r = (try? rhs.resourceValues(forKeys: [.creationDateKey]).creationDate) ?? .distantPast
-            return l < r
-        }
-        for url in sorted.prefix(sorted.count - retentionLimit) {
-            try? fileManager.removeItem(at: url)
+        guard let entries = try? fileManager.contentsOfDirectory(atPath: dir.path) else { return }
+        let backups = entries.filter { $0.hasSuffix(".bak") }
+        guard backups.count > retentionLimit else { return }
+        // Order by the millisecond timestamp embedded in the filename — stable and
+        // filesystem-independent (creationDate can be unavailable or reset).
+        let sorted = backups.sorted { Self.backupTimestamp($0) < Self.backupTimestamp($1) }
+        for name in sorted.prefix(sorted.count - retentionLimit) {
+            try? fileManager.removeItem(at: dir.appendingPathComponent(name))
         }
     }
 
+    private static func backupTimestamp(_ filename: String) -> Int {
+        Int(filename.split(separator: "-").first ?? "") ?? 0
+    }
+
     static func backupFolderName(for path: String) -> String {
-        // A filesystem-safe, collision-resistant folder per real path.
+        // Deterministic per real path across launches (R24 retention/recovery).
+        // hashValue is per-process randomized and must never be persisted.
         let base = (path as NSString).lastPathComponent
-        let digest = String(UInt64(bitPattern: Int64(path.hashValue)), radix: 16)
+        let digest = sha256(Data(path.utf8)).prefix(16)
         return "\(base)-\(digest)"
+    }
+
+    static func sha256(_ data: Data) -> String {
+        SHA256.hash(data: data).map { String(format: "%02x", $0) }.joined()
     }
 
     // MARK: - POSIX helpers
 
-    private static func fsyncPath(_ path: String) {
+    private static func permissions(ofPath path: String) -> UInt16? {
+        var info = stat()
+        guard stat(path, &info) == 0 else { return nil }
+        return UInt16(info.st_mode & 0o7777)
+    }
+
+    /// Flush to STABLE media. Plain `fsync` on macOS only reaches the drive
+    /// controller's cache; `F_FULLFSYNC` is required for real crash durability.
+    private static func fullSyncPath(_ path: String) {
         let fd = open(path, O_RDONLY)
         guard fd >= 0 else { return }
-        fsync(fd)
+        if fcntl(fd, F_FULLFSYNC) == -1 { fsync(fd) } // fall back if unsupported
         close(fd)
     }
 
@@ -304,20 +334,24 @@ public struct ConfigWriter: Sendable {
         var names = [CChar](repeating: 0, count: listSize)
         let got = listxattr(src, &names, listSize, 0)
         guard got > 0 else { return }
+        // Names are NUL-terminated C strings of arbitrary bytes. Walk the raw
+        // buffer by terminators rather than decoding to String and re-measuring,
+        // which would desync the offset on a non-UTF-8 name.
         names.withUnsafeBufferPointer { buf in
             guard let base = buf.baseAddress else { return }
-            var offset = 0
-            while offset < got {
-                let name = String(cString: base.advanced(by: offset))
-                if name.isEmpty { break }
-                let valueSize = getxattr(src, name, nil, 0, 0, 0)
-                if valueSize > 0 {
-                    var value = [UInt8](repeating: 0, count: valueSize)
-                    if getxattr(src, name, &value, valueSize, 0, 0) >= 0 {
-                        _ = setxattr(dst, name, value, valueSize, 0, 0)
+            var start = 0
+            for i in 0..<got where names[i] == 0 {
+                if i > start {
+                    let namePtr = base.advanced(by: start)
+                    let valueSize = getxattr(src, namePtr, nil, 0, 0, 0)
+                    if valueSize > 0 {
+                        var value = [UInt8](repeating: 0, count: valueSize)
+                        if getxattr(src, namePtr, &value, valueSize, 0, 0) >= 0 {
+                            _ = setxattr(dst, namePtr, value, valueSize, 0, 0)
+                        }
                     }
                 }
-                offset += name.utf8.count + 1
+                start = i + 1
             }
         }
     }

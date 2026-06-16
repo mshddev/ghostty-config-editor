@@ -157,7 +157,11 @@ public struct ConfigReader: Sendable {
             throw ConfigReadError.unreadable(path: path)
         }
         let resolved = canonicalPath(path)
-        let text = String(decoding: data, as: UTF8.self)
+        // Refuse non-UTF-8 rather than lossily decoding (U+FFFD replacement),
+        // which would silently corrupt the file on the next write (R11, R23).
+        guard let text = String(data: data, encoding: .utf8) else {
+            throw ConfigReadError.unreadable(path: path)
+        }
         var file = ConfigFile.parse(text: text, path: path, resolvedPath: resolved)
         // Capture the read-time identity stamp so the writer can detect external
         // changes and preserve permissions (R22, R23).
@@ -170,6 +174,8 @@ public struct ConfigReader: Sendable {
     static func resolveIncludePath(_ raw: String, relativeToDir dir: String) -> String? {
         var p = raw.trimmingCharacters(in: .whitespaces)
         if p.hasPrefix("?") { p.removeFirst(); p = p.trimmingCharacters(in: .whitespaces) }
+        // Strip one layer of surrounding double quotes (used for paths with spaces).
+        if p.count >= 2, p.hasPrefix("\""), p.hasSuffix("\"") { p = String(p.dropFirst().dropLast()) }
         guard !p.isEmpty else { return nil }
         if p.hasPrefix("~") { p = (p as NSString).expandingTildeInPath }
         if p.hasPrefix("/") { return (p as NSString).standardizingPath }

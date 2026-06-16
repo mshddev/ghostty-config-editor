@@ -93,7 +93,9 @@ public struct ConfigLinter: Sendable {
     }
 
     static func parseValidationOutput(_ output: String) -> [ValidationMessage] {
-        let regex = try? NSRegularExpression(pattern: #"^(.+):(\d+):([^:]+):\s?(.*)$"#)
+        // `path:line:key: message`, with the `:key` segment optional so a
+        // `path:line: message` diagnostic still yields file + line.
+        let regex = try? NSRegularExpression(pattern: #"^(.+):(\d+):(?:([^:]+):)?\s?(.*)$"#)
         var messages: [ValidationMessage] = []
         for rawLine in output.split(separator: "\n") {
             let line = String(rawLine)
@@ -103,12 +105,14 @@ public struct ConfigLinter: Sendable {
             if let regex, let match = regex.firstMatch(in: line, range: range),
                let fileR = Range(match.range(at: 1), in: line),
                let lineR = Range(match.range(at: 2), in: line),
-               let keyR = Range(match.range(at: 3), in: line),
                let msgR = Range(match.range(at: 4), in: line) {
+                let key = Range(match.range(at: 3), in: line).map {
+                    String(line[$0]).trimmingCharacters(in: .whitespaces)
+                }
                 messages.append(ValidationMessage(
                     file: String(line[fileR]),
                     line: Int(line[lineR]),
-                    key: String(line[keyR]).trimmingCharacters(in: .whitespaces),
+                    key: key,
                     message: String(line[msgR])
                 ))
             } else {

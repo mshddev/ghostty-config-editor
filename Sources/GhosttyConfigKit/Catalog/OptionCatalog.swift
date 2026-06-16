@@ -92,10 +92,6 @@ public struct OptionCatalog: Sendable, Codable {
         self.version = version
     }
 
-    private var index: [String: CatalogOption] {
-        Dictionary(options.map { ($0.name, $0) }, uniquingKeysWith: { first, _ in first })
-    }
-
     public func option(named name: String) -> CatalogOption? {
         options.first { $0.name == name }
     }
@@ -103,11 +99,7 @@ public struct OptionCatalog: Sendable, Codable {
     /// Categories in a stable, curated display order (known categories first,
     /// then any others alphabetically).
     public var categories: [String] {
-        let present = Set(options.map(\.category))
-        var ordered = OptionCategorizer.displayOrder.filter(present.contains)
-        let extras = present.subtracting(ordered).sorted()
-        ordered.append(contentsOf: extras)
-        return ordered
+        OptionCategorizer.orderedCategories(present: Set(options.map(\.category)))
     }
 
     public func options(in category: String) -> [CatalogOption] {
@@ -190,6 +182,13 @@ public enum OptionCategorizer {
         let prefix = name.split(separator: "-").first.map(String.init) ?? name
         if let mapped = prefixMap[prefix.lowercased()] { return mapped }
         return "General"
+    }
+
+    /// Known categories first (in display order), then any extras alphabetically.
+    public static func orderedCategories(present: Set<String>) -> [String] {
+        var ordered = displayOrder.filter(present.contains)
+        ordered.append(contentsOf: present.subtracting(ordered).sorted())
+        return ordered
     }
 }
 

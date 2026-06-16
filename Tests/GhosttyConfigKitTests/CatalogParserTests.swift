@@ -63,6 +63,24 @@ final class CatalogParserTests: XCTestCase {
         XCTAssertEqual(cursorStyle.defaultValue, "block")
     }
 
+    func testEnumExtractionExcludesBlankBulletToken() throws {
+        let catalog = try realCatalog()
+        // cursor-style-blink documents a `(blank)` choice as `* \` \``; the blank
+        // token must not leak into the enum.
+        let blink = try XCTUnwrap(catalog.option(named: "cursor-style-blink"))
+        XCTAssertFalse(blink.enumValues.contains { $0.trimmingCharacters(in: .whitespaces).isEmpty },
+                       "no whitespace-only enum value")
+    }
+
+    func testInlineAvailableValuesEnumIsExtracted() throws {
+        let catalog = try realCatalog()
+        // macos-titlebar-style documents choices inline ("Available values are: ...").
+        let titlebar = try XCTUnwrap(catalog.option(named: "macos-titlebar-style"))
+        XCTAssertEqual(titlebar.valueType, .enumeration)
+        XCTAssertTrue(titlebar.enumValues.contains("transparent"))
+        XCTAssertTrue(titlebar.enumValues.contains("hidden"))
+    }
+
     // MARK: - Repeatable keys (R9 foundation)
 
     func testRepeatableKeysAreRepresentedAsSuch() throws {

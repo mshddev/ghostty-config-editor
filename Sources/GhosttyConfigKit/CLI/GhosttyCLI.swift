@@ -118,8 +118,12 @@ public struct GhosttyCLI: Sendable {
                     let count = buffer.withUnsafeMutableBytes { read(fd, $0.baseAddress, bufferSize) }
                     if count > 0 {
                         data.append(buffer, count: count)
+                    } else if count == 0 {
+                        break // EOF
+                    } else if errno == EINTR {
+                        continue // interrupted by a signal — retry, don't truncate
                     } else {
-                        break // 0 == EOF, < 0 == error
+                        break // genuine read error
                     }
                 }
                 continuation.resume(returning: data)
