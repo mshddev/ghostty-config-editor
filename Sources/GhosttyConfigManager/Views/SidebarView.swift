@@ -32,6 +32,10 @@ struct SidebarView: View {
                 }
                 .tag(SidebarSelection.problems)
             }
+            Section("Appearance") {
+                Label("Themes", systemImage: "paintpalette")
+                    .tag(SidebarSelection.themes)
+            }
             Section("Categories") {
                 ForEach(model.categories, id: \.self) { category in
                     Label(category, systemImage: Self.icon(for: category))

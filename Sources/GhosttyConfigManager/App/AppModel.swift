@@ -8,6 +8,7 @@ public enum SidebarSelection: Hashable {
     case customized
     case unused
     case problems
+    case themes
     case category(String)
 }
 
@@ -61,6 +62,13 @@ public final class AppModel {
     private var environment: GhosttyEnvironment?
     private var catalog: OptionCatalog?
     private var lastReceipt: WriteReceipt?
+
+    // Themes (U8)
+    private var themeProvider: ThemeProvider?
+    private var colorsInFlight: Set<String> = []
+    public private(set) var themes: [ThemeRef] = []
+    public private(set) var themeColors: [String: ThemeColors] = [:]
+    public private(set) var fonts: [String] = []
 
     public init() {}
 
@@ -171,6 +179,41 @@ public final class AppModel {
         applyState = .idle
     }
 
+    // MARK: - Themes (U8)
+
+    /// The currently-applied theme value, if set.
+    public var currentTheme: String? {
+        browser?.merged.option(named: "theme").flatMap { $0.isSet ? $0.userValues.first : nil }
+    }
+
+    /// Load the theme + font lists once, lazily (the Themes tab triggers this).
+    public func loadThemesIfNeeded() async {
+        guard themes.isEmpty, let environment else { return }
+        let provider = ThemeProvider.live(environment)
+        themeProvider = provider
+        themes = (try? await provider.themes()) ?? []
+        fonts = (try? await provider.fonts()) ?? []
+    }
+
+    /// Lazily load (and cache) a theme's colors so swatches render on demand.
+    public func ensureColors(for theme: ThemeRef) {
+        guard themeColors[theme.name] == nil,
+              !colorsInFlight.contains(theme.name),
+              let themeProvider else { return }
+        colorsInFlight.insert(theme.name)
+        Task {
+            let colors = try? await themeProvider.colors(for: theme)
+            colorsInFlight.remove(theme.name)
+            if let colors { themeColors[theme.name] = colors }
+        }
+    }
+
+    /// Apply a theme by writing `theme = …` via the safe write path (F2).
+    public func applyTheme(_ name: String) async {
+        guard let themeOption = browser?.merged.option(named: "theme") else { return }
+        await applyEdit(option: themeOption, values: [name])
+    }
+
     /// Count of actionable problems (validation errors + non-info footguns).
     public var problemCount: Int {
         guard let report = lintReport else { return 0 }
@@ -202,6 +245,8 @@ public final class AppModel {
             return browser.unusedOptions
         case .problems:
             return [] // rendered by ProblemsView, not the option list
+        case .themes:
+            return [] // rendered by ThemeBrowserView
         case .all, .none:
             return browser.merged.options.sorted { $0.option.name < $1.option.name }
         }

@@ -34,6 +34,7 @@ struct OptionListView: View {
         case .customized: return "Customized"
         case .unused: return "Not Using Yet"
         case .problems: return "Problems"
+        case .themes: return "Themes"
         case .all, .none: return "All Options"
         }
     }

@@ -50,17 +50,22 @@ struct RootView: View {
         NavigationSplitView {
             SidebarView()
         } content: {
-            if model.selection == .problems {
-                ProblemsView()
-            } else {
-                OptionListView()
+            switch model.selection {
+            case .problems: ProblemsView()
+            case .themes: ThemeBrowserView()
+            default: OptionListView()
             }
         } detail: {
-            if model.selection == .problems {
+            switch model.selection {
+            case .problems:
                 ContentUnavailableView("Config health",
                                        systemImage: "stethoscope",
                                        description: Text("Validation runs against your live config via `ghostty +validate-config`."))
-            } else {
+            case .themes:
+                ContentUnavailableView("Pick a theme",
+                                       systemImage: "paintpalette",
+                                       description: Text("Click a theme to apply it. Previews are read from each theme's file."))
+            default:
                 OptionDetailView()
             }
         }
