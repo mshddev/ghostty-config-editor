@@ -367,6 +367,42 @@ final class ConfigWriterTests: XCTestCase {
         XCTAssertEqual(try String(contentsOf: path, encoding: .utf8), "font-size = 18\n")
     }
 
+    func testValidateAndApplyToIncludeOptionRoundTrips() async throws {
+        guard let binary = BinaryLocator.locateOnSystem() else { throw XCTSkip("Ghostty not installed") }
+        let dir = try tempDir()
+        try write("config-file = extra.conf\nfont-size = 16\n", dir, "config")
+        try write("cursor-style = bar\n", dir, "extra.conf")
+        let m = try ConfigReader().readModel(primaryPath: dir.appendingPathComponent("config").path)
+
+        // cursor-style lives in the include; a valid change must apply there.
+        try await makeWriter().validateAndApply(
+            optionName: "cursor-style", values: ["underline"],
+            isRepeatable: false, in: m, cli: GhosttyCLI(binaryPath: binary))
+
+        XCTAssertEqual(try String(contentsOf: dir.appendingPathComponent("extra.conf"), encoding: .utf8),
+                       "cursor-style = underline\n")
+    }
+
+    func testValidateAndApplyRejectsInvalidIncludeEditAgainstMergedTree() async throws {
+        guard let binary = BinaryLocator.locateOnSystem() else { throw XCTSkip("Ghostty not installed") }
+        let dir = try tempDir()
+        try write("config-file = extra.conf\nfont-size = 16\n", dir, "config")
+        try write("cursor-style = bar\n", dir, "extra.conf")
+        let m = try ConfigReader().readModel(primaryPath: dir.appendingPathComponent("config").path)
+
+        do {
+            _ = try await makeWriter().validateAndApply(
+                optionName: "cursor-style", values: ["not-a-cursor-style"],
+                isRepeatable: false, in: m, cli: GhosttyCLI(binaryPath: binary))
+            XCTFail("invalid include edit should be rejected via merged-tree validation")
+        } catch ConfigWriteError.validationFailed {
+            // expected
+        }
+        // The include is untouched.
+        XCTAssertEqual(try String(contentsOf: dir.appendingPathComponent("extra.conf"), encoding: .utf8),
+                       "cursor-style = bar\n")
+    }
+
     // MARK: - Helpers
 
     /// A writer whose backups go to a fresh temp dir outside any config dir.

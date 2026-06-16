@@ -138,7 +138,7 @@ public struct ConfigWriter: Sendable {
     ) async throws -> WriteReceipt {
         let edited = editedFile(setting: optionName, to: values, isRepeatable: isRepeatable, in: model)
         if let cli {
-            let validation = try await validatePreview(edited, cli: cli, linter: linter)
+            let validation = try await validatePreview(edited: edited, model: model, cli: cli, linter: linter)
             guard validation.isValid else {
                 throw ConfigWriteError.validationFailed(validation.messages)
             }
@@ -146,16 +146,51 @@ public struct ConfigWriter: Sendable {
         return try commit(edited)
     }
 
-    /// Write the proposed content to a throwaway temp file and validate it,
-    /// leaving the real config untouched.
-    private func validatePreview(_ file: ConfigFile, cli: GhosttyCLI, linter: ConfigLinter) async throws -> ValidationResult {
+    /// Validate the proposed change against the **full merged config**, not the
+    /// edited file in isolation. Reconstructs the whole tree (primary + every
+    /// `config-file` include) in a throwaway temp dir — using the edited bytes for
+    /// the edited file and rewriting `config-file` directives to point at the temp
+    /// copies — then validates the temp primary. This makes an option set inside
+    /// an include validate in its real context. The real files are untouched.
+    private func validatePreview(edited: ConfigFile, model: ConfigModel, cli: GhosttyCLI, linter: ConfigLinter) async throws -> ValidationResult {
         let dir = URL(fileURLWithPath: NSTemporaryDirectory())
             .appendingPathComponent("gcm-validate-\(UUID().uuidString)")
         try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
         defer { try? FileManager.default.removeItem(at: dir) }
-        let temp = dir.appendingPathComponent("config")
-        try Data(file.serialized().utf8).write(to: temp)
-        return try await linter.validate(cli: cli, configFile: temp.path)
+
+        // Stable temp path per real file (index-based avoids basename collisions).
+        var tempPaths: [String: URL] = [:]
+        for (index, file) in model.allFiles.enumerated() {
+            tempPaths[file.resolvedPath] = dir.appendingPathComponent("config-\(index)")
+        }
+        for file in model.allFiles {
+            let source = file.resolvedPath == edited.resolvedPath ? edited : file
+            let text = Self.rewriteIncludesForValidation(source, tempPaths: tempPaths)
+            try Data(text.utf8).write(to: tempPaths[file.resolvedPath]!)
+        }
+        guard let primaryTemp = tempPaths[model.primary.resolvedPath] else {
+            // Single-file fallback.
+            let temp = dir.appendingPathComponent("config")
+            try Data(edited.serialized().utf8).write(to: temp)
+            return try await linter.validate(cli: cli, configFile: temp.path)
+        }
+        return try await linter.validate(cli: cli, configFile: primaryTemp.path)
+    }
+
+    /// Re-emit a file for validation, rewriting each `config-file` directive to
+    /// point at the temp copy of its target so the include graph stays intact.
+    private static func rewriteIncludesForValidation(_ file: ConfigFile, tempPaths: [String: URL]) -> String {
+        let dir = (file.resolvedPath as NSString).deletingLastPathComponent
+        let lines = file.lines.map { line -> String in
+            guard case .setting(let key, let value) = line.kind, key == "config-file",
+                  let resolved = ConfigReader.resolveIncludePath(value, relativeToDir: dir),
+                  let tempURL = tempPaths[ConfigReader.canonicalPath(resolved)]
+            else { return line.raw }
+            return "config-file = \(tempURL.path)"
+        }
+        var out = lines.joined(separator: "\n")
+        if file.hasTrailingNewline { out += "\n" }
+        return out
     }
 
     /// Write `newFile` to its resolved real path with the full safety contract.
