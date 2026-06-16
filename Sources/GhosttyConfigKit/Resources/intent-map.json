@@ -1,0 +1,25 @@
+{
+  "version": 1,
+  "entries": [
+    { "phrases": ["transparent background", "transparency", "see through", "translucent"], "options": ["background-opacity", "background-blur"] },
+    { "phrases": ["blur", "background blur", "frosted"], "options": ["background-blur"] },
+    { "phrases": ["hide title bar", "no title bar", "remove title bar", "titlebar", "title bar"], "options": ["macos-titlebar-style", "window-decoration"] },
+    { "phrases": ["window decoration", "borderless", "no chrome"], "options": ["window-decoration"] },
+    { "phrases": ["window padding", "padding", "margins", "inner spacing"], "options": ["window-padding-x", "window-padding-y", "window-padding-balance"] },
+    { "phrases": ["hide mouse", "hide cursor while typing", "hide pointer"], "options": ["mouse-hide-while-typing"] },
+    { "phrases": ["cursor shape", "cursor style", "block cursor", "bar cursor", "beam cursor"], "options": ["cursor-style"] },
+    { "phrases": ["cursor blink", "blinking cursor", "stop blinking"], "options": ["cursor-style-blink"] },
+    { "phrases": ["scrollback", "history", "scroll history", "lines of history"], "options": ["scrollback-limit"] },
+    { "phrases": ["clipboard", "copy on select", "paste", "copy paste"], "options": ["clipboard-read", "clipboard-write", "copy-on-select"] },
+    { "phrases": ["confirm quit", "confirm close", "ask before closing", "warn on close"], "options": ["confirm-close-surface"] },
+    { "phrases": ["restore windows", "reopen windows", "save state", "remember windows"], "options": ["window-save-state"] },
+    { "phrases": ["option as alt", "meta key", "alt key", "left option", "right option"], "options": ["macos-option-as-alt"] },
+    { "phrases": ["mouse scroll speed", "scroll speed", "scroll multiplier"], "options": ["mouse-scroll-multiplier"] },
+    { "phrases": ["dim inactive splits", "split opacity", "unfocused split", "fade splits"], "options": ["unfocused-split-opacity", "unfocused-split-fill"] },
+    { "phrases": ["font size", "text size", "bigger text", "smaller text"], "options": ["font-size"] },
+    { "phrases": ["font family", "change font", "typeface"], "options": ["font-family"] },
+    { "phrases": ["ligatures", "font features", "stylistic sets"], "options": ["font-feature"] },
+    { "phrases": ["theme", "color scheme", "colors", "palette"], "options": ["theme", "palette"] },
+    { "phrases": ["bold", "bright bold", "bold colors"], "options": ["bold-color"] }
+  ]
+}

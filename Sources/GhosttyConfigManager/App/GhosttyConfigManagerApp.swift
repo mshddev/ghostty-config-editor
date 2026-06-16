@@ -9,71 +9,67 @@ struct GhosttyConfigManagerApp: App {
         WindowGroup {
             RootView()
                 .environment(model)
-                .frame(minWidth: 800, minHeight: 500)
+                .frame(minWidth: 900, minHeight: 560)
                 .task { await model.bootstrap() }
         }
         .windowStyle(.titleBar)
     }
 }
 
-/// The top-level NavigationSplitView shell (U1 skeleton). Later units fill the
-/// sidebar with option categories and the detail pane with option detail.
+/// Top-level shell. Until Ghostty is located it shows a status view; once ready
+/// it presents the three-column Explorer (sidebar · option list · detail).
 struct RootView: View {
     @Environment(AppModel.self) private var model
 
     var body: some View {
-        NavigationSplitView {
-            List {
-                Section("Ghostty") {
-                    environmentRow
-                }
-            }
-            .navigationSplitViewColumnWidth(min: 220, ideal: 260)
-        } detail: {
-            placeholderDetail
-        }
-        .navigationTitle("Ghostty Config Manager")
-    }
-
-    @ViewBuilder
-    private var environmentRow: some View {
         switch model.environmentState {
         case .loading:
-            Label("Locating Ghostty…", systemImage: "hourglass")
-        case .ready(let env):
-            Label("Ghostty \(env.version)", systemImage: "checkmark.seal")
+            statusView(ProgressView("Locating Ghostty…"))
         case .notFound:
-            Label("Ghostty not found", systemImage: "exclamationmark.triangle")
-                .foregroundStyle(.orange)
-        case .unsupported(let detail):
-            Label("Unsupported: \(detail)", systemImage: "questionmark.diamond")
-                .foregroundStyle(.orange)
-        }
-    }
-
-    @ViewBuilder
-    private var placeholderDetail: some View {
-        switch model.environmentState {
-        case .loading:
-            ProgressView("Locating Ghostty…")
-        case .ready(let env):
-            ContentUnavailableView {
-                Label("Ghostty \(env.version)", systemImage: "terminal")
-            } description: {
-                Text("Connected to \(env.binaryPath).\nThe option catalog will appear here.")
-            }
-        case .notFound:
-            ContentUnavailableView {
+            statusView(ContentUnavailableView {
                 Label("Ghostty not found", systemImage: "exclamationmark.triangle")
             } description: {
-                Text("Install Ghostty, or set the binary path in settings, then reopen.")
-            }
+                Text("Install Ghostty, or set the binary path, then reopen.\nSearched the app bundle, Homebrew, and your login shell.")
+            })
         case .unsupported(let detail):
-            ContentUnavailableView {
+            statusView(ContentUnavailableView {
                 Label("Couldn't verify Ghostty", systemImage: "questionmark.diamond")
             } description: {
                 Text(detail)
+            })
+        case .ready(let environment):
+            browser(environment)
+        }
+    }
+
+    private func statusView(_ content: some View) -> some View {
+        content.frame(minWidth: 900, minHeight: 560)
+    }
+
+    private func browser(_ environment: GhosttyEnvironment) -> some View {
+        NavigationSplitView {
+            SidebarView()
+        } content: {
+            OptionListView()
+        } detail: {
+            OptionDetailView()
+        }
+        .toolbar {
+            ToolbarItem(placement: .status) {
+                statusChip(environment)
             }
         }
+    }
+
+    @ViewBuilder
+    private func statusChip(_ environment: GhosttyEnvironment) -> some View {
+        HStack(spacing: 6) {
+            Image(systemName: "checkmark.seal.fill").foregroundStyle(.green)
+            Text("Ghostty \(environment.version)")
+            if model.configMissing {
+                Text("· no config file yet").foregroundStyle(.secondary)
+            }
+        }
+        .font(.caption)
     }
 }

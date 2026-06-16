@@ -20,7 +20,8 @@ let package = Package(
     targets: [
         // All non-UI logic lives here so the test target can exercise it directly.
         .target(
-            name: "GhosttyConfigKit"
+            name: "GhosttyConfigKit",
+            resources: [.process("Resources")]
         ),
         // Thin SwiftUI shell over GhosttyConfigKit.
         .executableTarget(
