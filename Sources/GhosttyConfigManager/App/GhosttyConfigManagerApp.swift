@@ -1,8 +1,25 @@
 import SwiftUI
+import AppKit
 import GhosttyConfigKit
+
+/// Without an `.app` bundle (e.g. when launched via `swift run`), macOS treats
+/// the process as a background agent and never shows a window. Promote it to a
+/// regular foreground app and bring it to the front. Inside a real bundle this
+/// is a harmless no-op.
+final class AppDelegate: NSObject, NSApplicationDelegate {
+    func applicationDidFinishLaunching(_ notification: Notification) {
+        NSApp.setActivationPolicy(.regular)
+        NSApp.activate(ignoringOtherApps: true)
+    }
+
+    func applicationShouldTerminateAfterLastWindowClosed(_ sender: NSApplication) -> Bool {
+        true
+    }
+}
 
 @main
 struct GhosttyConfigManagerApp: App {
+    @NSApplicationDelegateAdaptor(AppDelegate.self) private var appDelegate
     @State private var model = AppModel()
 
     var body: some Scene {
