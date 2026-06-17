@@ -65,6 +65,7 @@ struct OptionRow: View {
                 .fill(stateColor)
                 .frame(width: 7, height: 7)
                 .help(stateHelp)
+                .accessibilityHidden(true)
             VStack(alignment: .leading, spacing: 1) {
                 Text(option.option.name)
                     .font(.body)
