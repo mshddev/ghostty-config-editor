@@ -195,15 +195,20 @@ public actor ThemeProvider {
 
     public func colors(for theme: ThemeRef) async throws -> ThemeColors {
         if let cached = colorCache[theme.path] { return cached }
-        // Read + parse OFF the actor: `loadFile` does blocking file I/O, so doing
-        // it on the actor's executor would serialize every concurrent swatch load
-        // behind one read. Awaiting a detached task frees the actor (reentrancy)
-        // so concurrent theme loads proceed in parallel.
+        // Run the blocking `loadFile` read on a Dispatch queue (whose pool grows
+        // threads on demand) rather than the actor's executor or the fixed-size
+        // cooperative pool. The actor frees while awaiting (reentrancy), so
+        // concurrent swatch loads proceed in parallel instead of serializing —
+        // and a slow read can't starve Swift's cooperative executor.
         let loadFile = self.loadFile
         let path = theme.path
-        let parsed = try await Task.detached {
-            ThemeParser.parseThemeFile(try loadFile(path))
-        }.value
+        let text = try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<String, Error>) in
+            DispatchQueue.global(qos: .userInitiated).async {
+                do { continuation.resume(returning: try loadFile(path)) }
+                catch { continuation.resume(throwing: error) }
+            }
+        }
+        let parsed = ThemeParser.parseThemeFile(text)
         colorCache[theme.path] = parsed
         return parsed
     }

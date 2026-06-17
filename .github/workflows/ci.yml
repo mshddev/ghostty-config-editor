@@ -28,6 +28,4 @@ jobs:
         run: swift build
 
       - name: Test
-        # Run under a PTY so test output is line-buffered — otherwise a hang hides
-        # the culprit in an unflushed block buffer. timeout-minutes fails fast.
-        run: script -q /dev/null swift test
+        run: swift test
