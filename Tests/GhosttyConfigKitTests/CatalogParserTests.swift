@@ -12,9 +12,64 @@ final class CatalogParserTests: XCTestCase {
 
     func testParsesRepresentativeOptionCount() throws {
         let catalog = try realCatalog()
-        // Real 1.3.1 output has 200 distinct option names.
-        XCTAssertEqual(catalog.options.count, 200)
+        // Real 1.3.1 output has 200 distinct option names; the macOS-scoped catalog
+        // (R1, R6) drops 27 Linux/GTK-only options, leaving 173.
+        XCTAssertEqual(catalog.options.count, 173)
         XCTAssertEqual(catalog.version, "1.3.1")
+    }
+
+    // MARK: - macOS-scoped catalog (R1, R6)
+
+    func testMacOSScopedCatalogExcludesLinuxOnlyOptions() throws {
+        let catalog = try realCatalog()
+        // Linux-stack-prefixed options are gone.
+        for name in ["gtk-titlebar", "gtk-custom-css", "x11-instance-name", "linux-cgroup"] {
+            XCTAssertNil(catalog.option(named: name), "\(name) should be filtered from the macOS catalog")
+        }
+        // Doc-confirmed Linux/GTK/Wayland-only options without a Linux-stack prefix
+        // are gone too.
+        for name in ["app-notifications", "window-subtitle", "language", "async-backend",
+                     "window-show-tab-bar", "quit-after-last-window-closed-delay",
+                     "quick-terminal-keyboard-interactivity", "class", "freetype-load-flags",
+                     "window-titlebar-background", "window-titlebar-foreground"] {
+            XCTAssertNil(catalog.option(named: name), "\(name) is Linux/GTK-only and should be filtered")
+        }
+        // The "Linux / GTK" sidebar category disappears once its members are gone.
+        XCTAssertFalse(catalog.categories.contains("Linux / GTK"))
+    }
+
+    func testMacOSScopedCatalogKeepsCrossPlatformAndMacOSOptions() throws {
+        let catalog = try realCatalog()
+        // desktop-notifications works on macOS (OSC 9/777) and must survive despite
+        // sharing the "desktop"/notification theme with the filtered GTK options.
+        XCTAssertNotNil(catalog.option(named: "desktop-notifications"),
+                        "desktop-notifications is cross-platform and must be kept")
+        // Kept, and re-homed out of the (now-empty) Linux / GTK group via nameOverride.
+        XCTAssertEqual(catalog.option(named: "desktop-notifications")?.category, "Terminal")
+        // macOS-supported options that mention Linux in passing stay.
+        for name in ["window-decoration", "window-save-state", "quick-terminal-space-behavior",
+                     "macos-titlebar-style", "initial-window"] {
+            XCTAssertNotNil(catalog.option(named: name), "\(name) is macOS-applicable and must be kept")
+        }
+    }
+
+    func testMacOSCatalogScopePredicate() {
+        // Prefix rule.
+        XCTAssertTrue(MacOSCatalogScope.excludes("gtk-titlebar"))
+        XCTAssertTrue(MacOSCatalogScope.excludes("x11-instance-name"))
+        XCTAssertTrue(MacOSCatalogScope.excludes("linux-cgroup-hard-fail"))
+        XCTAssertTrue(MacOSCatalogScope.excludes("wayland-anything"))
+        // Curated non-prefixed rule.
+        XCTAssertTrue(MacOSCatalogScope.excludes("app-notifications"))
+        XCTAssertTrue(MacOSCatalogScope.excludes("window-subtitle"))
+        XCTAssertTrue(MacOSCatalogScope.excludes("class"))
+        XCTAssertTrue(MacOSCatalogScope.excludes("freetype-load-flags"))
+        XCTAssertTrue(MacOSCatalogScope.excludes("window-titlebar-background"))
+        // Kept: cross-platform / macOS / unrelated.
+        XCTAssertFalse(MacOSCatalogScope.excludes("desktop-notifications"))
+        XCTAssertFalse(MacOSCatalogScope.excludes("font-size"))
+        XCTAssertFalse(MacOSCatalogScope.excludes("macos-titlebar-style"))
+        XCTAssertFalse(MacOSCatalogScope.excludes("window-decoration"))
     }
 
     func testKnownOptionsArePresentWithDefaults() throws {
