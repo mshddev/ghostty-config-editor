@@ -55,7 +55,21 @@ struct RootView: View {
                 Text(detail)
             })
         case .ready(let environment):
-            browser(environment)
+            // Ghostty is located; now reflect catalog/config loading so a load
+            // failure surfaces instead of an empty browser (it was previously
+            // tracked in contentState but never rendered).
+            switch model.contentState {
+            case .failed(let detail):
+                statusView(ContentUnavailableView {
+                    Label("Couldn't load options", systemImage: "exclamationmark.triangle")
+                } description: {
+                    Text("Ghostty was found, but reading its option catalog failed.\n\(detail)")
+                })
+            case .idle, .loading:
+                statusView(ProgressView("Loading options…"))
+            case .loaded:
+                browser(environment)
+            }
         }
     }
 

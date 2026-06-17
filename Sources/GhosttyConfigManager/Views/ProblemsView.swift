@@ -16,7 +16,13 @@ struct ProblemsView: View {
                                            description: Text("Your config validates cleanly and has no known footguns."))
                 } else {
                     List {
-                        if let validation = report.validation, !validation.isValid, !validation.messages.isEmpty {
+                        if case .unavailable(let reason) = report.validation {
+                            Section("Validation unavailable") {
+                                unavailableRow(reason)
+                            }
+                        }
+                        if case .completed(let validation) = report.validation,
+                           !validation.isValid, !validation.messages.isEmpty {
                             Section("Validation errors") {
                                 ForEach(Array(validation.messages.enumerated()), id: \.offset) { _, message in
                                     validationRow(message)
@@ -40,8 +46,27 @@ struct ProblemsView: View {
     }
 
     private func isClean(_ report: LintReport) -> Bool {
-        let validClean = report.validation?.isValid ?? true
-        return validClean && report.findings.isEmpty
+        switch report.validation {
+        case .unavailable:
+            return false // surface the banner rather than a false all-clear
+        case .completed(let result):
+            return result.isValid && report.findings.isEmpty
+        case .notRun:
+            return report.findings.isEmpty
+        }
+    }
+
+    private func unavailableRow(_ reason: String) -> some View {
+        HStack(alignment: .top, spacing: 8) {
+            Image(systemName: "questionmark.diamond.fill").foregroundStyle(.orange)
+            VStack(alignment: .leading, spacing: 2) {
+                Text("Couldn't run ghostty +validate-config").font(.body.bold())
+                Text("Static footguns are still listed, but live validation didn't run: \(reason)")
+                    .font(.callout).foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+        }
+        .padding(.vertical, 2)
     }
 
     private func validationRow(_ message: ValidationMessage) -> some View {

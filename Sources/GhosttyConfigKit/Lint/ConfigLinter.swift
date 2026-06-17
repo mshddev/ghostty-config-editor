@@ -55,18 +55,33 @@ public struct LintFinding: Sendable, Equatable, Identifiable {
     }
 }
 
+/// The outcome of the `+validate-config` step — distinguishes "validated, no
+/// errors" from "couldn't validate", which a plain `ValidationResult?` conflated
+/// into `nil` and let the UI render a false all-clear (R15).
+public enum ValidationOutcome: Sendable, Equatable {
+    /// Not attempted — no binary available (e.g. first launch with no config).
+    case notRun
+    /// Ran to completion; carries validity and any parsed messages.
+    case completed(ValidationResult)
+    /// Attempted but the binary call failed; carries a human-readable reason.
+    case unavailable(String)
+}
+
 /// Combined validation + footgun report.
 public struct LintReport: Sendable {
-    public let validation: ValidationResult?
+    public let validation: ValidationOutcome
     public let findings: [LintFinding]
 
-    public init(validation: ValidationResult?, findings: [LintFinding]) {
+    public init(validation: ValidationOutcome, findings: [LintFinding]) {
         self.validation = validation
         self.findings = findings
     }
 
     public var hasProblems: Bool {
-        (validation.map { !$0.isValid } ?? false) || findings.contains { $0.severity != .info }
+        let validationFailed: Bool
+        if case .completed(let result) = validation { validationFailed = !result.isValid }
+        else { validationFailed = false }
+        return validationFailed || findings.contains { $0.severity != .info }
     }
 }
 
@@ -200,9 +215,17 @@ public struct ConfigLinter: Sendable {
     /// Validate + lint in one pass for the Explorer's problems surface.
     public func analyze(model: ConfigModel, cli: GhosttyCLI?) async -> LintReport {
         let findings = lint(model)
-        var validation: ValidationResult?
+        let validation: ValidationOutcome
         if let cli {
-            validation = try? await validate(cli: cli, configFile: model.primary.resolvedPath)
+            do {
+                validation = .completed(try await validate(cli: cli, configFile: model.primary.resolvedPath))
+            } catch {
+                // Don't swallow it into a false "no problems": surface that live
+                // validation couldn't run, distinct from "ran and found nothing".
+                validation = .unavailable(error.localizedDescription)
+            }
+        } else {
+            validation = .notRun
         }
         return LintReport(validation: validation, findings: findings)
     }

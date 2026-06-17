@@ -101,4 +101,23 @@ final class ConfigLinterTests: XCTestCase {
         XCTAssertTrue(result.messages.contains { $0.key == "font-size" },
                       "validator should flag the invalid font-size: \(result.rawOutput)")
     }
+
+    // MARK: - Validation outcome distinguishes "clean" from "couldn't run" (G3 #4)
+
+    func testAnalyzeWithoutBinaryReportsNotRun() async {
+        let report = await linter.analyze(model: model("font-size = 16\n"), cli: nil)
+        XCTAssertEqual(report.validation, .notRun)
+    }
+
+    func testAnalyzeSurfacesUnavailableWhenBinaryFails() async {
+        // A bogus binary makes `+validate-config` throw; analyze must report it
+        // as .unavailable, not swallow it into a false "validated cleanly".
+        let bogus = GhosttyCLI(binaryPath: "/definitely/not/here/ghostty")
+        let report = await linter.analyze(model: model("font-size = 16\n"), cli: bogus)
+        guard case .unavailable = report.validation else {
+            return XCTFail("expected .unavailable, got \(report.validation)")
+        }
+        // A tooling failure is surfaced but is not itself a config "problem".
+        XCTAssertFalse(report.hasProblems)
+    }
 }
