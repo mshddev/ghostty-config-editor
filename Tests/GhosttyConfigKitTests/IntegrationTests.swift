@@ -6,7 +6,7 @@ import XCTest
 final class IntegrationTests: XCTestCase {
 
     private func requireGhostty() throws -> GhosttyCLI {
-        guard let path = BinaryLocator.locateOnSystem() else {
+        guard let path = BinaryLocator.locateForTests() else {
             throw XCTSkip("Ghostty not installed")
         }
         return GhosttyCLI(binaryPath: path)

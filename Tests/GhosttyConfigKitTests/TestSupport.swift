@@ -1,5 +1,21 @@
 import Foundation
 import XCTest
+@testable import GhosttyConfigKit
+
+extension BinaryLocator {
+    /// Locate `ghostty` for tests WITHOUT the login-shell fallback. The real
+    /// `zsh -lc` probe is environment-dependent and can be very slow on CI
+    /// runners, which would dominate (and previously hung) the suite. Tests only
+    /// need to know whether a usable binary exists at a standard path; a
+    /// `GHOSTTY_BIN` env override lets CI point at a custom location.
+    static func locateForTests() -> String? {
+        locate(
+            userOverride: ProcessInfo.processInfo.environment["GHOSTTY_BIN"],
+            isExecutable: systemIsExecutable,
+            shellFallback: { nil }
+        )
+    }
+}
 
 /// Loads real captured Ghostty CLI output staged under `Fixtures/`.
 enum Fixture {

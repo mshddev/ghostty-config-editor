@@ -62,14 +62,19 @@ public enum BinaryLocator {
     /// Asks a login shell for `ghostty` on its `PATH`. This is the last resort
     /// for non-standard installs (e.g., a custom Homebrew prefix or asdf shim).
     ///
-    /// stderr is routed to `/dev/null` — a noisy login profile must not fill an
-    /// undrained pipe and deadlock our read — and the probe is abandoned after
-    /// `timeout` seconds so a slow or wedged shell can't hang discovery (and the
-    /// app's launch) forever.
+    /// Hardening so a hostile environment can't wedge discovery (and the app's
+    /// launch):
+    ///  - **Non-interactive** login shell (`-lc`, not `-lic`): sources login
+    ///    profiles where PATH is normally set, but skips interactive init, which
+    ///    can be slow or hang (the exact failure mode this guards against).
+    ///  - stderr → `/dev/null` so a noisy profile can't fill an undrained pipe.
+    ///  - Fully bounded: the only wait is a `timeout`-second deadline on stdout
+    ///    reaching EOF. There is **no** unbounded `waitUntilExit()` — a child that
+    ///    lingers after closing stdout must not stall us; the Process reaps itself.
     public static func loginShellFallback(timeout: TimeInterval = 5) -> String? {
         let process = Process()
         process.executableURL = URL(fileURLWithPath: "/bin/zsh")
-        process.arguments = ["-lic", "command -v ghostty"]
+        process.arguments = ["-lc", "command -v ghostty"]
         let pipe = Pipe()
         process.standardOutput = pipe
         process.standardError = FileHandle.nullDevice
@@ -87,11 +92,12 @@ public enum BinaryLocator {
             box.data = readToEOF(fd: outFD)
             done.signal()
         }
-        if done.wait(timeout: .now() + timeout) == .timedOut {
-            kill(process.processIdentifier, SIGKILL) // abandon: closes the pipe, unblocks the read
+        // If stdout hasn't produced output + EOF within the deadline, abandon the
+        // probe (kill the shell) rather than risk hanging.
+        guard done.wait(timeout: .now() + timeout) == .success else {
+            kill(process.processIdentifier, SIGKILL)
             return nil
         }
-        process.waitUntilExit()
         guard let line = String(data: box.data, encoding: .utf8)?
             .split(separator: "\n").first
             .map(String.init)?

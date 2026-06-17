@@ -89,7 +89,7 @@ final class ConfigLinterTests: XCTestCase {
     // MARK: - Live validation (skipped without Ghostty)
 
     func testLiveValidationCatchesInvalidValue() async throws {
-        guard let path = BinaryLocator.locateOnSystem() else { throw XCTSkip("Ghostty not installed") }
+        guard let path = BinaryLocator.locateForTests() else { throw XCTSkip("Ghostty not installed") }
         let dir = URL(fileURLWithPath: NSTemporaryDirectory()).appendingPathComponent("lint-\(UUID().uuidString)")
         try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
         defer { try? FileManager.default.removeItem(at: dir) }

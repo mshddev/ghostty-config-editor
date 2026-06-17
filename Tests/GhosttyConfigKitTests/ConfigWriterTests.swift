@@ -375,7 +375,7 @@ final class ConfigWriterTests: XCTestCase {
     }
 
     func testValidateAndApplyRejectsInvalidWithoutWriting() async throws {
-        guard let binary = BinaryLocator.locateOnSystem() else { throw XCTSkip("Ghostty not installed") }
+        guard let binary = BinaryLocator.locateForTests() else { throw XCTSkip("Ghostty not installed") }
         let dir = try tempDir()
         let path = dir.appendingPathComponent("config")
         try write("font-size = 16\n", dir, "config")
@@ -394,7 +394,7 @@ final class ConfigWriterTests: XCTestCase {
     }
 
     func testValidateAndApplyRoundTripsValidChange() async throws {
-        guard let binary = BinaryLocator.locateOnSystem() else { throw XCTSkip("Ghostty not installed") }
+        guard let binary = BinaryLocator.locateForTests() else { throw XCTSkip("Ghostty not installed") }
         let dir = try tempDir()
         let path = dir.appendingPathComponent("config")
         try write("font-size = 16\n", dir, "config")
@@ -408,7 +408,7 @@ final class ConfigWriterTests: XCTestCase {
     }
 
     func testValidateAndApplyToIncludeOptionRoundTrips() async throws {
-        guard let binary = BinaryLocator.locateOnSystem() else { throw XCTSkip("Ghostty not installed") }
+        guard let binary = BinaryLocator.locateForTests() else { throw XCTSkip("Ghostty not installed") }
         let dir = try tempDir()
         try write("config-file = extra.conf\nfont-size = 16\n", dir, "config")
         try write("cursor-style = bar\n", dir, "extra.conf")
@@ -424,7 +424,7 @@ final class ConfigWriterTests: XCTestCase {
     }
 
     func testValidateAndApplyRejectsInvalidIncludeEditAgainstMergedTree() async throws {
-        guard let binary = BinaryLocator.locateOnSystem() else { throw XCTSkip("Ghostty not installed") }
+        guard let binary = BinaryLocator.locateForTests() else { throw XCTSkip("Ghostty not installed") }
         let dir = try tempDir()
         try write("config-file = extra.conf\nfont-size = 16\n", dir, "config")
         try write("cursor-style = bar\n", dir, "extra.conf")
