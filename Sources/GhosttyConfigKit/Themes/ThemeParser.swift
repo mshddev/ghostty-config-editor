@@ -193,9 +193,17 @@ public actor ThemeProvider {
         return parsed
     }
 
-    public func colors(for theme: ThemeRef) throws -> ThemeColors {
+    public func colors(for theme: ThemeRef) async throws -> ThemeColors {
         if let cached = colorCache[theme.path] { return cached }
-        let parsed = ThemeParser.parseThemeFile(try loadFile(theme.path))
+        // Read + parse OFF the actor: `loadFile` does blocking file I/O, so doing
+        // it on the actor's executor would serialize every concurrent swatch load
+        // behind one read. Awaiting a detached task frees the actor (reentrancy)
+        // so concurrent theme loads proceed in parallel.
+        let loadFile = self.loadFile
+        let path = theme.path
+        let parsed = try await Task.detached {
+            ThemeParser.parseThemeFile(try loadFile(path))
+        }.value
         colorCache[theme.path] = parsed
         return parsed
     }

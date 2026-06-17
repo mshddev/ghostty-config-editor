@@ -65,7 +65,9 @@ public final class AppModel {
 
     // Themes (U8)
     private var themeProvider: ThemeProvider?
-    private var colorsInFlight: Set<String> = []
+    /// In-flight per-theme color loads, kept so they can be cancelled when the
+    /// environment is reloaded (rather than leaking and writing into stale state).
+    private var colorTasks: [String: Task<Void, Never>] = [:]
     private var failedThemes: Set<String> = []
     public private(set) var themes: [ThemeRef] = []
     public private(set) var themeColors: [String: ThemeColors] = [:]
@@ -77,6 +79,14 @@ public final class AppModel {
 
     /// Locate Ghostty, then load the catalog and merge the user's config.
     public func bootstrap() async {
+        // A re-bootstrap (e.g. binary-override change) abandons stale theme/color
+        // loads and clears caches so themes reload against the new environment.
+        cancelInFlightColorLoads()
+        themeProvider = nil
+        themes = []
+        themeColors = [:]
+        fonts = []
+        failedThemes = []
         environmentState = .loading
         contentState = .idle
         do {
@@ -208,19 +218,28 @@ public final class AppModel {
     /// Lazily load (and cache) a theme's colors so swatches render on demand.
     public func ensureColors(for theme: ThemeRef) {
         guard themeColors[theme.name] == nil,
-              !colorsInFlight.contains(theme.name),
+              colorTasks[theme.name] == nil,
               !failedThemes.contains(theme.name), // don't re-fetch a known-bad file every redraw
               let themeProvider else { return }
-        colorsInFlight.insert(theme.name)
-        Task {
+        let name = theme.name
+        colorTasks[name] = Task { [weak self] in
             let colors = try? await themeProvider.colors(for: theme)
-            colorsInFlight.remove(theme.name)
+            // A cancelled load (environment reloaded) must not write into the new
+            // model; cancelInFlightColorLoads has already cleared the dictionary.
+            guard let self, !Task.isCancelled else { return }
+            self.colorTasks[name] = nil
             if let colors {
-                themeColors[theme.name] = colors
+                self.themeColors[name] = colors
             } else {
-                failedThemes.insert(theme.name)
+                self.failedThemes.insert(name)
             }
         }
+    }
+
+    /// Cancel and forget every in-flight color load (called on re-bootstrap).
+    private func cancelInFlightColorLoads() {
+        for task in colorTasks.values { task.cancel() }
+        colorTasks.removeAll()
     }
 
     /// Apply a theme by writing `theme = …` via the safe write path (F2).

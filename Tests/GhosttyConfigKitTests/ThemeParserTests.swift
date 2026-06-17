@@ -83,4 +83,28 @@ final class ThemeParserTests: XCTestCase {
         XCTAssertTrue(disclaimer.contains("best-effort") || disclaimer.contains("approxim"))
         XCTAssertTrue(disclaimer.contains("ligature") || disclaimer.contains("font"))
     }
+
+    // MARK: - ThemeProvider concurrency (review G4 #11)
+
+    func testConcurrentColorLoadsDoNotSerializeOnTheActor() async throws {
+        // A loadFile that blocks for 0.2s. If colors(for:) held the actor during
+        // the read, five concurrent loads would serialize to ~1.0s; reading off
+        // the actor lets them overlap to ~0.2s.
+        let provider = ThemeProvider(
+            loadList: { "" },
+            loadFontList: { "" },
+            loadFile: { _ in usleep(200_000); return "palette = 0=#000000\n" }
+        )
+        let themes = (0..<5).map { ThemeRef(name: "t\($0)", source: "user", path: "/tmp/theme-\($0)") }
+
+        let start = Date()
+        try await withThrowingTaskGroup(of: Void.self) { group in
+            for theme in themes {
+                group.addTask { _ = try await provider.colors(for: theme) }
+            }
+            try await group.waitForAll()
+        }
+        let elapsed = Date().timeIntervalSince(start)
+        XCTAssertLessThan(elapsed, 0.7, "concurrent color loads must overlap, not serialize on the actor")
+    }
 }
