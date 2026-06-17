@@ -17,6 +17,7 @@ jobs:
     # manifest and macOS 14 deployment target require. The app's Ghostty-backed
     # tests XCTSkip when no `ghostty` binary is present (as on CI).
     runs-on: macos-15
+    timeout-minutes: 12
     steps:
       - uses: actions/checkout@v4
 
@@ -27,4 +28,6 @@ jobs:
         run: swift build
 
       - name: Test
-        run: swift test
+        # Run under a PTY so test output is line-buffered — otherwise a hang hides
+        # the culprit in an unflushed block buffer. timeout-minutes fails fast.
+        run: script -q /dev/null swift test
