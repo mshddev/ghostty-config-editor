@@ -164,6 +164,8 @@ public final class AppModel {
             applyState = .failed(messages.first?.message ?? "The change didn't validate.")
         } catch ConfigWriteError.staleOnDisk {
             applyState = .failed("This file changed on disk since it was read. Reload and try again.")
+        } catch ConfigWriteError.invalidValue {
+            applyState = .failed("That value can't contain a line break.")
         } catch {
             applyState = .failed(error.localizedDescription)
         }

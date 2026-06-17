@@ -19,6 +19,8 @@ public enum GhosttyCLIError: Error, Equatable, Sendable {
     case versionUnverified(String)
     /// The subprocess could not be launched.
     case launchFailed(String)
+    /// The subprocess outlived its deadline and was terminated.
+    case timedOut
 }
 
 /// Runs `ghostty` subcommands, capturing stdout/stderr asynchronously.
@@ -36,8 +38,10 @@ public struct GhosttyCLI: Sendable {
         self.binaryPath = binaryPath
     }
 
-    /// Run a subcommand (e.g., `["+version"]`) and capture its output.
-    public func run(_ arguments: [String], stdin: Data? = nil) async throws -> CLIResult {
+    /// Run a subcommand (e.g., `["+version"]`) and capture its output. A binary
+    /// that wedges is terminated after `timeout` seconds and surfaces `.timedOut`
+    /// rather than hanging the caller (and the app) forever.
+    public func run(_ arguments: [String], timeout: TimeInterval = 30) async throws -> CLIResult {
         let process = Process()
         process.executableURL = URL(fileURLWithPath: binaryPath)
         process.arguments = arguments
@@ -46,14 +50,6 @@ public struct GhosttyCLI: Sendable {
         let errPipe = Pipe()
         process.standardOutput = outPipe
         process.standardError = errPipe
-
-        if let stdin {
-            let inPipe = Pipe()
-            process.standardInput = inPipe
-            // Write stdin fully then close so the child sees EOF.
-            inPipe.fileHandleForWriting.write(stdin)
-            try? inPipe.fileHandleForWriting.close()
-        }
 
         // Capture descriptors (Int32 is Sendable) before crossing thread
         // boundaries; the Pipe objects stay alive via the Process for the
@@ -67,6 +63,21 @@ public struct GhosttyCLI: Sendable {
             throw GhosttyCLIError.launchFailed(error.localizedDescription)
         }
 
+        // Watchdog: if the child outlives the deadline, kill it. Killing closes
+        // its pipe write-ends, so the drains below hit EOF and we unwind instead
+        // of blocking forever. `Process` is not Sendable, so the watchdog touches
+        // only the pid via POSIX `kill` (signal 0 = liveness probe).
+        let pid = process.processIdentifier
+        let timedOut = AtomicFlag()
+        let watchdog = Task {
+            try? await Task.sleep(for: .seconds(timeout))
+            guard kill(pid, 0) == 0 else { return } // already exited
+            timedOut.set()
+            kill(pid, SIGTERM)
+            try? await Task.sleep(for: .milliseconds(500))
+            if kill(pid, 0) == 0 { kill(pid, SIGKILL) }
+        }
+
         async let outData = Self.drain(fd: outFD)
         async let errData = Self.drain(fd: errFD)
         let (out, err) = await (outData, errData)
@@ -74,7 +85,9 @@ public struct GhosttyCLI: Sendable {
         // Both pipes hit EOF, so the child has closed its write ends and is
         // exiting; this returns promptly.
         process.waitUntilExit()
+        watchdog.cancel()
 
+        if timedOut.isSet { throw GhosttyCLIError.timedOut }
         return CLIResult(stdout: out, stderr: err, exitCode: process.terminationStatus)
     }
 
@@ -149,4 +162,13 @@ public struct GhosttyEnvironment: Sendable {
         let version = try await cli.version()
         return GhosttyEnvironment(cli: cli, version: version)
     }
+}
+
+/// A one-way Sendable boolean: set from the timeout watchdog Task, read by the
+/// caller after the subprocess unwinds.
+final class AtomicFlag: @unchecked Sendable {
+    private let lock = NSLock()
+    private var flag = false
+    func set() { lock.lock(); flag = true; lock.unlock() }
+    var isSet: Bool { lock.lock(); defer { lock.unlock() }; return flag }
 }

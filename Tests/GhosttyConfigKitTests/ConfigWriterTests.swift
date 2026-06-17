@@ -85,6 +85,46 @@ final class ConfigWriterTests: XCTestCase {
         XCTAssertEqual(edited.serialized(), "# café ☕\nfont-family = \"Menlö\"\nfont-size = 17\n")
     }
 
+    // Review G2 #5: editing a CRLF file must keep CRLF on the edited/added line,
+    // not silently rewrite it as LF.
+    func testEditingCRLFFileKeepsCRLFOnEditedLine() {
+        let cfg = "font-size = 16\r\nfont-family = Menlo\r\n"
+        let edited = writer.editedFile(setting: "font-size", to: ["18"], isRepeatable: false, in: model(cfg))
+        XCTAssertEqual(edited.serialized(), "font-size = 18\r\nfont-family = Menlo\r\n")
+    }
+
+    func testAppendedLineInCRLFFileUsesCRLF() {
+        let cfg = "font-size = 16\r\n"
+        let edited = writer.editedFile(setting: "cursor-style", to: ["bar"], isRepeatable: false, in: model(cfg))
+        XCTAssertEqual(edited.serialized(), "font-size = 16\r\ncursor-style = bar\r\n")
+    }
+
+    func testLFFileStaysLFOnEdit() {
+        let cfg = "font-size = 16\nfont-family = Menlo\n"
+        let edited = writer.editedFile(setting: "font-size", to: ["18"], isRepeatable: false, in: model(cfg))
+        XCTAssertEqual(edited.serialized(), "font-size = 18\nfont-family = Menlo\n")
+    }
+
+    // Review G2 #3: a value with a newline would inject extra directives — refuse it.
+    func testApplyRejectsValueContainingNewline() throws {
+        let dir = try tempDir()
+        let path = dir.appendingPathComponent("config")
+        try write("font-size = 16\n", dir, "config")
+        let m = try ConfigReader().readModel(primaryPath: path.path)
+
+        XCTAssertThrowsError(
+            try makeWriter().apply(optionName: "font-size",
+                                   values: ["16\nconfig-file = /tmp/evil"],
+                                   isRepeatable: false, in: m)
+        ) { error in
+            guard case .invalidValue = (error as? ConfigWriteError) else {
+                return XCTFail("expected invalidValue, got \(error)")
+            }
+        }
+        // No injected directive reached disk; the file is byte-intact.
+        XCTAssertEqual(try String(contentsOf: path, encoding: .utf8), "font-size = 16\n")
+    }
+
     // MARK: - Write-target selection (R8)
 
     func testWriteTargetPicksIncludeWhenOptionLivesThere() throws {

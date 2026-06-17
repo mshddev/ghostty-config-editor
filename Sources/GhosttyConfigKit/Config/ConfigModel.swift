@@ -108,8 +108,12 @@ public struct ConfigFile: Sendable, Equatable {
         let hasBOM = rawText.hasPrefix(bom)
         var text = hasBOM ? String(rawText.dropFirst()) : rawText
 
-        let hasTrailing = text.hasSuffix("\n")
-        if hasTrailing { text.removeLast() }
+        // Operate on the last unicode *scalar*, not the last Character: Swift
+        // treats "\r\n" as a single grapheme, so `hasSuffix("\n")` is false for a
+        // CRLF file and `removeLast()` would strip the whole CRLF. Scalars detect
+        // (and strip just) the trailing "\n" for LF and CRLF alike.
+        let hasTrailing = text.unicodeScalars.last == "\n"
+        if hasTrailing { text.unicodeScalars.removeLast() }
 
         let rawLines = (text.isEmpty && !hasTrailing) ? [] : text.components(separatedBy: "\n")
         let lines = rawLines.enumerated().map { index, raw in

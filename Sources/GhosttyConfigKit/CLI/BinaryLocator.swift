@@ -61,21 +61,38 @@ public enum BinaryLocator {
 
     /// Asks a login shell for `ghostty` on its `PATH`. This is the last resort
     /// for non-standard installs (e.g., a custom Homebrew prefix or asdf shim).
-    public static func loginShellFallback() -> String? {
+    ///
+    /// stderr is routed to `/dev/null` — a noisy login profile must not fill an
+    /// undrained pipe and deadlock our read — and the probe is abandoned after
+    /// `timeout` seconds so a slow or wedged shell can't hang discovery (and the
+    /// app's launch) forever.
+    public static func loginShellFallback(timeout: TimeInterval = 5) -> String? {
         let process = Process()
         process.executableURL = URL(fileURLWithPath: "/bin/zsh")
         process.arguments = ["-lic", "command -v ghostty"]
         let pipe = Pipe()
         process.standardOutput = pipe
-        process.standardError = Pipe()
+        process.standardError = FileHandle.nullDevice
         do {
             try process.run()
         } catch {
             return nil
         }
-        let data = pipe.fileHandleForReading.readDataToEndOfFile()
+
+        // Read stdout to EOF on a background queue so the wait can honor a deadline.
+        let outFD = pipe.fileHandleForReading.fileDescriptor
+        let box = DataBox()
+        let done = DispatchSemaphore(value: 0)
+        DispatchQueue.global(qos: .userInitiated).async {
+            box.data = readToEOF(fd: outFD)
+            done.signal()
+        }
+        if done.wait(timeout: .now() + timeout) == .timedOut {
+            kill(process.processIdentifier, SIGKILL) // abandon: closes the pipe, unblocks the read
+            return nil
+        }
         process.waitUntilExit()
-        guard let line = String(data: data, encoding: .utf8)?
+        guard let line = String(data: box.data, encoding: .utf8)?
             .split(separator: "\n").first
             .map(String.init)?
             .trimmingCharacters(in: .whitespacesAndNewlines),
@@ -85,12 +102,38 @@ public enum BinaryLocator {
         return line
     }
 
+    /// Read a file descriptor to EOF (POSIX), retrying on EINTR.
+    private static func readToEOF(fd: Int32) -> Data {
+        var data = Data()
+        let bufferSize = 65_536
+        var buffer = [UInt8](repeating: 0, count: bufferSize)
+        while true {
+            let count = buffer.withUnsafeMutableBytes { read(fd, $0.baseAddress, bufferSize) }
+            if count > 0 { data.append(buffer, count: count) }
+            else if count == 0 { break }
+            else if errno == EINTR { continue }
+            else { break }
+        }
+        return data
+    }
+
     /// Locate `ghostty` against the live system, wiring the real probes.
     public static func locateOnSystem(userOverride: String? = nil) -> String? {
         locate(
             userOverride: userOverride,
             isExecutable: systemIsExecutable,
-            shellFallback: loginShellFallback
+            shellFallback: { loginShellFallback() }
         )
+    }
+}
+
+/// A lock-guarded `Data` box so the background reader can hand bytes back to the
+/// caller across the timeout semaphore.
+private final class DataBox: @unchecked Sendable {
+    private let lock = NSLock()
+    private var _data = Data()
+    var data: Data {
+        get { lock.lock(); defer { lock.unlock() }; return _data }
+        set { lock.lock(); _data = newValue; lock.unlock() }
     }
 }

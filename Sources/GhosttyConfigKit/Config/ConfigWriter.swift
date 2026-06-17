@@ -9,6 +9,9 @@ public enum ConfigWriteError: Error, Equatable, Sendable {
     case backupFailed(String)
     case stageFailed(String)
     case renameFailed(String)
+    /// A key or value contained a newline — writing it would split into extra
+    /// config directives (e.g. an injected `config-file`), so it is refused (R8).
+    case invalidValue(String)
 }
 
 /// The outcome of a successful write, carrying everything needed to undo it (R24).
@@ -68,11 +71,12 @@ public struct ConfigWriter: Sendable {
     /// position-wise so untouched occurrences stay byte-identical.
     public func editedFile(setting name: String, to values: [String], isRepeatable: Bool, in model: ConfigModel) -> ConfigFile {
         let target = targetFile(forOption: name, in: model)
-        let newLines = Self.mutate(target.lines, key: name, newValues: values, isRepeatable: isRepeatable)
+        let newLines = Self.mutate(target.lines, key: name, newValues: values,
+                                   isRepeatable: isRepeatable, lineEnding: target.lineEnding)
         return target.replacingLines(newLines)
     }
 
-    static func mutate(_ original: [ConfigLine], key: String, newValues: [String], isRepeatable: Bool) -> [ConfigLine] {
+    static func mutate(_ original: [ConfigLine], key: String, newValues: [String], isRepeatable: Bool, lineEnding: String = "\n") -> [ConfigLine] {
         var lines = original
         let occurrences = lines.indices.filter { lines[$0].key == key }
 
@@ -81,12 +85,12 @@ public struct ConfigWriter: Sendable {
             for i in 0..<shared {
                 let idx = occurrences[i]
                 if lines[idx].value != newValues[i] {
-                    lines[idx] = settingLine(key: key, value: newValues[i])
+                    lines[idx] = settingLine(key: key, value: newValues[i], lineEnding: lineEnding)
                 }
             }
             if newValues.count > occurrences.count {
                 let insertAt = (occurrences.last.map { $0 + 1 }) ?? lines.count
-                let extras = newValues[occurrences.count...].map { settingLine(key: key, value: $0) }
+                let extras = newValues[occurrences.count...].map { settingLine(key: key, value: $0, lineEnding: lineEnding) }
                 lines.insert(contentsOf: extras, at: insertAt)
             } else if newValues.count < occurrences.count {
                 for idx in occurrences[newValues.count...].sorted(by: >) {
@@ -97,16 +101,19 @@ public struct ConfigWriter: Sendable {
             for idx in occurrences.sorted(by: >) { lines.remove(at: idx) }
         } else if let last = occurrences.last {
             if lines[last].value != newValues[0] {
-                lines[last] = settingLine(key: key, value: newValues[0])
+                lines[last] = settingLine(key: key, value: newValues[0], lineEnding: lineEnding)
             }
         } else {
-            lines.append(settingLine(key: key, value: newValues[0]))
+            lines.append(settingLine(key: key, value: newValues[0], lineEnding: lineEnding))
         }
         return renumber(lines)
     }
 
-    private static func settingLine(key: String, value: String) -> ConfigLine {
-        ConfigLine(raw: "\(key) = \(value)", kind: .setting(key: key, value: value), lineNumber: 0)
+    private static func settingLine(key: String, value: String, lineEnding: String) -> ConfigLine {
+        // Carry the file's line ending so editing a line in a CRLF file doesn't
+        // silently rewrite just that line as LF (R23 byte fidelity).
+        let terminator = lineEnding == "\r\n" ? "\r" : ""
+        return ConfigLine(raw: "\(key) = \(value)\(terminator)", kind: .setting(key: key, value: value), lineNumber: 0)
     }
 
     private static func renumber(_ lines: [ConfigLine]) -> [ConfigLine] {
@@ -120,8 +127,20 @@ public struct ConfigWriter: Sendable {
     /// Apply an option change and persist it safely in one step.
     @discardableResult
     public func apply(optionName: String, values: [String], isRepeatable: Bool, in model: ConfigModel) throws -> WriteReceipt {
+        try Self.rejectLineBreaks(key: optionName, values: values)
         let edited = editedFile(setting: optionName, to: values, isRepeatable: isRepeatable, in: model)
         return try commit(edited)
+    }
+
+    /// Refuse a key/value containing a newline — it would serialize into extra
+    /// config directives (e.g. an injected `config-file`). Guards the public
+    /// write entry points so a multi-line value can never reach disk (R8).
+    private static func rejectLineBreaks(key: String, values: [String]) throws {
+        func hasBreak(_ s: String) -> Bool { s.contains("\n") || s.contains("\r") }
+        if hasBreak(key) { throw ConfigWriteError.invalidValue(key) }
+        for value in values where hasBreak(value) {
+            throw ConfigWriteError.invalidValue(value)
+        }
     }
 
     /// Validate the proposed change against the live binary BEFORE writing, then
@@ -136,6 +155,7 @@ public struct ConfigWriter: Sendable {
         cli: GhosttyCLI?,
         linter: ConfigLinter = ConfigLinter()
     ) async throws -> WriteReceipt {
+        try Self.rejectLineBreaks(key: optionName, values: values)
         let edited = editedFile(setting: optionName, to: values, isRepeatable: isRepeatable, in: model)
         if let cli {
             let validation = try await validatePreview(edited: edited, model: model, cli: cli, linter: linter)
