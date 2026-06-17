@@ -13,8 +13,8 @@ final class CatalogParserTests: XCTestCase {
     func testParsesRepresentativeOptionCount() throws {
         let catalog = try realCatalog()
         // Real 1.3.1 output has 200 distinct option names; the macOS-scoped catalog
-        // (R1, R6) drops 25 Linux/GTK-only options, leaving 175.
-        XCTAssertEqual(catalog.options.count, 175)
+        // (R1, R6) drops 27 Linux/GTK-only options, leaving 173.
+        XCTAssertEqual(catalog.options.count, 173)
         XCTAssertEqual(catalog.version, "1.3.1")
     }
 
@@ -30,7 +30,8 @@ final class CatalogParserTests: XCTestCase {
         // are gone too.
         for name in ["app-notifications", "window-subtitle", "language", "async-backend",
                      "window-show-tab-bar", "quit-after-last-window-closed-delay",
-                     "quick-terminal-keyboard-interactivity", "class", "freetype-load-flags"] {
+                     "quick-terminal-keyboard-interactivity", "class", "freetype-load-flags",
+                     "window-titlebar-background", "window-titlebar-foreground"] {
             XCTAssertNil(catalog.option(named: name), "\(name) is Linux/GTK-only and should be filtered")
         }
         // The "Linux / GTK" sidebar category disappears once its members are gone.
@@ -43,6 +44,8 @@ final class CatalogParserTests: XCTestCase {
         // sharing the "desktop"/notification theme with the filtered GTK options.
         XCTAssertNotNil(catalog.option(named: "desktop-notifications"),
                         "desktop-notifications is cross-platform and must be kept")
+        // Kept, and re-homed out of the (now-empty) Linux / GTK group via nameOverride.
+        XCTAssertEqual(catalog.option(named: "desktop-notifications")?.category, "Terminal")
         // macOS-supported options that mention Linux in passing stay.
         for name in ["window-decoration", "window-save-state", "quick-terminal-space-behavior",
                      "macos-titlebar-style", "initial-window"] {
@@ -61,6 +64,7 @@ final class CatalogParserTests: XCTestCase {
         XCTAssertTrue(MacOSCatalogScope.excludes("window-subtitle"))
         XCTAssertTrue(MacOSCatalogScope.excludes("class"))
         XCTAssertTrue(MacOSCatalogScope.excludes("freetype-load-flags"))
+        XCTAssertTrue(MacOSCatalogScope.excludes("window-titlebar-background"))
         // Kept: cross-platform / macOS / unrelated.
         XCTAssertFalse(MacOSCatalogScope.excludes("desktop-notifications"))
         XCTAssertFalse(MacOSCatalogScope.excludes("font-size"))

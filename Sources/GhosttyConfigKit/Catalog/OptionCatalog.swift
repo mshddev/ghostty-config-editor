@@ -123,6 +123,10 @@ public enum OptionCategorizer {
         "Shell Integration",
         "Terminal",
         "macOS",
+        // Retained intentionally: `MacOSCatalogScope` filters every Linux/GTK option
+        // out of the catalog, so no option carries this category today and it never
+        // surfaces (`orderedCategories` filters by present categories). Kept as a
+        // no-op affordance in case that scoping is ever relaxed.
         "Linux / GTK",
         "General",
     ]
@@ -226,12 +230,12 @@ public enum MacOSCatalogScope {
     /// Name prefixes that unambiguously mark an option as part of the Linux display
     /// stack (GTK / X11 / Wayland / Linux cgroups). `desktop-` is intentionally
     /// absent — `desktop-notifications` is cross-platform.
-    static let linuxStackPrefixes = ["gtk-", "x11-", "linux-", "wayland-"]
+    private static let linuxStackPrefixes: [String] = ["gtk-", "x11-", "linux-", "wayland-"]
 
     /// Options that are doc-confirmed Linux/GTK/Wayland-only yet lack a Linux-stack
     /// prefix, so the prefix rule alone would miss them. Each is annotated with the
     /// `--docs` sentence that establishes it has no effect on macOS.
-    static let nonPrefixedLinuxOnly: Set<String> = [
+    private static let nonPrefixedLinuxOnly: Set<String> = [
         "language",                              // "GTK only."
         "async-backend",                         // "only supported on Linux ... On macOS, we always use `kqueue`."
         "quit-after-last-window-closed-delay",   // "Only implemented on Linux."
@@ -241,6 +245,8 @@ public enum MacOSCatalogScope {
         "quick-terminal-keyboard-interactivity", // "Only has an effect on Linux Wayland."
         "class",                                 // "This only affects GTK builds." (X11 WM_CLASS / Wayland app ID / DBus)
         "freetype-load-flags",                   // "macOS uses CoreText and does not have an equivalent configuration."
+        "window-titlebar-background",            // "Currently only supported in the GTK app runtime."
+        "window-titlebar-foreground",            // "Currently only supported in the GTK app runtime."
     ]
 
     /// True when an option never takes effect on macOS and should be excluded from

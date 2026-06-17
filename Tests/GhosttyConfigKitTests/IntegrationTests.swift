@@ -17,7 +17,7 @@ final class IntegrationTests: XCTestCase {
         let result = try await cli.run(["+show-config", "--default", "--docs"])
         XCTAssertTrue(result.succeeded)
         let catalog = CatalogParser.parse(result.stdoutString)
-        XCTAssertGreaterThan(catalog.options.count, 150, "live macOS-scoped catalog should list ~177 options")
+        XCTAssertGreaterThan(catalog.options.count, 160, "live macOS-scoped catalog should list ~173 options")
         XCTAssertNotNil(catalog.option(named: "background-opacity"))
         XCTAssertNotNil(catalog.option(named: "keybind"))
     }
