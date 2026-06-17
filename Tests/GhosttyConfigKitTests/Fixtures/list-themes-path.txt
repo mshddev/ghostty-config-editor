@@ -1,0 +1,463 @@
+0x96f (resources) /Applications/Ghostty.app/Contents/Resources/ghostty/themes/0x96f
+12-bit Rainbow (resources) /Applications/Ghostty.app/Contents/Resources/ghostty/themes/12-bit Rainbow
+3024 Day (resources) /Applications/Ghostty.app/Contents/Resources/ghostty/themes/3024 Day
+3024 Night (resources) /Applications/Ghostty.app/Contents/Resources/ghostty/themes/3024 Night
+Aardvark Blue (resources) /Applications/Ghostty.app/Contents/Resources/ghostty/themes/Aardvark Blue
+Abernathy (resources) /Applications/Ghostty.app/Contents/Resources/ghostty/themes/Abernathy
+Adventure (resources) /Applications/Ghostty.app/Contents/Resources/ghostty/themes/Adventure
+Adventure Time (resources) /Applications/Ghostty.app/Contents/Resources/ghostty/themes/Adventure Time
+Adwaita (resources) /Applications/Ghostty.app/Contents/Resources/ghostty/themes/Adwaita
+Adwaita Dark (resources) /Applications/Ghostty.app/Contents/Resources/ghostty/themes/Adwaita Dark
+Afterglow (resources) /Applications/Ghostty.app/Contents/Resources/ghostty/themes/Afterglow
+Aizen Dark (resources) /Applications/Ghostty.app/Contents/Resources/ghostty/themes/Aizen Dark
+Aizen Light (resources) /Applications/Ghostty.app/Contents/Resources/ghostty/themes/Aizen Light
+Alabaster (resources) /Applications/Ghostty.app/Contents/Resources/ghostty/themes/Alabaster
+Alien Blood (resources) /Applications/Ghostty.app/Contents/Resources/ghostty/themes/Alien Blood
+Andromeda (resources) /Applications/Ghostty.app/Contents/Resources/ghostty/themes/Andromeda
+Apple Classic (resources) /Applications/Ghostty.app/Contents/Resources/ghostty/themes/Apple Classic
+Apple System Colors (resources) /Applications/Ghostty.app/Contents/Resources/ghostty/themes/Apple System Colors
+Apple System Colors Light (resources) /Applications/Ghostty.app/Contents/Resources/ghostty/themes/Apple System Colors Light
+Arcoiris (resources) /Applications/Ghostty.app/Contents/Resources/ghostty/themes/Arcoiris
+Ardoise (resources) /Applications/Ghostty.app/Contents/Resources/ghostty/themes/Ardoise
+Argonaut (resources) /Applications/Ghostty.app/Contents/Resources/ghostty/themes/Argonaut
+Arthur (resources) /Applications/Ghostty.app/Contents/Resources/ghostty/themes/Arthur
+Atelier Sulphurpool (resources) /Applications/Ghostty.app/Contents/Resources/ghostty/themes/Atelier Sulphurpool
+Atom (resources) /Applications/Ghostty.app/Contents/Resources/ghostty/themes/Atom
+Atom One Dark (resources) /Applications/Ghostty.app/Contents/Resources/ghostty/themes/Atom One Dark
+Atom One Light (resources) /Applications/Ghostty.app/Contents/Resources/ghostty/themes/Atom One Light
+Aura (resources) /Applications/Ghostty.app/Contents/Resources/ghostty/themes/Aura
+Aurora (resources) /Applications/Ghostty.app/Contents/Resources/ghostty/themes/Aurora
+Ayu (resources) /Applications/Ghostty.app/Contents/Resources/ghostty/themes/Ayu
+Ayu Light (resources) /Applications/Ghostty.app/Contents/Resources/ghostty/themes/Ayu Light
+Ayu Mirage (resources) /Applications/Ghostty.app/Contents/Resources/ghostty/themes/Ayu Mirage
+Banana Blueberry (resources) /Applications/Ghostty.app/Contents/Resources/ghostty/themes/Banana Blueberry
+Batman (resources) /Applications/Ghostty.app/Contents/Resources/ghostty/themes/Batman
+Belafonte Day (resources) /Applications/Ghostty.app/Contents/Resources/ghostty/themes/Belafonte Day
+Belafonte Night (resources) /Applications/Ghostty.app/Contents/Resources/ghostty/themes/Belafonte Night
+Birds Of Paradise (resources) /Applications/Ghostty.app/Contents/Resources/ghostty/themes/Birds Of Paradise
+Black Metal (resources) /Applications/Ghostty.app/Contents/Resources/ghostty/themes/Black Metal
+Black Metal (Bathory) (resources) /Applications/Ghostty.app/Contents/Resources/ghostty/themes/Black Metal (Bathory)
+Black Metal (Burzum) (resources) /Applications/Ghostty.app/Contents/Resources/ghostty/themes/Black Metal (Burzum)
+Black Metal (Dark Funeral) (resources) /Applications/Ghostty.app/Contents/Resources/ghostty/themes/Black Metal (Dark Funeral)
+Black Metal (Gorgoroth) (resources) /Applications/Ghostty.app/Contents/Resources/ghostty/themes/Black Metal (Gorgoroth)
+Black Metal (Immortal) (resources) /Applications/Ghostty.app/Contents/Resources/ghostty/themes/Black Metal (Immortal)
+Black Metal (Khold) (resources) /Applications/Ghostty.app/Contents/Resources/ghostty/themes/Black Metal (Khold)
+Black Metal (Marduk) (resources) /Applications/Ghostty.app/Contents/Resources/ghostty/themes/Black Metal (Marduk)
+Black Metal (Mayhem) (resources) /Applications/Ghostty.app/Contents/Resources/ghostty/themes/Black Metal (Mayhem)
+Black Metal (Nile) (resources) /Applications/Ghostty.app/Contents/Resources/ghostty/themes/Black Metal (Nile)
+Black Metal (Venom) (resources) /Applications/Ghostty.app/Contents/Resources/ghostty/themes/Black Metal (Venom)
+Blazer (resources) /Applications/Ghostty.app/Contents/Resources/ghostty/themes/Blazer
+Blue Berry Pie (resources) /Applications/Ghostty.app/Contents/Resources/ghostty/themes/Blue Berry Pie
+Blue Dolphin (resources) /Applications/Ghostty.app/Contents/Resources/ghostty/themes/Blue Dolphin
+Blue Matrix (resources) /Applications/Ghostty.app/Contents/Resources/ghostty/themes/Blue Matrix
+Bluloco Dark (resources) /Applications/Ghostty.app/Contents/Resources/ghostty/themes/Bluloco Dark
+Bluloco Light (resources) /Applications/Ghostty.app/Contents/Resources/ghostty/themes/Bluloco Light
+Borland (resources) /Applications/Ghostty.app/Contents/Resources/ghostty/themes/Borland
+Box (resources) /Applications/Ghostty.app/Contents/Resources/ghostty/themes/Box
+branch (resources) /Applications/Ghostty.app/Contents/Resources/ghostty/themes/branch
+Breadog (resources) /Applications/Ghostty.app/Contents/Resources/ghostty/themes/Breadog
+Breeze (resources) /Applications/Ghostty.app/Contents/Resources/ghostty/themes/Breeze
+Bright Lights (resources) /Applications/Ghostty.app/Contents/Resources/ghostty/themes/Bright Lights
+Broadcast (resources) /Applications/Ghostty.app/Contents/Resources/ghostty/themes/Broadcast
+Brogrammer (resources) /Applications/Ghostty.app/Contents/Resources/ghostty/themes/Brogrammer
+Builtin Dark (resources) /Applications/Ghostty.app/Contents/Resources/ghostty/themes/Builtin Dark
+Builtin Light (resources) /Applications/Ghostty.app/Contents/Resources/ghostty/themes/Builtin Light
+Builtin Pastel Dark (resources) /Applications/Ghostty.app/Contents/Resources/ghostty/themes/Builtin Pastel Dark
+Builtin Tango Dark (resources) /Applications/Ghostty.app/Contents/Resources/ghostty/themes/Builtin Tango Dark
+Builtin Tango Light (resources) /Applications/Ghostty.app/Contents/Resources/ghostty/themes/Builtin Tango Light
+C64 (resources) /Applications/Ghostty.app/Contents/Resources/ghostty/themes/C64
+Calamity (resources) /Applications/Ghostty.app/Contents/Resources/ghostty/themes/Calamity
+Carbonfox (resources) /Applications/Ghostty.app/Contents/Resources/ghostty/themes/Carbonfox
+Catppuccin Frappe (resources) /Applications/Ghostty.app/Contents/Resources/ghostty/themes/Catppuccin Frappe
+Catppuccin Latte (resources) /Applications/Ghostty.app/Contents/Resources/ghostty/themes/Catppuccin Latte
+Catppuccin Macchiato (resources) /Applications/Ghostty.app/Contents/Resources/ghostty/themes/Catppuccin Macchiato
+Catppuccin Mocha (resources) /Applications/Ghostty.app/Contents/Resources/ghostty/themes/Catppuccin Mocha
+CGA (resources) /Applications/Ghostty.app/Contents/Resources/ghostty/themes/CGA
+Chalk (resources) /Applications/Ghostty.app/Contents/Resources/ghostty/themes/Chalk
+Chalkboard (resources) /Applications/Ghostty.app/Contents/Resources/ghostty/themes/Chalkboard
+Challenger Deep (resources) /Applications/Ghostty.app/Contents/Resources/ghostty/themes/Challenger Deep
+Chester (resources) /Applications/Ghostty.app/Contents/Resources/ghostty/themes/Chester
+Ciapre (resources) /Applications/Ghostty.app/Contents/Resources/ghostty/themes/Ciapre
+Citruszest (resources) /Applications/Ghostty.app/Contents/Resources/ghostty/themes/Citruszest
+CLRS (resources) /Applications/Ghostty.app/Contents/Resources/ghostty/themes/CLRS
+Cobalt Neon (resources) /Applications/Ghostty.app/Contents/Resources/ghostty/themes/Cobalt Neon
+Cobalt Next (resources) /Applications/Ghostty.app/Contents/Resources/ghostty/themes/Cobalt Next
+Cobalt Next Dark (resources) /Applications/Ghostty.app/Contents/Resources/ghostty/themes/Cobalt Next Dark
+Cobalt Next Minimal (resources) /Applications/Ghostty.app/Contents/Resources/ghostty/themes/Cobalt Next Minimal
+Cobalt2 (resources) /Applications/Ghostty.app/Contents/Resources/ghostty/themes/Cobalt2
+Coffee Theme (resources) /Applications/Ghostty.app/Contents/Resources/ghostty/themes/Coffee Theme
+Crayon Pony Fish (resources) /Applications/Ghostty.app/Contents/Resources/ghostty/themes/Crayon Pony Fish
+Cursor Dark (resources) /Applications/Ghostty.app/Contents/Resources/ghostty/themes/Cursor Dark
+Cutie Pro (resources) /Applications/Ghostty.app/Contents/Resources/ghostty/themes/Cutie Pro
+Cyberdyne (resources) /Applications/Ghostty.app/Contents/Resources/ghostty/themes/Cyberdyne
+Cyberpunk (resources) /Applications/Ghostty.app/Contents/Resources/ghostty/themes/Cyberpunk
+Cyberpunk Scarlet Protocol (resources) /Applications/Ghostty.app/Contents/Resources/ghostty/themes/Cyberpunk Scarlet Protocol
+Dark Modern (resources) /Applications/Ghostty.app/Contents/Resources/ghostty/themes/Dark Modern
+Dark Pastel (resources) /Applications/Ghostty.app/Contents/Resources/ghostty/themes/Dark Pastel
+Dark+ (resources) /Applications/Ghostty.app/Contents/Resources/ghostty/themes/Dark+
+Darkermatrix (resources) /Applications/Ghostty.app/Contents/Resources/ghostty/themes/Darkermatrix
+Darkmatrix (resources) /Applications/Ghostty.app/Contents/Resources/ghostty/themes/Darkmatrix
+Darkside (resources) /Applications/Ghostty.app/Contents/Resources/ghostty/themes/Darkside
+Dawnfox (resources) /Applications/Ghostty.app/Contents/Resources/ghostty/themes/Dawnfox
+Dayfox (resources) /Applications/Ghostty.app/Contents/Resources/ghostty/themes/Dayfox
+Deep (resources) /Applications/Ghostty.app/Contents/Resources/ghostty/themes/Deep
+Desert (resources) /Applications/Ghostty.app/Contents/Resources/ghostty/themes/Desert
+Detuned (resources) /Applications/Ghostty.app/Contents/Resources/ghostty/themes/Detuned
+Dimidium (resources) /Applications/Ghostty.app/Contents/Resources/ghostty/themes/Dimidium
+Dimmed Monokai (resources) /Applications/Ghostty.app/Contents/Resources/ghostty/themes/Dimmed Monokai
+Django (resources) /Applications/Ghostty.app/Contents/Resources/ghostty/themes/Django
+Django Reborn Again (resources) /Applications/Ghostty.app/Contents/Resources/ghostty/themes/Django Reborn Again
+Django Smooth (resources) /Applications/Ghostty.app/Contents/Resources/ghostty/themes/Django Smooth
+Doom One (resources) /Applications/Ghostty.app/Contents/Resources/ghostty/themes/Doom One
+Doom Peacock (resources) /Applications/Ghostty.app/Contents/Resources/ghostty/themes/Doom Peacock
+Dot Gov (resources) /Applications/Ghostty.app/Contents/Resources/ghostty/themes/Dot Gov
+Dracula (resources) /Applications/Ghostty.app/Contents/Resources/ghostty/themes/Dracula
+Dracula+ (resources) /Applications/Ghostty.app/Contents/Resources/ghostty/themes/Dracula+
+Duckbones (resources) /Applications/Ghostty.app/Contents/Resources/ghostty/themes/Duckbones
+Duotone Dark (resources) /Applications/Ghostty.app/Contents/Resources/ghostty/themes/Duotone Dark
+Duskfox (resources) /Applications/Ghostty.app/Contents/Resources/ghostty/themes/Duskfox
+Earthsong (resources) /Applications/Ghostty.app/Contents/Resources/ghostty/themes/Earthsong
+Electron Highlighter (resources) /Applications/Ghostty.app/Contents/Resources/ghostty/themes/Electron Highlighter
+Elegant (resources) /Applications/Ghostty.app/Contents/Resources/ghostty/themes/Elegant
+Elemental (resources) /Applications/Ghostty.app/Contents/Resources/ghostty/themes/Elemental
+Elementary (resources) /Applications/Ghostty.app/Contents/Resources/ghostty/themes/Elementary
+Embark (resources) /Applications/Ghostty.app/Contents/Resources/ghostty/themes/Embark
+Embers Dark (resources) /Applications/Ghostty.app/Contents/Resources/ghostty/themes/Embers Dark
+ENCOM (resources) /Applications/Ghostty.app/Contents/Resources/ghostty/themes/ENCOM
+Espresso (resources) /Applications/Ghostty.app/Contents/Resources/ghostty/themes/Espresso
+Espresso Libre (resources) /Applications/Ghostty.app/Contents/Resources/ghostty/themes/Espresso Libre
+Everblush (resources) /Applications/Ghostty.app/Contents/Resources/ghostty/themes/Everblush
+Everforest Dark Hard (resources) /Applications/Ghostty.app/Contents/Resources/ghostty/themes/Everforest Dark Hard
+Everforest Light Med (resources) /Applications/Ghostty.app/Contents/Resources/ghostty/themes/Everforest Light Med
+Fahrenheit (resources) /Applications/Ghostty.app/Contents/Resources/ghostty/themes/Fahrenheit
+Fairyfloss (resources) /Applications/Ghostty.app/Contents/Resources/ghostty/themes/Fairyfloss
+Farmhouse Dark (resources) /Applications/Ghostty.app/Contents/Resources/ghostty/themes/Farmhouse Dark
+Farmhouse Light (resources) /Applications/Ghostty.app/Contents/Resources/ghostty/themes/Farmhouse Light
+Fideloper (resources) /Applications/Ghostty.app/Contents/Resources/ghostty/themes/Fideloper
+Firefly Traditional (resources) /Applications/Ghostty.app/Contents/Resources/ghostty/themes/Firefly Traditional
+Firefox Dev (resources) /Applications/Ghostty.app/Contents/Resources/ghostty/themes/Firefox Dev
+Firewatch (resources) /Applications/Ghostty.app/Contents/Resources/ghostty/themes/Firewatch
+Fish Tank (resources) /Applications/Ghostty.app/Contents/Resources/ghostty/themes/Fish Tank
+Flat (resources) /Applications/Ghostty.app/Contents/Resources/ghostty/themes/Flat
+Flatland (resources) /Applications/Ghostty.app/Contents/Resources/ghostty/themes/Flatland
+Flexoki Dark (resources) /Applications/Ghostty.app/Contents/Resources/ghostty/themes/Flexoki Dark
+Flexoki Light (resources) /Applications/Ghostty.app/Contents/Resources/ghostty/themes/Flexoki Light
+Floraverse (resources) /Applications/Ghostty.app/Contents/Resources/ghostty/themes/Floraverse
+Forest Blue (resources) /Applications/Ghostty.app/Contents/Resources/ghostty/themes/Forest Blue
+Framer (resources) /Applications/Ghostty.app/Contents/Resources/ghostty/themes/Framer
+Front End Delight (resources) /Applications/Ghostty.app/Contents/Resources/ghostty/themes/Front End Delight
+Fun Forrest (resources) /Applications/Ghostty.app/Contents/Resources/ghostty/themes/Fun Forrest
+Galaxy (resources) /Applications/Ghostty.app/Contents/Resources/ghostty/themes/Galaxy
+Galizur (resources) /Applications/Ghostty.app/Contents/Resources/ghostty/themes/Galizur
+Ghostty Default Style Dark (resources) /Applications/Ghostty.app/Contents/Resources/ghostty/themes/Ghostty Default Style Dark
+GitHub (resources) /Applications/Ghostty.app/Contents/Resources/ghostty/themes/GitHub
+GitHub Dark (resources) /Applications/Ghostty.app/Contents/Resources/ghostty/themes/GitHub Dark
+GitHub Dark Colorblind (resources) /Applications/Ghostty.app/Contents/Resources/ghostty/themes/GitHub Dark Colorblind
+GitHub Dark Default (resources) /Applications/Ghostty.app/Contents/Resources/ghostty/themes/GitHub Dark Default
+GitHub Dark Dimmed (resources) /Applications/Ghostty.app/Contents/Resources/ghostty/themes/GitHub Dark Dimmed
+GitHub Dark High Contrast (resources) /Applications/Ghostty.app/Contents/Resources/ghostty/themes/GitHub Dark High Contrast
+GitHub Light Colorblind (resources) /Applications/Ghostty.app/Contents/Resources/ghostty/themes/GitHub Light Colorblind
+GitHub Light Default (resources) /Applications/Ghostty.app/Contents/Resources/ghostty/themes/GitHub Light Default
+GitHub Light High Contrast (resources) /Applications/Ghostty.app/Contents/Resources/ghostty/themes/GitHub Light High Contrast
+GitLab Dark (resources) /Applications/Ghostty.app/Contents/Resources/ghostty/themes/GitLab Dark
+GitLab Dark Grey (resources) /Applications/Ghostty.app/Contents/Resources/ghostty/themes/GitLab Dark Grey
+GitLab Light (resources) /Applications/Ghostty.app/Contents/Resources/ghostty/themes/GitLab Light
+Glacier (resources) /Applications/Ghostty.app/Contents/Resources/ghostty/themes/Glacier
+Grape (resources) /Applications/Ghostty.app/Contents/Resources/ghostty/themes/Grape
+Grass (resources) /Applications/Ghostty.app/Contents/Resources/ghostty/themes/Grass
+Grey Green (resources) /Applications/Ghostty.app/Contents/Resources/ghostty/themes/Grey Green
+Gruber Darker (resources) /Applications/Ghostty.app/Contents/Resources/ghostty/themes/Gruber Darker
+Gruvbox Dark (resources) /Applications/Ghostty.app/Contents/Resources/ghostty/themes/Gruvbox Dark
+Gruvbox Dark Hard (resources) /Applications/Ghostty.app/Contents/Resources/ghostty/themes/Gruvbox Dark Hard
+Gruvbox Light (resources) /Applications/Ghostty.app/Contents/Resources/ghostty/themes/Gruvbox Light
+Gruvbox Light Hard (resources) /Applications/Ghostty.app/Contents/Resources/ghostty/themes/Gruvbox Light Hard
+Gruvbox Material (resources) /Applications/Ghostty.app/Contents/Resources/ghostty/themes/Gruvbox Material
+Gruvbox Material Dark (resources) /Applications/Ghostty.app/Contents/Resources/ghostty/themes/Gruvbox Material Dark
+Gruvbox Material Light (resources) /Applications/Ghostty.app/Contents/Resources/ghostty/themes/Gruvbox Material Light
+Guezwhoz (resources) /Applications/Ghostty.app/Contents/Resources/ghostty/themes/Guezwhoz
+Hacktober (resources) /Applications/Ghostty.app/Contents/Resources/ghostty/themes/Hacktober
+Hardcore (resources) /Applications/Ghostty.app/Contents/Resources/ghostty/themes/Hardcore
+Harper (resources) /Applications/Ghostty.app/Contents/Resources/ghostty/themes/Harper
+Havn Daggry (resources) /Applications/Ghostty.app/Contents/Resources/ghostty/themes/Havn Daggry
+Havn Skumring (resources) /Applications/Ghostty.app/Contents/Resources/ghostty/themes/Havn Skumring
+HaX0R Blue (resources) /Applications/Ghostty.app/Contents/Resources/ghostty/themes/HaX0R Blue
+HaX0R Gr33N (resources) /Applications/Ghostty.app/Contents/Resources/ghostty/themes/HaX0R Gr33N
+HaX0R R3D (resources) /Applications/Ghostty.app/Contents/Resources/ghostty/themes/HaX0R R3D
+Heeler (resources) /Applications/Ghostty.app/Contents/Resources/ghostty/themes/Heeler
+Highway (resources) /Applications/Ghostty.app/Contents/Resources/ghostty/themes/Highway
+Hipster Green (resources) /Applications/Ghostty.app/Contents/Resources/ghostty/themes/Hipster Green
+Hivacruz (resources) /Applications/Ghostty.app/Contents/Resources/ghostty/themes/Hivacruz
+Homebrew (resources) /Applications/Ghostty.app/Contents/Resources/ghostty/themes/Homebrew
+Hopscotch (resources) /Applications/Ghostty.app/Contents/Resources/ghostty/themes/Hopscotch
+Hopscotch.256 (resources) /Applications/Ghostty.app/Contents/Resources/ghostty/themes/Hopscotch.256
+Horizon (resources) /Applications/Ghostty.app/Contents/Resources/ghostty/themes/Horizon
+Horizon Bright (resources) /Applications/Ghostty.app/Contents/Resources/ghostty/themes/Horizon Bright
+Hot Dog Stand (resources) /Applications/Ghostty.app/Contents/Resources/ghostty/themes/Hot Dog Stand
+Hot Dog Stand (Mustard) (resources) /Applications/Ghostty.app/Contents/Resources/ghostty/themes/Hot Dog Stand (Mustard)
+Hurtado (resources) /Applications/Ghostty.app/Contents/Resources/ghostty/themes/Hurtado
+Hybrid (resources) /Applications/Ghostty.app/Contents/Resources/ghostty/themes/Hybrid
+IBM 5153 CGA (resources) /Applications/Ghostty.app/Contents/Resources/ghostty/themes/IBM 5153 CGA
+IBM 5153 CGA (Black) (resources) /Applications/Ghostty.app/Contents/Resources/ghostty/themes/IBM 5153 CGA (Black)
+IC Green PPL (resources) /Applications/Ghostty.app/Contents/Resources/ghostty/themes/IC Green PPL
+IC Orange PPL (resources) /Applications/Ghostty.app/Contents/Resources/ghostty/themes/IC Orange PPL
+Iceberg Dark (resources) /Applications/Ghostty.app/Contents/Resources/ghostty/themes/Iceberg Dark
+Iceberg Light (resources) /Applications/Ghostty.app/Contents/Resources/ghostty/themes/Iceberg Light
+Idea (resources) /Applications/Ghostty.app/Contents/Resources/ghostty/themes/Idea
+Idle Toes (resources) /Applications/Ghostty.app/Contents/Resources/ghostty/themes/Idle Toes
+IR Black (resources) /Applications/Ghostty.app/Contents/Resources/ghostty/themes/IR Black
+IRIX Console (resources) /Applications/Ghostty.app/Contents/Resources/ghostty/themes/IRIX Console
+IRIX Terminal (resources) /Applications/Ghostty.app/Contents/Resources/ghostty/themes/IRIX Terminal
+iTerm2 Dark Background (resources) /Applications/Ghostty.app/Contents/Resources/ghostty/themes/iTerm2 Dark Background
+iTerm2 Default (resources) /Applications/Ghostty.app/Contents/Resources/ghostty/themes/iTerm2 Default
+iTerm2 Light Background (resources) /Applications/Ghostty.app/Contents/Resources/ghostty/themes/iTerm2 Light Background
+iTerm2 Pastel Dark Background (resources) /Applications/Ghostty.app/Contents/Resources/ghostty/themes/iTerm2 Pastel Dark Background
+iTerm2 Smoooooth (resources) /Applications/Ghostty.app/Contents/Resources/ghostty/themes/iTerm2 Smoooooth
+iTerm2 Solarized Dark (resources) /Applications/Ghostty.app/Contents/Resources/ghostty/themes/iTerm2 Solarized Dark
+iTerm2 Solarized Light (resources) /Applications/Ghostty.app/Contents/Resources/ghostty/themes/iTerm2 Solarized Light
+iTerm2 Tango Dark (resources) /Applications/Ghostty.app/Contents/Resources/ghostty/themes/iTerm2 Tango Dark
+iTerm2 Tango Light (resources) /Applications/Ghostty.app/Contents/Resources/ghostty/themes/iTerm2 Tango Light
+Jackie Brown (resources) /Applications/Ghostty.app/Contents/Resources/ghostty/themes/Jackie Brown
+Japanesque (resources) /Applications/Ghostty.app/Contents/Resources/ghostty/themes/Japanesque
+Jellybeans (resources) /Applications/Ghostty.app/Contents/Resources/ghostty/themes/Jellybeans
+JetBrains Darcula (resources) /Applications/Ghostty.app/Contents/Resources/ghostty/themes/JetBrains Darcula
+Jubi (resources) /Applications/Ghostty.app/Contents/Resources/ghostty/themes/Jubi
+Kanagawa Dragon (resources) /Applications/Ghostty.app/Contents/Resources/ghostty/themes/Kanagawa Dragon
+Kanagawa Lotus (resources) /Applications/Ghostty.app/Contents/Resources/ghostty/themes/Kanagawa Lotus
+Kanagawa Wave (resources) /Applications/Ghostty.app/Contents/Resources/ghostty/themes/Kanagawa Wave
+Kanagawabones (resources) /Applications/Ghostty.app/Contents/Resources/ghostty/themes/Kanagawabones
+Kanso Ink (resources) /Applications/Ghostty.app/Contents/Resources/ghostty/themes/Kanso Ink
+Kanso Mist (resources) /Applications/Ghostty.app/Contents/Resources/ghostty/themes/Kanso Mist
+Kanso Pearl (resources) /Applications/Ghostty.app/Contents/Resources/ghostty/themes/Kanso Pearl
+Kanso Zen (resources) /Applications/Ghostty.app/Contents/Resources/ghostty/themes/Kanso Zen
+Kibble (resources) /Applications/Ghostty.app/Contents/Resources/ghostty/themes/Kibble
+Kitty Default (resources) /Applications/Ghostty.app/Contents/Resources/ghostty/themes/Kitty Default
+Kitty Low Contrast (resources) /Applications/Ghostty.app/Contents/Resources/ghostty/themes/Kitty Low Contrast
+Kolorit (resources) /Applications/Ghostty.app/Contents/Resources/ghostty/themes/Kolorit
+Konsolas (resources) /Applications/Ghostty.app/Contents/Resources/ghostty/themes/Konsolas
+Kurokula (resources) /Applications/Ghostty.app/Contents/Resources/ghostty/themes/Kurokula
+Lab Fox (resources) /Applications/Ghostty.app/Contents/Resources/ghostty/themes/Lab Fox
+Laser (resources) /Applications/Ghostty.app/Contents/Resources/ghostty/themes/Laser
+Later This Evening (resources) /Applications/Ghostty.app/Contents/Resources/ghostty/themes/Later This Evening
+Lavandula (resources) /Applications/Ghostty.app/Contents/Resources/ghostty/themes/Lavandula
+Light Owl (resources) /Applications/Ghostty.app/Contents/Resources/ghostty/themes/Light Owl
+Liquid Carbon (resources) /Applications/Ghostty.app/Contents/Resources/ghostty/themes/Liquid Carbon
+Liquid Carbon Transparent (resources) /Applications/Ghostty.app/Contents/Resources/ghostty/themes/Liquid Carbon Transparent
+Lovelace (resources) /Applications/Ghostty.app/Contents/Resources/ghostty/themes/Lovelace
+Man Page (resources) /Applications/Ghostty.app/Contents/Resources/ghostty/themes/Man Page
+Mariana (resources) /Applications/Ghostty.app/Contents/Resources/ghostty/themes/Mariana
+Material (resources) /Applications/Ghostty.app/Contents/Resources/ghostty/themes/Material
+Material Dark (resources) /Applications/Ghostty.app/Contents/Resources/ghostty/themes/Material Dark
+Material Darker (resources) /Applications/Ghostty.app/Contents/Resources/ghostty/themes/Material Darker
+Material Design Colors (resources) /Applications/Ghostty.app/Contents/Resources/ghostty/themes/Material Design Colors
+Material Ocean (resources) /Applications/Ghostty.app/Contents/Resources/ghostty/themes/Material Ocean
+Mathias (resources) /Applications/Ghostty.app/Contents/Resources/ghostty/themes/Mathias
+Matrix (resources) /Applications/Ghostty.app/Contents/Resources/ghostty/themes/Matrix
+Matte Black (resources) /Applications/Ghostty.app/Contents/Resources/ghostty/themes/Matte Black
+Medallion (resources) /Applications/Ghostty.app/Contents/Resources/ghostty/themes/Medallion
+Melange Dark (resources) /Applications/Ghostty.app/Contents/Resources/ghostty/themes/Melange Dark
+Melange Light (resources) /Applications/Ghostty.app/Contents/Resources/ghostty/themes/Melange Light
+Mellifluous (resources) /Applications/Ghostty.app/Contents/Resources/ghostty/themes/Mellifluous
+Mellow (resources) /Applications/Ghostty.app/Contents/Resources/ghostty/themes/Mellow
+Miasma (resources) /Applications/Ghostty.app/Contents/Resources/ghostty/themes/Miasma
+Midnight In Mojave (resources) /Applications/Ghostty.app/Contents/Resources/ghostty/themes/Midnight In Mojave
+Mirage (resources) /Applications/Ghostty.app/Contents/Resources/ghostty/themes/Mirage
+Misterioso (resources) /Applications/Ghostty.app/Contents/Resources/ghostty/themes/Misterioso
+Modus Operandi (resources) /Applications/Ghostty.app/Contents/Resources/ghostty/themes/Modus Operandi
+Modus Operandi Tinted (resources) /Applications/Ghostty.app/Contents/Resources/ghostty/themes/Modus Operandi Tinted
+Modus Vivendi (resources) /Applications/Ghostty.app/Contents/Resources/ghostty/themes/Modus Vivendi
+Modus Vivendi Tinted (resources) /Applications/Ghostty.app/Contents/Resources/ghostty/themes/Modus Vivendi Tinted
+Molokai (resources) /Applications/Ghostty.app/Contents/Resources/ghostty/themes/Molokai
+Mona Lisa (resources) /Applications/Ghostty.app/Contents/Resources/ghostty/themes/Mona Lisa
+Monokai Classic (resources) /Applications/Ghostty.app/Contents/Resources/ghostty/themes/Monokai Classic
+Monokai Pro (resources) /Applications/Ghostty.app/Contents/Resources/ghostty/themes/Monokai Pro
+Monokai Pro Light (resources) /Applications/Ghostty.app/Contents/Resources/ghostty/themes/Monokai Pro Light
+Monokai Pro Light Sun (resources) /Applications/Ghostty.app/Contents/Resources/ghostty/themes/Monokai Pro Light Sun
+Monokai Pro Machine (resources) /Applications/Ghostty.app/Contents/Resources/ghostty/themes/Monokai Pro Machine
+Monokai Pro Octagon (resources) /Applications/Ghostty.app/Contents/Resources/ghostty/themes/Monokai Pro Octagon
+Monokai Pro Ristretto (resources) /Applications/Ghostty.app/Contents/Resources/ghostty/themes/Monokai Pro Ristretto
+Monokai Pro Spectrum (resources) /Applications/Ghostty.app/Contents/Resources/ghostty/themes/Monokai Pro Spectrum
+Monokai Remastered (resources) /Applications/Ghostty.app/Contents/Resources/ghostty/themes/Monokai Remastered
+Monokai Soda (resources) /Applications/Ghostty.app/Contents/Resources/ghostty/themes/Monokai Soda
+Monokai Vivid (resources) /Applications/Ghostty.app/Contents/Resources/ghostty/themes/Monokai Vivid
+Moonfly (resources) /Applications/Ghostty.app/Contents/Resources/ghostty/themes/Moonfly
+N0Tch2K (resources) /Applications/Ghostty.app/Contents/Resources/ghostty/themes/N0Tch2K
+Neobones Dark (resources) /Applications/Ghostty.app/Contents/Resources/ghostty/themes/Neobones Dark
+Neobones Light (resources) /Applications/Ghostty.app/Contents/Resources/ghostty/themes/Neobones Light
+Neon (resources) /Applications/Ghostty.app/Contents/Resources/ghostty/themes/Neon
+Neopolitan (resources) /Applications/Ghostty.app/Contents/Resources/ghostty/themes/Neopolitan
+Neutron (resources) /Applications/Ghostty.app/Contents/Resources/ghostty/themes/Neutron
+Night Lion V1 (resources) /Applications/Ghostty.app/Contents/Resources/ghostty/themes/Night Lion V1
+Night Lion V2 (resources) /Applications/Ghostty.app/Contents/Resources/ghostty/themes/Night Lion V2
+Night Owl (resources) /Applications/Ghostty.app/Contents/Resources/ghostty/themes/Night Owl
+Night Owlish Light (resources) /Applications/Ghostty.app/Contents/Resources/ghostty/themes/Night Owlish Light
+Nightfox (resources) /Applications/Ghostty.app/Contents/Resources/ghostty/themes/Nightfox
+Niji (resources) /Applications/Ghostty.app/Contents/Resources/ghostty/themes/Niji
+No Clown Fiesta (resources) /Applications/Ghostty.app/Contents/Resources/ghostty/themes/No Clown Fiesta
+No Clown Fiesta Light (resources) /Applications/Ghostty.app/Contents/Resources/ghostty/themes/No Clown Fiesta Light
+Nocturnal Winter (resources) /Applications/Ghostty.app/Contents/Resources/ghostty/themes/Nocturnal Winter
+Nord (resources) /Applications/Ghostty.app/Contents/Resources/ghostty/themes/Nord
+Nord Light (resources) /Applications/Ghostty.app/Contents/Resources/ghostty/themes/Nord Light
+Nord Wave (resources) /Applications/Ghostty.app/Contents/Resources/ghostty/themes/Nord Wave
+Nordfox (resources) /Applications/Ghostty.app/Contents/Resources/ghostty/themes/Nordfox
+Novel (resources) /Applications/Ghostty.app/Contents/Resources/ghostty/themes/Novel
+novmbr (resources) /Applications/Ghostty.app/Contents/Resources/ghostty/themes/novmbr
+Nvim Dark (resources) /Applications/Ghostty.app/Contents/Resources/ghostty/themes/Nvim Dark
+Nvim Light (resources) /Applications/Ghostty.app/Contents/Resources/ghostty/themes/Nvim Light
+Obsidian (resources) /Applications/Ghostty.app/Contents/Resources/ghostty/themes/Obsidian
+Ocean (resources) /Applications/Ghostty.app/Contents/Resources/ghostty/themes/Ocean
+Oceanic Material (resources) /Applications/Ghostty.app/Contents/Resources/ghostty/themes/Oceanic Material
+Oceanic Next (resources) /Applications/Ghostty.app/Contents/Resources/ghostty/themes/Oceanic Next
+Ollie (resources) /Applications/Ghostty.app/Contents/Resources/ghostty/themes/Ollie
+One Dark Two (resources) /Applications/Ghostty.app/Contents/Resources/ghostty/themes/One Dark Two
+One Double Dark (resources) /Applications/Ghostty.app/Contents/Resources/ghostty/themes/One Double Dark
+One Double Light (resources) /Applications/Ghostty.app/Contents/Resources/ghostty/themes/One Double Light
+One Half Dark (resources) /Applications/Ghostty.app/Contents/Resources/ghostty/themes/One Half Dark
+One Half Light (resources) /Applications/Ghostty.app/Contents/Resources/ghostty/themes/One Half Light
+Onenord (resources) /Applications/Ghostty.app/Contents/Resources/ghostty/themes/Onenord
+Onenord Light (resources) /Applications/Ghostty.app/Contents/Resources/ghostty/themes/Onenord Light
+Operator Mono Dark (resources) /Applications/Ghostty.app/Contents/Resources/ghostty/themes/Operator Mono Dark
+Overnight Slumber (resources) /Applications/Ghostty.app/Contents/Resources/ghostty/themes/Overnight Slumber
+owl (resources) /Applications/Ghostty.app/Contents/Resources/ghostty/themes/owl
+Oxocarbon (resources) /Applications/Ghostty.app/Contents/Resources/ghostty/themes/Oxocarbon
+Pale Night Hc (resources) /Applications/Ghostty.app/Contents/Resources/ghostty/themes/Pale Night Hc
+Pandora (resources) /Applications/Ghostty.app/Contents/Resources/ghostty/themes/Pandora
+Paraiso Dark (resources) /Applications/Ghostty.app/Contents/Resources/ghostty/themes/Paraiso Dark
+Paul Millr (resources) /Applications/Ghostty.app/Contents/Resources/ghostty/themes/Paul Millr
+Pencil Dark (resources) /Applications/Ghostty.app/Contents/Resources/ghostty/themes/Pencil Dark
+Pencil Light (resources) /Applications/Ghostty.app/Contents/Resources/ghostty/themes/Pencil Light
+Peppermint (resources) /Applications/Ghostty.app/Contents/Resources/ghostty/themes/Peppermint
+Phala Green Dark (resources) /Applications/Ghostty.app/Contents/Resources/ghostty/themes/Phala Green Dark
+Piatto Light (resources) /Applications/Ghostty.app/Contents/Resources/ghostty/themes/Piatto Light
+Pnevma (resources) /Applications/Ghostty.app/Contents/Resources/ghostty/themes/Pnevma
+Poimandres (resources) /Applications/Ghostty.app/Contents/Resources/ghostty/themes/Poimandres
+Poimandres Darker (resources) /Applications/Ghostty.app/Contents/Resources/ghostty/themes/Poimandres Darker
+Poimandres Storm (resources) /Applications/Ghostty.app/Contents/Resources/ghostty/themes/Poimandres Storm
+Poimandres White (resources) /Applications/Ghostty.app/Contents/Resources/ghostty/themes/Poimandres White
+Popping And Locking (resources) /Applications/Ghostty.app/Contents/Resources/ghostty/themes/Popping And Locking
+Powershell (resources) /Applications/Ghostty.app/Contents/Resources/ghostty/themes/Powershell
+Primary (resources) /Applications/Ghostty.app/Contents/Resources/ghostty/themes/Primary
+Pro (resources) /Applications/Ghostty.app/Contents/Resources/ghostty/themes/Pro
+Pro Light (resources) /Applications/Ghostty.app/Contents/Resources/ghostty/themes/Pro Light
+Purple Rain (resources) /Applications/Ghostty.app/Contents/Resources/ghostty/themes/Purple Rain
+Purplepeter (resources) /Applications/Ghostty.app/Contents/Resources/ghostty/themes/Purplepeter
+Rapture (resources) /Applications/Ghostty.app/Contents/Resources/ghostty/themes/Rapture
+Raycast Dark (resources) /Applications/Ghostty.app/Contents/Resources/ghostty/themes/Raycast Dark
+Raycast Light (resources) /Applications/Ghostty.app/Contents/Resources/ghostty/themes/Raycast Light
+Rebecca (resources) /Applications/Ghostty.app/Contents/Resources/ghostty/themes/Rebecca
+Red Alert (resources) /Applications/Ghostty.app/Contents/Resources/ghostty/themes/Red Alert
+Red Planet (resources) /Applications/Ghostty.app/Contents/Resources/ghostty/themes/Red Planet
+Red Sands (resources) /Applications/Ghostty.app/Contents/Resources/ghostty/themes/Red Sands
+Relaxed (resources) /Applications/Ghostty.app/Contents/Resources/ghostty/themes/Relaxed
+Retro (resources) /Applications/Ghostty.app/Contents/Resources/ghostty/themes/Retro
+Retro Legends (resources) /Applications/Ghostty.app/Contents/Resources/ghostty/themes/Retro Legends
+Rippedcasts (resources) /Applications/Ghostty.app/Contents/Resources/ghostty/themes/Rippedcasts
+Rose Pine (resources) /Applications/Ghostty.app/Contents/Resources/ghostty/themes/Rose Pine
+Rose Pine Dawn (resources) /Applications/Ghostty.app/Contents/Resources/ghostty/themes/Rose Pine Dawn
+Rose Pine Moon (resources) /Applications/Ghostty.app/Contents/Resources/ghostty/themes/Rose Pine Moon
+Rouge 2 (resources) /Applications/Ghostty.app/Contents/Resources/ghostty/themes/Rouge 2
+Royal (resources) /Applications/Ghostty.app/Contents/Resources/ghostty/themes/Royal
+Ryuuko (resources) /Applications/Ghostty.app/Contents/Resources/ghostty/themes/Ryuuko
+Sakura (resources) /Applications/Ghostty.app/Contents/Resources/ghostty/themes/Sakura
+Scarlet Protocol (resources) /Applications/Ghostty.app/Contents/Resources/ghostty/themes/Scarlet Protocol
+Sea Shells (resources) /Applications/Ghostty.app/Contents/Resources/ghostty/themes/Sea Shells
+Seafoam Pastel (resources) /Applications/Ghostty.app/Contents/Resources/ghostty/themes/Seafoam Pastel
+Selenized Black (resources) /Applications/Ghostty.app/Contents/Resources/ghostty/themes/Selenized Black
+Selenized Dark (resources) /Applications/Ghostty.app/Contents/Resources/ghostty/themes/Selenized Dark
+Selenized Light (resources) /Applications/Ghostty.app/Contents/Resources/ghostty/themes/Selenized Light
+Seoulbones Dark (resources) /Applications/Ghostty.app/Contents/Resources/ghostty/themes/Seoulbones Dark
+Seoulbones Light (resources) /Applications/Ghostty.app/Contents/Resources/ghostty/themes/Seoulbones Light
+Seti (resources) /Applications/Ghostty.app/Contents/Resources/ghostty/themes/Seti
+Shades Of Purple (resources) /Applications/Ghostty.app/Contents/Resources/ghostty/themes/Shades Of Purple
+Shaman (resources) /Applications/Ghostty.app/Contents/Resources/ghostty/themes/Shaman
+Slate (resources) /Applications/Ghostty.app/Contents/Resources/ghostty/themes/Slate
+Sleepy Hollow (resources) /Applications/Ghostty.app/Contents/Resources/ghostty/themes/Sleepy Hollow
+Smyck (resources) /Applications/Ghostty.app/Contents/Resources/ghostty/themes/Smyck
+Snazzy (resources) /Applications/Ghostty.app/Contents/Resources/ghostty/themes/Snazzy
+Snazzy Soft (resources) /Applications/Ghostty.app/Contents/Resources/ghostty/themes/Snazzy Soft
+Soft Server (resources) /Applications/Ghostty.app/Contents/Resources/ghostty/themes/Soft Server
+Solarized Darcula (resources) /Applications/Ghostty.app/Contents/Resources/ghostty/themes/Solarized Darcula
+Solarized Dark Higher Contrast (resources) /Applications/Ghostty.app/Contents/Resources/ghostty/themes/Solarized Dark Higher Contrast
+Solarized Dark Patched (resources) /Applications/Ghostty.app/Contents/Resources/ghostty/themes/Solarized Dark Patched
+Solarized Osaka Night (resources) /Applications/Ghostty.app/Contents/Resources/ghostty/themes/Solarized Osaka Night
+Sonokai (resources) /Applications/Ghostty.app/Contents/Resources/ghostty/themes/Sonokai
+Spacedust (resources) /Applications/Ghostty.app/Contents/Resources/ghostty/themes/Spacedust
+Spacegray (resources) /Applications/Ghostty.app/Contents/Resources/ghostty/themes/Spacegray
+Spacegray Bright (resources) /Applications/Ghostty.app/Contents/Resources/ghostty/themes/Spacegray Bright
+Spacegray Eighties (resources) /Applications/Ghostty.app/Contents/Resources/ghostty/themes/Spacegray Eighties
+Spacegray Eighties Dull (resources) /Applications/Ghostty.app/Contents/Resources/ghostty/themes/Spacegray Eighties Dull
+Spiderman (resources) /Applications/Ghostty.app/Contents/Resources/ghostty/themes/Spiderman
+Spring (resources) /Applications/Ghostty.app/Contents/Resources/ghostty/themes/Spring
+Square (resources) /Applications/Ghostty.app/Contents/Resources/ghostty/themes/Square
+Squirrelsong Dark (resources) /Applications/Ghostty.app/Contents/Resources/ghostty/themes/Squirrelsong Dark
+Srcery (resources) /Applications/Ghostty.app/Contents/Resources/ghostty/themes/Srcery
+Starlight (resources) /Applications/Ghostty.app/Contents/Resources/ghostty/themes/Starlight
+Sublette (resources) /Applications/Ghostty.app/Contents/Resources/ghostty/themes/Sublette
+Subliminal (resources) /Applications/Ghostty.app/Contents/Resources/ghostty/themes/Subliminal
+Sugarplum (resources) /Applications/Ghostty.app/Contents/Resources/ghostty/themes/Sugarplum
+Sundried (resources) /Applications/Ghostty.app/Contents/Resources/ghostty/themes/Sundried
+Sunset Drive (resources) /Applications/Ghostty.app/Contents/Resources/ghostty/themes/Sunset Drive
+Symfonic (resources) /Applications/Ghostty.app/Contents/Resources/ghostty/themes/Symfonic
+Synthwave (resources) /Applications/Ghostty.app/Contents/Resources/ghostty/themes/Synthwave
+Synthwave Alpha (resources) /Applications/Ghostty.app/Contents/Resources/ghostty/themes/Synthwave Alpha
+Synthwave Everything (resources) /Applications/Ghostty.app/Contents/Resources/ghostty/themes/Synthwave Everything
+Tango Adapted (resources) /Applications/Ghostty.app/Contents/Resources/ghostty/themes/Tango Adapted
+Tango Half Adapted (resources) /Applications/Ghostty.app/Contents/Resources/ghostty/themes/Tango Half Adapted
+Tearout (resources) /Applications/Ghostty.app/Contents/Resources/ghostty/themes/Tearout
+Teerb (resources) /Applications/Ghostty.app/Contents/Resources/ghostty/themes/Teerb
+Terafox (resources) /Applications/Ghostty.app/Contents/Resources/ghostty/themes/Terafox
+Terminal Basic (resources) /Applications/Ghostty.app/Contents/Resources/ghostty/themes/Terminal Basic
+Terminal Basic Dark (resources) /Applications/Ghostty.app/Contents/Resources/ghostty/themes/Terminal Basic Dark
+Thayer Bright (resources) /Applications/Ghostty.app/Contents/Resources/ghostty/themes/Thayer Bright
+The Hulk (resources) /Applications/Ghostty.app/Contents/Resources/ghostty/themes/The Hulk
+Tinacious Design Dark (resources) /Applications/Ghostty.app/Contents/Resources/ghostty/themes/Tinacious Design Dark
+Tinacious Design Light (resources) /Applications/Ghostty.app/Contents/Resources/ghostty/themes/Tinacious Design Light
+TokyoNight (resources) /Applications/Ghostty.app/Contents/Resources/ghostty/themes/TokyoNight
+TokyoNight Day (resources) /Applications/Ghostty.app/Contents/Resources/ghostty/themes/TokyoNight Day
+TokyoNight Moon (resources) /Applications/Ghostty.app/Contents/Resources/ghostty/themes/TokyoNight Moon
+TokyoNight Night (resources) /Applications/Ghostty.app/Contents/Resources/ghostty/themes/TokyoNight Night
+TokyoNight Storm (resources) /Applications/Ghostty.app/Contents/Resources/ghostty/themes/TokyoNight Storm
+Tomorrow (resources) /Applications/Ghostty.app/Contents/Resources/ghostty/themes/Tomorrow
+Tomorrow Night (resources) /Applications/Ghostty.app/Contents/Resources/ghostty/themes/Tomorrow Night
+Tomorrow Night Blue (resources) /Applications/Ghostty.app/Contents/Resources/ghostty/themes/Tomorrow Night Blue
+Tomorrow Night Bright (resources) /Applications/Ghostty.app/Contents/Resources/ghostty/themes/Tomorrow Night Bright
+Tomorrow Night Burns (resources) /Applications/Ghostty.app/Contents/Resources/ghostty/themes/Tomorrow Night Burns
+Tomorrow Night Eighties (resources) /Applications/Ghostty.app/Contents/Resources/ghostty/themes/Tomorrow Night Eighties
+Toy Chest (resources) /Applications/Ghostty.app/Contents/Resources/ghostty/themes/Toy Chest
+traffic (resources) /Applications/Ghostty.app/Contents/Resources/ghostty/themes/traffic
+Treehouse (resources) /Applications/Ghostty.app/Contents/Resources/ghostty/themes/Treehouse
+Twilight (resources) /Applications/Ghostty.app/Contents/Resources/ghostty/themes/Twilight
+Ubuntu (resources) /Applications/Ghostty.app/Contents/Resources/ghostty/themes/Ubuntu
+Ultra Dark (resources) /Applications/Ghostty.app/Contents/Resources/ghostty/themes/Ultra Dark
+Ultra Violent (resources) /Applications/Ghostty.app/Contents/Resources/ghostty/themes/Ultra Violent
+Under The Sea (resources) /Applications/Ghostty.app/Contents/Resources/ghostty/themes/Under The Sea
+Unikitty (resources) /Applications/Ghostty.app/Contents/Resources/ghostty/themes/Unikitty
+urban (resources) /Applications/Ghostty.app/Contents/Resources/ghostty/themes/urban
+Urple (resources) /Applications/Ghostty.app/Contents/Resources/ghostty/themes/Urple
+Vague (resources) /Applications/Ghostty.app/Contents/Resources/ghostty/themes/Vague
+Vaughn (resources) /Applications/Ghostty.app/Contents/Resources/ghostty/themes/Vaughn
+Vercel (resources) /Applications/Ghostty.app/Contents/Resources/ghostty/themes/Vercel
+Vesper (resources) /Applications/Ghostty.app/Contents/Resources/ghostty/themes/Vesper
+Vibrant Ink (resources) /Applications/Ghostty.app/Contents/Resources/ghostty/themes/Vibrant Ink
+Vimbones (resources) /Applications/Ghostty.app/Contents/Resources/ghostty/themes/Vimbones
+Violet Dark (resources) /Applications/Ghostty.app/Contents/Resources/ghostty/themes/Violet Dark
+Violet Light (resources) /Applications/Ghostty.app/Contents/Resources/ghostty/themes/Violet Light
+Violite (resources) /Applications/Ghostty.app/Contents/Resources/ghostty/themes/Violite
+Warm Neon (resources) /Applications/Ghostty.app/Contents/Resources/ghostty/themes/Warm Neon
+Wez (resources) /Applications/Ghostty.app/Contents/Resources/ghostty/themes/Wez
+Whimsy (resources) /Applications/Ghostty.app/Contents/Resources/ghostty/themes/Whimsy
+Wild Cherry (resources) /Applications/Ghostty.app/Contents/Resources/ghostty/themes/Wild Cherry
+Wilmersdorf (resources) /Applications/Ghostty.app/Contents/Resources/ghostty/themes/Wilmersdorf
+Wombat (resources) /Applications/Ghostty.app/Contents/Resources/ghostty/themes/Wombat
+Wryan (resources) /Applications/Ghostty.app/Contents/Resources/ghostty/themes/Wryan
+Xcode Dark (resources) /Applications/Ghostty.app/Contents/Resources/ghostty/themes/Xcode Dark
+Xcode Dark hc (resources) /Applications/Ghostty.app/Contents/Resources/ghostty/themes/Xcode Dark hc
+Xcode Light (resources) /Applications/Ghostty.app/Contents/Resources/ghostty/themes/Xcode Light
+Xcode Light hc (resources) /Applications/Ghostty.app/Contents/Resources/ghostty/themes/Xcode Light hc
+Xcode WWDC (resources) /Applications/Ghostty.app/Contents/Resources/ghostty/themes/Xcode WWDC
+Zenbones (resources) /Applications/Ghostty.app/Contents/Resources/ghostty/themes/Zenbones
+Zenbones Dark (resources) /Applications/Ghostty.app/Contents/Resources/ghostty/themes/Zenbones Dark
+Zenbones Light (resources) /Applications/Ghostty.app/Contents/Resources/ghostty/themes/Zenbones Light
+Zenburn (resources) /Applications/Ghostty.app/Contents/Resources/ghostty/themes/Zenburn
+Zenburned (resources) /Applications/Ghostty.app/Contents/Resources/ghostty/themes/Zenburned
+Zenwritten Dark (resources) /Applications/Ghostty.app/Contents/Resources/ghostty/themes/Zenwritten Dark
+Zenwritten Light (resources) /Applications/Ghostty.app/Contents/Resources/ghostty/themes/Zenwritten Light
