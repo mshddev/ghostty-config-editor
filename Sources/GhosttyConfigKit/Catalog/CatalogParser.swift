@@ -79,6 +79,10 @@ public enum CatalogParser {
 
         let options = order.compactMap { name -> CatalogOption? in
             guard let b = builders[name] else { return nil }
+            // macOS-scoped catalog (R1, R6): drop options that only take effect on
+            // Linux/GTK so they never surface in browse/search/discovery. See
+            // `MacOSCatalogScope`.
+            guard !MacOSCatalogScope.excludes(name) else { return nil }
             let enums = extractEnumValues(b.documentation)
             let repeatable = b.defaultValues.count > 1 || knownRepeatableKeys.contains(name)
             return CatalogOption(

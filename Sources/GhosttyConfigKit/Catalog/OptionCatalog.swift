@@ -164,7 +164,9 @@ public enum OptionCategorizer {
         "linux": "Linux / GTK",
         "x11": "Linux / GTK",
         "wayland": "Linux / GTK",
-        "desktop": "Linux / GTK",
+        // No `desktop` prefix: `desktop-notifications` is cross-platform (kept on
+        // macOS, categorized via a nameOverride below). Mapping `desktop-*` here
+        // would miscategorize a future cross-platform desktop option as Linux/GTK.
         "app": "macOS",
         "quick": "macOS",
         "auto": "macOS",
@@ -175,6 +177,10 @@ public enum OptionCategorizer {
         "theme": "Colors & Theme",
         "bold-is-bright": "Colors & Theme",
         "tab-bar": "Tabs & Splits",
+        // Kept on macOS (OSC 9/777 escape-sequence notifications work here), so it
+        // must not land in the otherwise-empty "Linux / GTK" group via its
+        // `desktop-` prefix. It's a terminal-protocol capability.
+        "desktop-notifications": "Terminal",
     ]
 
     public static func category(for name: String) -> String {
@@ -189,6 +195,59 @@ public enum OptionCategorizer {
         var ordered = displayOrder.filter(present.contains)
         ordered.append(contentsOf: present.subtracting(ordered).sorted())
         return ordered
+    }
+}
+
+/// macOS-scoping policy for the catalog — the "macOS-scoped catalog" decision in
+/// `docs/brainstorms/2026-06-16-ghostty-config-manager-requirements.md` (R1, R6).
+///
+/// Ghostty's `+show-config` output is platform-agnostic and lists options that
+/// only take effect on Linux/GTK/Wayland/X11. This app is macOS-only, so those
+/// options are excluded from the catalog at parse time — they then never reach the
+/// sidebar, search, All Options, or the "Not Using Yet" discovery surface, which
+/// would otherwise recommend changes that do nothing on macOS.
+///
+/// The CLI carries no machine-readable platform tag, so membership is curated from
+/// each option's own `--docs` platform-restriction language (verified against
+/// Ghostty 1.3.x). Two rules combine:
+///   1. Any `gtk-`/`x11-`/`linux-`/`wayland-`-prefixed option is Linux-stack-only.
+///   2. A curated set of options that are doc-confirmed Linux/GTK/Wayland-only but
+///      do *not* carry one of those prefixes (see `nonPrefixedLinuxOnly`).
+///
+/// Cross-platform options are kept even when their name looks platform-ish — most
+/// notably `desktop-notifications`, whose OSC 9 / OSC 777 escape sequences work on
+/// macOS. The prefix rule deliberately omits `desktop-` for that reason.
+///
+/// This is intentionally a hand-maintained list, revisited as Ghostty adds config
+/// keys; a purely prefix-based filter is wrong at the edges in both directions
+/// (it would drop `desktop-notifications` and miss `app-notifications`).
+public enum MacOSCatalogScope {
+
+    /// Name prefixes that unambiguously mark an option as part of the Linux display
+    /// stack (GTK / X11 / Wayland / Linux cgroups). `desktop-` is intentionally
+    /// absent — `desktop-notifications` is cross-platform.
+    static let linuxStackPrefixes = ["gtk-", "x11-", "linux-", "wayland-"]
+
+    /// Options that are doc-confirmed Linux/GTK/Wayland-only yet lack a Linux-stack
+    /// prefix, so the prefix rule alone would miss them. Each is annotated with the
+    /// `--docs` sentence that establishes it has no effect on macOS.
+    static let nonPrefixedLinuxOnly: Set<String> = [
+        "language",                              // "GTK only."
+        "async-backend",                         // "only supported on Linux ... On macOS, we always use `kqueue`."
+        "quit-after-last-window-closed-delay",   // "Only implemented on Linux."
+        "window-show-tab-bar",                   // "Currently only supported on Linux (GTK)."
+        "window-subtitle",                       // "This feature is only supported on GTK."
+        "app-notifications",                     // "This configuration only applies to GTK."
+        "quick-terminal-keyboard-interactivity", // "Only has an effect on Linux Wayland."
+        "class",                                 // "This only affects GTK builds." (X11 WM_CLASS / Wayland app ID / DBus)
+        "freetype-load-flags",                   // "macOS uses CoreText and does not have an equivalent configuration."
+    ]
+
+    /// True when an option never takes effect on macOS and should be excluded from
+    /// the catalog this app presents.
+    public static func excludes(_ name: String) -> Bool {
+        if linuxStackPrefixes.contains(where: name.hasPrefix) { return true }
+        return nonPrefixedLinuxOnly.contains(name)
     }
 }
 

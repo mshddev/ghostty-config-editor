@@ -82,6 +82,18 @@ final class IntentSearchTests: XCTestCase {
         XCTAssertFalse(unused.contains { $0.option.name == "font-size" })
     }
 
+    func testDiscoveryNeverSurfacesLinuxOnlyOptions() {
+        // The "Not Using Yet" surface and search must never recommend an option
+        // that does nothing on macOS (R1, R6, macOS-scoped catalog).
+        let b = browser(config: "font-size = 16")
+        let unusedNames = Set(b.unusedOptions.map(\.option.name))
+        for name in ["gtk-titlebar", "app-notifications", "window-subtitle"] {
+            XCTAssertFalse(unusedNames.contains(name), "\(name) must not appear in discovery")
+        }
+        XCTAssertTrue(b.searchResults("titlebar").allSatisfy { $0.option.name != "gtk-titlebar" })
+        XCTAssertFalse(b.categories.contains("Linux / GTK"))
+    }
+
     // MARK: - Copy snippet (read-only action)
 
     func testSnippetForSetScalarIsValidKeyValueLine() {

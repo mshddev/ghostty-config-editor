@@ -7,13 +7,13 @@ topic: ghostty-config-manager
 
 ## Summary
 
-A native macOS (SwiftUI) configuration tool for the Ghostty terminal, built for the dotfiles power user. It makes Ghostty's config **discoverable** — every option in the user's installed version, with documentation, default, and the user's current value, searchable by intent — and lets the user tune and save changes back to their plain-text config. It ships in two milestones: a read-first **Explorer** (M1), then in-app **Editing** (M2).
+A native macOS (SwiftUI) configuration tool for the Ghostty terminal, built for the dotfiles power user. It makes Ghostty's config **discoverable** — every macOS-applicable option in the user's installed version, with documentation, default, and the user's current value, searchable by intent — and lets the user tune and save changes back to their plain-text config. It ships in two milestones: a read-first **Explorer** (M1), then in-app **Editing** (M2).
 
 ---
 
 ## Problem Frame
 
-Editing Ghostty's text config is tedious, and the sharpest pain isn't typing — it's **discovery**. Ghostty has ~185 config options spread across docs, and the recurring failure is "a behavior annoys me, but I don't know the option exists to change it." Themes (300+ built-ins) are hidden behind a TUI command; keybind syntax has footguns; config reload gives no visual confirmation. The text file gives you no map of what's possible and no feedback when you get it wrong.
+Editing Ghostty's text config is tedious, and the sharpest pain isn't typing — it's **discovery**. Ghostty has ~185 config options spread across docs (roughly two dozen of which are Linux/GTK-only and filtered from the macOS catalog), and the recurring failure is "a behavior annoys me, but I don't know the option exists to change it." Themes (300+ built-ins) are hidden behind a TUI command; keybind syntax has footguns; config reload gives no visual confirmation. The text file gives you no map of what's possible and no feedback when you get it wrong.
 
 This is built **for the author first** — a personal itch — with community use as real-but-uncertain upside. Two facts shape the bet:
 
@@ -26,6 +26,7 @@ This is built **for the author first** — a personal itch — with community us
 
 - **Text-native, not NSUserDefaults.** The tool reads and writes the user's plain-text config (`config.ghostty`), keeping it git-friendly and portable. This is the deliberate orthogonal positioning against the official pane, not an implementation convenience.
 - **Self-describing catalog.** The option catalog is generated from the user's installed binary (`ghostty +show-config --default --docs`) rather than a hand-maintained list, so it stays current across Ghostty releases and avoids the maintenance treadmill that drags on the existing tools.
+- **macOS-scoped catalog.** Even though the catalog is generated from the binary, options that only take effect on Linux/GTK are filtered out before display, so the sidebar, search, All Options, and the "Not Using Yet" surface never present options that are inert on macOS. This extends the macOS-only identity into the catalog itself, not just the build target. The exclusion set is a **curated list** (25 options in Ghostty 1.3.x), not a raw prefix bucket: any `gtk-`/`x11-`/`linux-`/`wayland-`-prefixed option, **plus** 9 doc-confirmed Linux/GTK/Wayland-only options that lack such a prefix — `language`, `async-backend`, `class`, `freetype-load-flags`, `window-subtitle`, `window-show-tab-bar`, `app-notifications`, `quit-after-last-window-closed-delay`, `quick-terminal-keyboard-interactivity`. It must be curated because the CLI output carries no platform tag, so a prefix heuristic is wrong at the edges in both directions: it would over-include `desktop-notifications` (kept — its OSC 9 / OSC 777 notifications work on macOS) and under-include the non-prefixed options above. Membership is read from each option's own `--docs` platform-restriction language ("only applies to GTK", "macOS uses CoreText and does not have an equivalent", …) and revisited as Ghostty adds config keys.
 - **Discovery is the headline, by intent.** The product's reason to exist is finding the option that fixes an annoyance — search by behavior/intent and surface options the user isn't yet using — not exposing a parity form of all options.
 - **Two milestones, M1 before M2.** M1 (Explorer) is read-only: discover, understand, copy a snippet, reveal in editor. M2 (Studio) adds writing back to the config plus rich visual controls. M1 ships as a useful standalone tool before any write code exists, capping the risk of the hard config-writing problem.
 - **Honest preview fidelity.** Color/theme/palette previews are faithful; font-rendering, ligatures, blur, and cursor-style effects are best-effort approximations, because the app does not embed Ghostty's renderer.
@@ -66,7 +67,7 @@ The app is single-user, but it brokers between three parties whose contracts mat
 
 **Discovery & Option Catalog (M1)**
 
-- R1. The app presents every config option available in the user's installed Ghostty, sourced from the binary's own output, so the catalog stays current across releases without manual updates.
+- R1. The app presents every config option available in the user's installed Ghostty **that can take effect on macOS**, sourced from the binary's own output, so the catalog stays current across releases without manual updates. Linux/GTK-only options are excluded (see Key Decisions: *macOS-scoped catalog*).
 - R2. Each option shows its documentation, default value, and — where determinable — its accepted type or enumerated values.
 - R3. Options are browsable by category and searchable by option name.
 - R4. Search supports intent/behavior queries (e.g., "transparent background", "hide title bar") that map natural phrasing to the relevant option(s), not just literal name matching.
@@ -74,7 +75,7 @@ The app is single-user, but it brokers between three parties whose contracts mat
 **Config Awareness (M1)**
 
 - R5. The app reads the user's active config — resolving Ghostty's search-path precedence, including `config.ghostty` — and shows, per option, whether it is unset (default), set to the default, or set to a non-default value.
-- R6. The app surfaces options the user is not currently setting as discoverable, directly serving the core discovery goal.
+- R6. The app surfaces options the user is not currently setting as discoverable, directly serving the core discovery goal — excluding Linux/GTK-only options, so discovery never recommends a change that has no effect on macOS.
 - R7. When the config is split across `config-file` includes, the app resolves included files when determining current values.
 
 **Editing & Persistence (M2)**
@@ -118,7 +119,7 @@ The app is single-user, but it brokers between three parties whose contracts mat
 - The author reaches for this tool instead of hand-editing the text file or grepping docs.
 - M1 ships and is genuinely useful (discovery works end to end) before any write-path code exists.
 - Zero config-corruption incidents: a bad write is always recoverable.
-- Catalog correctness: for a given installed Ghostty version, no options are missing — a direct payoff of the self-describing approach.
+- Catalog correctness: for a given installed Ghostty version, no macOS-applicable options are missing — a direct payoff of the self-describing approach.
 - Handoff: `ce-plan` can produce an implementation plan without re-deciding scope, positioning, or success criteria.
 
 ---
@@ -138,6 +139,7 @@ The app is single-user, but it brokers between three parties whose contracts mat
 - NSUserDefaults-backed settings that override the text file — that is the official pane's model; this tool is deliberately text-native.
 - A comprehensive "form for all 185 options" as the product's reason to exist — discovery plus the text-native/visual wedge is the identity.
 - Cross-platform (Linux/Windows) builds.
+- Surfacing Linux/GTK-only config options in the catalog — filtered out per R1/R6 (see Key Decisions: *macOS-scoped catalog*). The plain-text writer still preserves any such lines already in the user's file (R8/R11), so a portable, cross-machine config is never corrupted; the options are just not browsable or discoverable in-app.
 - Competing with the eventual first-party pane on basic option coverage.
 - Embedding a real Ghostty terminal for pixel-perfect preview.
 
@@ -161,6 +163,7 @@ The app is single-user, but it brokers between three parties whose contracts mat
 - Intent-search mapping: curated synonyms/keyword map vs. heuristic matching (affects R4)?
 - Backup/undo mechanism for the write path (affects R10).
 - When the config spans multiple `config-file` includes, which file does a given write target, and how is that surfaced to the user (affects R8)?
+- How to define the macOS-scoped exclusion set, and where to apply it (at catalog build vs. per discovery surface) (affects R1, R6). The existing "Linux / GTK" prefix bucket is a starting point but not a reliable platform oracle: it over-includes `desktop-notifications` (works on macOS) and under-includes GTK-only options filed elsewhere (`app-notifications`, `window-subtitle`). Likely a small curated allowlist of genuinely-inert options, derived once and revisited as Ghostty adds config keys.
 
 ---
 
