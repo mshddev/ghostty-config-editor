@@ -104,6 +104,9 @@ struct RootView: View {
             ToolbarItem(placement: .status) {
                 statusChip(environment)
             }
+            ToolbarItem(placement: .status) {
+                healthChip()
+            }
         }
     }
 
@@ -117,5 +120,60 @@ struct RootView: View {
             }
         }
         .font(.caption)
+    }
+
+    /// Config-health indicator in the window chrome (moved out of the sidebar).
+    /// Tapping it opens the Problems surface (KTD4); icon and tint mirror
+    /// `ProblemsView` so the severity language stays consistent (KTD5).
+    @ViewBuilder
+    private func healthChip() -> some View {
+        if let report = model.lintReport {
+            Button {
+                model.selection = .problems
+            } label: {
+                HStack(spacing: 6) {
+                    Image(systemName: Self.healthIcon(report.health))
+                        .foregroundStyle(Self.healthTint(report.health))
+                    Text(healthLabel(report.health))
+                }
+                .font(.caption)
+            }
+            .buttonStyle(.plain)
+            .help("Show config health")
+        } else {
+            HStack(spacing: 6) {
+                Image(systemName: "stethoscope")
+                Text("Checking…")
+            }
+            .font(.caption)
+            .foregroundStyle(.secondary)
+        }
+    }
+
+    private static func healthIcon(_ health: LintReport.Health) -> String {
+        switch health {
+        case .clean: return "checkmark.seal.fill"
+        case .warning: return "exclamationmark.triangle.fill"
+        case .error: return "xmark.octagon.fill"
+        case .unknown: return "questionmark.diamond.fill"
+        }
+    }
+
+    private static func healthTint(_ health: LintReport.Health) -> Color {
+        switch health {
+        case .clean: return .green
+        case .warning, .unknown: return .orange
+        case .error: return .red
+        }
+    }
+
+    private func healthLabel(_ health: LintReport.Health) -> String {
+        switch health {
+        case .clean: return "No problems"
+        case .warning, .error:
+            let count = model.problemCount
+            return "\(count) problem\(count == 1 ? "" : "s")"
+        case .unknown: return "Health unknown"
+        }
     }
 }

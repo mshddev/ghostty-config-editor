@@ -249,17 +249,8 @@ public final class AppModel {
     }
 
     /// Count of actionable problems (validation errors + non-info footguns).
-    public var problemCount: Int {
-        guard let report = lintReport else { return 0 }
-        let validationErrors: Int
-        if case .completed(let result) = report.validation, !result.isValid {
-            validationErrors = result.messages.count
-        } else {
-            validationErrors = 0
-        }
-        let footguns = report.findings.filter { $0.severity != .info }.count
-        return validationErrors + footguns
-    }
+    /// Delegates to the kit so the count is derived in one tested place.
+    public var problemCount: Int { lintReport?.problemCount ?? 0 }
 
     // MARK: - Derived view data
 
