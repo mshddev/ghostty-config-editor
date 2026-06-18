@@ -9,28 +9,8 @@ struct SidebarView: View {
         @Bindable var model = model
         List(selection: $model.selection) {
             Section("Discover") {
-                Label("All Options", systemImage: "list.bullet")
-                    .tag(SidebarSelection.all)
                 Label("Customized", systemImage: "pencil")
                     .tag(SidebarSelection.customized)
-                Label("Not Using Yet", systemImage: "sparkles")
-                    .tag(SidebarSelection.unused)
-                Label {
-                    HStack {
-                        Text("Problems")
-                        if model.problemCount > 0 {
-                            Spacer()
-                            Text("\(model.problemCount)")
-                                .font(.caption.monospacedDigit())
-                                .padding(.horizontal, 6).padding(.vertical, 1)
-                                .background(.orange, in: Capsule())
-                                .foregroundStyle(.white)
-                        }
-                    }
-                } icon: {
-                    Image(systemName: "exclamationmark.triangle")
-                }
-                .tag(SidebarSelection.problems)
             }
             Section("Appearance") {
                 Label("Themes", systemImage: "paintpalette")
