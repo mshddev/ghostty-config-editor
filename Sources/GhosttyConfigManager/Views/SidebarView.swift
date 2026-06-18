@@ -1,26 +1,19 @@
 import SwiftUI
 import GhosttyConfigKit
 
-/// The leading column: discovery shortcuts plus option categories (R3, R6).
+/// The leading column: a flat list of Themes plus the option categories (R3, R6).
+/// The "Customized" discovery shortcut now lives in the top bar, not here.
 struct SidebarView: View {
     @Environment(AppModel.self) private var model
 
     var body: some View {
         @Bindable var model = model
         List(selection: $model.selection) {
-            Section("Discover") {
-                Label("Customized", systemImage: "pencil")
-                    .tag(SidebarSelection.customized)
-            }
-            Section("Appearance") {
-                Label("Themes", systemImage: "paintpalette")
-                    .tag(SidebarSelection.themes)
-            }
-            Section("Categories") {
-                ForEach(model.categories, id: \.self) { category in
-                    Label(category, systemImage: Self.icon(for: category))
-                        .tag(SidebarSelection.category(category))
-                }
+            Label("Themes", systemImage: "paintpalette")
+                .tag(SidebarSelection.themes)
+            ForEach(model.categories, id: \.self) { category in
+                Label(category, systemImage: Self.icon(for: category))
+                    .tag(SidebarSelection.category(category))
             }
         }
         .navigationTitle("Ghostty")

@@ -101,6 +101,9 @@ struct RootView: View {
             }
         }
         .toolbar {
+            ToolbarItem(placement: .navigation) {
+                customizedChip()
+            }
             ToolbarItem(placement: .status) {
                 statusChip(environment)
             }
@@ -108,6 +111,26 @@ struct RootView: View {
                 healthChip()
             }
         }
+    }
+
+    /// The "Customized" entry point, promoted from the sidebar into the window
+    /// chrome (mirrors `healthChip`'s button-sets-selection pattern). Tapping it
+    /// shows the user's customized options; it tints accent while that view is
+    /// active so the current surface is legible from the top bar.
+    @ViewBuilder
+    private func customizedChip() -> some View {
+        let isActive = model.selection == .customized
+        Button {
+            model.selection = .customized
+        } label: {
+            Label("Customized", systemImage: "pencil")
+                .font(.caption)
+                .foregroundStyle(isActive ? Color.accentColor : Color.primary)
+        }
+        .buttonStyle(.plain)
+        .help("Show customized options")
+        .accessibilityLabel("Customized options")
+        .accessibilityAddTraits(isActive ? .isSelected : [])
     }
 
     @ViewBuilder
