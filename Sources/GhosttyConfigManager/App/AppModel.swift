@@ -6,7 +6,6 @@ import GhosttyConfigKit
 public enum SidebarSelection: Hashable {
     case all
     case customized
-    case unused
     case problems
     case themes
     case category(String)
@@ -270,8 +269,6 @@ public final class AppModel {
             return browser.options(in: category)
         case .customized:
             return browser.customizedOptions
-        case .unused:
-            return browser.unusedOptions
         case .problems:
             return [] // rendered by ProblemsView, not the option list
         case .themes:

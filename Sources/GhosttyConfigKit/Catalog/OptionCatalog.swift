@@ -208,8 +208,8 @@ public enum OptionCategorizer {
 /// Ghostty's `+show-config` output is platform-agnostic and lists options that
 /// only take effect on Linux/GTK/Wayland/X11. This app is macOS-only, so those
 /// options are excluded from the catalog at parse time — they then never reach the
-/// sidebar, search, All Options, or the "Not Using Yet" discovery surface, which
-/// would otherwise recommend changes that do nothing on macOS.
+/// sidebar, search, or any discovery surface, which would otherwise recommend
+/// changes that do nothing on macOS.
 ///
 /// The CLI carries no machine-readable platform tag, so membership is curated from
 /// each option's own `--docs` platform-restriction language (verified against
