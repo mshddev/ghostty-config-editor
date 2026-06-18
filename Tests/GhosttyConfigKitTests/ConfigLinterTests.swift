@@ -167,11 +167,30 @@ final class ConfigLinterTests: XCTestCase {
         XCTAssertEqual(report.problemCount, 3)
     }
 
-    func testHealthIsUnknownWhenValidationUnavailable() {
+    func testHealthIsUnknownWhenValidationUnavailableAndNothingActionable() {
+        let report = LintReport(validation: .unavailable("boom"), findings: [])
+        XCTAssertEqual(report.health, .unknown)
+        XCTAssertEqual(report.problemCount, 0)
+        XCTAssertEqual(report.badgeText, "Health unknown")
+    }
+
+    func testFootgunSurfacesAsWarningEvenWhenValidationUnavailable() {
+        // Footgun lint is static — it doesn't need the validation binary — so an
+        // actionable footgun must surface as .warning rather than being masked
+        // behind "Health unknown" when ghostty +validate-config couldn't run.
         let report = LintReport(validation: .unavailable("boom"),
                                 findings: [finding(.warning)])
-        XCTAssertEqual(report.health, .unknown)
+        XCTAssertEqual(report.health, .warning)
         XCTAssertEqual(report.problemCount, 1)
+        XCTAssertEqual(report.badgeText, "1 problem")
+    }
+
+    func testHealthStaysUnknownWhenUnavailableWithOnlyInfoFinding() {
+        // .info findings are not actionable, so they don't lift .unknown to .warning.
+        let report = LintReport(validation: .unavailable("boom"),
+                                findings: [finding(.info)])
+        XCTAssertEqual(report.health, .unknown)
+        XCTAssertEqual(report.problemCount, 0)
     }
 
     func testHealthIsWarningWhenNotRunWithFootgun() {

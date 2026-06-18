@@ -114,12 +114,16 @@ public struct LintReport: Sendable {
     }
 
     /// Severity classification for the top-bar health chip. Hard validation
-    /// errors outrank footgun warnings; an unavailable validation run is
-    /// `.unknown` rather than a false `.clean`.
+    /// errors outrank footgun warnings, which in turn outrank an unavailable
+    /// validation run: footgun lint is static (it doesn't need the validation
+    /// binary), so an actionable footgun still surfaces as `.warning` even when
+    /// `ghostty +validate-config` couldn't run. `.unknown` therefore means
+    /// validation was unavailable AND nothing else is actionable.
     public var health: Health {
-        if case .unavailable = validation { return .unknown }
         if case .completed(let result) = validation, !result.isValid { return .error }
-        return findings.contains { $0.severity != .info } ? .warning : .clean
+        if findings.contains(where: { $0.severity != .info }) { return .warning }
+        if case .unavailable = validation { return .unknown }
+        return .clean
     }
 
     /// One-line label for the top-bar health chip, derived entirely from this
