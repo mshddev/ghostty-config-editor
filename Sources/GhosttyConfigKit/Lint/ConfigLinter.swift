@@ -83,6 +83,40 @@ public struct LintReport: Sendable {
         else { validationFailed = false }
         return validationFailed || findings.contains { $0.severity != .info }
     }
+
+    /// At-a-glance config health for the window-chrome chip. `.error` outranks
+    /// `.warning`; `.unknown` means live validation couldn't run (surfaced
+    /// instead of a false all-clear), and `.clean` means validated/not-run with
+    /// no actionable footguns.
+    public enum Health: Sendable, Equatable {
+        case clean
+        case warning
+        case error
+        case unknown
+    }
+
+    /// Count of actionable problems: validation errors (only when validation ran
+    /// and failed) plus non-`.info` footguns. Single source of truth for the
+    /// count the sidebar previously rendered and the top-bar chip now shows.
+    public var problemCount: Int {
+        let validationErrors: Int
+        if case .completed(let result) = validation, !result.isValid {
+            validationErrors = result.messages.count
+        } else {
+            validationErrors = 0
+        }
+        let footguns = findings.filter { $0.severity != .info }.count
+        return validationErrors + footguns
+    }
+
+    /// Severity classification for the top-bar health chip. Hard validation
+    /// errors outrank footgun warnings; an unavailable validation run is
+    /// `.unknown` rather than a false `.clean`.
+    public var health: Health {
+        if case .unavailable = validation { return .unknown }
+        if case .completed(let result) = validation, !result.isValid { return .error }
+        return findings.contains { $0.severity != .info } ? .warning : .clean
+    }
 }
 
 /// Validates config via the Ghostty CLI and flags known footguns statically

@@ -120,4 +120,57 @@ final class ConfigLinterTests: XCTestCase {
         // A tooling failure is surfaced but is not itself a config "problem".
         XCTAssertFalse(report.hasProblems)
     }
+
+    // MARK: - Health summary for the top-bar chip (R15, R16)
+
+    private func finding(_ severity: LintFinding.Severity) -> LintFinding {
+        LintFinding(rule: "r", severity: severity, title: "t", message: "m", locations: [])
+    }
+
+    private func completed(isValid: Bool, errors: Int) -> ValidationOutcome {
+        let messages = (0..<errors).map {
+            ValidationMessage(file: nil, line: nil, key: nil, message: "e\($0)")
+        }
+        return .completed(ValidationResult(isValid: isValid, messages: messages, rawOutput: ""))
+    }
+
+    func testHealthIsCleanWhenNotRunWithNoFindings() {
+        let report = LintReport(validation: .notRun, findings: [])
+        XCTAssertEqual(report.health, .clean)
+        XCTAssertEqual(report.problemCount, 0)
+    }
+
+    func testHealthIsCleanWhenValidatedWithNoFindings() {
+        let report = LintReport(validation: completed(isValid: true, errors: 0), findings: [])
+        XCTAssertEqual(report.health, .clean)
+        XCTAssertEqual(report.problemCount, 0)
+    }
+
+    func testHealthIsWarningOnFootgunWarning() {
+        let report = LintReport(validation: completed(isValid: true, errors: 0),
+                                findings: [finding(.warning)])
+        XCTAssertEqual(report.health, .warning)
+        XCTAssertEqual(report.problemCount, 1)
+    }
+
+    func testHealthIgnoresInfoFindings() {
+        let report = LintReport(validation: completed(isValid: true, errors: 0),
+                                findings: [finding(.info)])
+        XCTAssertEqual(report.health, .clean)
+        XCTAssertEqual(report.problemCount, 0)
+    }
+
+    func testHealthErrorOutranksWarningAndCountsBoth() {
+        let report = LintReport(validation: completed(isValid: false, errors: 2),
+                                findings: [finding(.warning)])
+        XCTAssertEqual(report.health, .error)
+        XCTAssertEqual(report.problemCount, 3)
+    }
+
+    func testHealthIsUnknownWhenValidationUnavailable() {
+        let report = LintReport(validation: .unavailable("boom"),
+                                findings: [finding(.warning)])
+        XCTAssertEqual(report.health, .unknown)
+        XCTAssertEqual(report.problemCount, 1)
+    }
 }
