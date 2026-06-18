@@ -125,11 +125,12 @@ struct RootView: View {
         } label: {
             Label("Customized", systemImage: "pencil")
                 .font(.caption)
-                .foregroundStyle(isActive ? AnyShapeStyle(.tint) : AnyShapeStyle(.primary))
+                .foregroundStyle(isActive ? Color.accentColor : Color.primary)
         }
         .buttonStyle(.plain)
         .help("Show customized options")
         .accessibilityLabel("Customized options")
+        .accessibilityAddTraits(isActive ? .isSelected : [])
     }
 
     @ViewBuilder
