@@ -173,4 +173,44 @@ final class ConfigLinterTests: XCTestCase {
         XCTAssertEqual(report.health, .unknown)
         XCTAssertEqual(report.problemCount, 1)
     }
+
+    func testHealthIsWarningWhenNotRunWithFootgun() {
+        let report = LintReport(validation: .notRun, findings: [finding(.warning)])
+        XCTAssertEqual(report.health, .warning)
+        XCTAssertEqual(report.problemCount, 1)
+    }
+
+    func testHealthErrorWithoutParsedMessagesStillCountsOne() {
+        // A failed validation that emitted nothing parseable is still .error;
+        // problemCount must be >= 1 so the chip never reads a red "0 problems".
+        let report = LintReport(validation: completed(isValid: false, errors: 0), findings: [])
+        XCTAssertEqual(report.health, .error)
+        XCTAssertEqual(report.problemCount, 1)
+    }
+
+    // MARK: - Chip label (badgeText)
+
+    func testBadgeTextClean() {
+        let report = LintReport(validation: .notRun, findings: [])
+        XCTAssertEqual(report.badgeText, "No problems")
+    }
+
+    func testBadgeTextSingularAndPlural() {
+        let one = LintReport(validation: completed(isValid: true, errors: 0),
+                             findings: [finding(.warning)])
+        XCTAssertEqual(one.badgeText, "1 problem")
+        let many = LintReport(validation: completed(isValid: true, errors: 0),
+                              findings: [finding(.warning), finding(.warning)])
+        XCTAssertEqual(many.badgeText, "2 problems")
+    }
+
+    func testBadgeTextErrorWithoutMessagesReadsOneProblem() {
+        let report = LintReport(validation: completed(isValid: false, errors: 0), findings: [])
+        XCTAssertEqual(report.badgeText, "1 problem")
+    }
+
+    func testBadgeTextUnknown() {
+        let report = LintReport(validation: .unavailable("boom"), findings: [])
+        XCTAssertEqual(report.badgeText, "Health unknown")
+    }
 }

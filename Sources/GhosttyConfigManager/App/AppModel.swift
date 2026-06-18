@@ -3,6 +3,10 @@ import Observation
 import GhosttyConfigKit
 
 /// What the sidebar can select.
+///
+/// `.all` is the initial default (it has no sidebar row — the unfiltered list is
+/// the launch content) and `.problems` is entered from the top-bar health chip
+/// rather than a sidebar row; the rest map to visible rows.
 public enum SidebarSelection: Hashable {
     case all
     case customized

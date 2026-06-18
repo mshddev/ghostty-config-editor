@@ -134,12 +134,14 @@ struct RootView: View {
                 HStack(spacing: 6) {
                     Image(systemName: Self.healthIcon(report.health))
                         .foregroundStyle(Self.healthTint(report.health))
-                    Text(healthLabel(report.health))
+                        .accessibilityHidden(true)
+                    Text(report.badgeText)
                 }
                 .font(.caption)
             }
             .buttonStyle(.plain)
             .help("Show config health")
+            .accessibilityLabel(report.badgeText)
         } else {
             HStack(spacing: 6) {
                 Image(systemName: "stethoscope")
@@ -164,16 +166,6 @@ struct RootView: View {
         case .clean: return .green
         case .warning, .unknown: return .orange
         case .error: return .red
-        }
-    }
-
-    private func healthLabel(_ health: LintReport.Health) -> String {
-        switch health {
-        case .clean: return "No problems"
-        case .warning, .error:
-            let count = model.problemCount
-            return "\(count) problem\(count == 1 ? "" : "s")"
-        case .unknown: return "Health unknown"
         }
     }
 }
