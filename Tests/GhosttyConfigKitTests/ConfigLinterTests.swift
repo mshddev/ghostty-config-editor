@@ -120,4 +120,116 @@ final class ConfigLinterTests: XCTestCase {
         // A tooling failure is surfaced but is not itself a config "problem".
         XCTAssertFalse(report.hasProblems)
     }
+
+    // MARK: - Health summary for the top-bar chip (R15, R16)
+
+    private func finding(_ severity: LintFinding.Severity) -> LintFinding {
+        LintFinding(rule: "r", severity: severity, title: "t", message: "m", locations: [])
+    }
+
+    private func completed(isValid: Bool, errors: Int) -> ValidationOutcome {
+        let messages = (0..<errors).map {
+            ValidationMessage(file: nil, line: nil, key: nil, message: "e\($0)")
+        }
+        return .completed(ValidationResult(isValid: isValid, messages: messages, rawOutput: ""))
+    }
+
+    func testHealthIsCleanWhenNotRunWithNoFindings() {
+        let report = LintReport(validation: .notRun, findings: [])
+        XCTAssertEqual(report.health, .clean)
+        XCTAssertEqual(report.problemCount, 0)
+    }
+
+    func testHealthIsCleanWhenValidatedWithNoFindings() {
+        let report = LintReport(validation: completed(isValid: true, errors: 0), findings: [])
+        XCTAssertEqual(report.health, .clean)
+        XCTAssertEqual(report.problemCount, 0)
+    }
+
+    func testHealthIsWarningOnFootgunWarning() {
+        let report = LintReport(validation: completed(isValid: true, errors: 0),
+                                findings: [finding(.warning)])
+        XCTAssertEqual(report.health, .warning)
+        XCTAssertEqual(report.problemCount, 1)
+    }
+
+    func testHealthIgnoresInfoFindings() {
+        let report = LintReport(validation: completed(isValid: true, errors: 0),
+                                findings: [finding(.info)])
+        XCTAssertEqual(report.health, .clean)
+        XCTAssertEqual(report.problemCount, 0)
+    }
+
+    func testHealthErrorOutranksWarningAndCountsBoth() {
+        let report = LintReport(validation: completed(isValid: false, errors: 2),
+                                findings: [finding(.warning)])
+        XCTAssertEqual(report.health, .error)
+        XCTAssertEqual(report.problemCount, 3)
+    }
+
+    func testHealthIsUnknownWhenValidationUnavailableAndNothingActionable() {
+        let report = LintReport(validation: .unavailable("boom"), findings: [])
+        XCTAssertEqual(report.health, .unknown)
+        XCTAssertEqual(report.problemCount, 0)
+        XCTAssertEqual(report.badgeText, "Health unknown")
+    }
+
+    func testFootgunSurfacesAsWarningEvenWhenValidationUnavailable() {
+        // Footgun lint is static — it doesn't need the validation binary — so an
+        // actionable footgun must surface as .warning rather than being masked
+        // behind "Health unknown" when ghostty +validate-config couldn't run.
+        let report = LintReport(validation: .unavailable("boom"),
+                                findings: [finding(.warning)])
+        XCTAssertEqual(report.health, .warning)
+        XCTAssertEqual(report.problemCount, 1)
+        XCTAssertEqual(report.badgeText, "1 problem")
+    }
+
+    func testHealthStaysUnknownWhenUnavailableWithOnlyInfoFinding() {
+        // .info findings are not actionable, so they don't lift .unknown to .warning.
+        let report = LintReport(validation: .unavailable("boom"),
+                                findings: [finding(.info)])
+        XCTAssertEqual(report.health, .unknown)
+        XCTAssertEqual(report.problemCount, 0)
+    }
+
+    func testHealthIsWarningWhenNotRunWithFootgun() {
+        let report = LintReport(validation: .notRun, findings: [finding(.warning)])
+        XCTAssertEqual(report.health, .warning)
+        XCTAssertEqual(report.problemCount, 1)
+    }
+
+    func testHealthErrorWithoutParsedMessagesStillCountsOne() {
+        // A failed validation that emitted nothing parseable is still .error;
+        // problemCount must be >= 1 so the chip never reads a red "0 problems".
+        let report = LintReport(validation: completed(isValid: false, errors: 0), findings: [])
+        XCTAssertEqual(report.health, .error)
+        XCTAssertEqual(report.problemCount, 1)
+    }
+
+    // MARK: - Chip label (badgeText)
+
+    func testBadgeTextClean() {
+        let report = LintReport(validation: .notRun, findings: [])
+        XCTAssertEqual(report.badgeText, "No problems")
+    }
+
+    func testBadgeTextSingularAndPlural() {
+        let one = LintReport(validation: completed(isValid: true, errors: 0),
+                             findings: [finding(.warning)])
+        XCTAssertEqual(one.badgeText, "1 problem")
+        let many = LintReport(validation: completed(isValid: true, errors: 0),
+                              findings: [finding(.warning), finding(.warning)])
+        XCTAssertEqual(many.badgeText, "2 problems")
+    }
+
+    func testBadgeTextErrorWithoutMessagesReadsOneProblem() {
+        let report = LintReport(validation: completed(isValid: false, errors: 0), findings: [])
+        XCTAssertEqual(report.badgeText, "1 problem")
+    }
+
+    func testBadgeTextUnknown() {
+        let report = LintReport(validation: .unavailable("boom"), findings: [])
+        XCTAssertEqual(report.badgeText, "Health unknown")
+    }
 }

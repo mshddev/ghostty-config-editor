@@ -3,10 +3,13 @@ import Observation
 import GhosttyConfigKit
 
 /// What the sidebar can select.
+///
+/// `.all` is the initial default (it has no sidebar row — the unfiltered list is
+/// the launch content) and `.problems` is entered from the top-bar health chip
+/// rather than a sidebar row; the rest map to visible rows.
 public enum SidebarSelection: Hashable {
     case all
     case customized
-    case unused
     case problems
     case themes
     case category(String)
@@ -249,17 +252,8 @@ public final class AppModel {
     }
 
     /// Count of actionable problems (validation errors + non-info footguns).
-    public var problemCount: Int {
-        guard let report = lintReport else { return 0 }
-        let validationErrors: Int
-        if case .completed(let result) = report.validation, !result.isValid {
-            validationErrors = result.messages.count
-        } else {
-            validationErrors = 0
-        }
-        let footguns = report.findings.filter { $0.severity != .info }.count
-        return validationErrors + footguns
-    }
+    /// Delegates to the kit so the count is derived in one tested place.
+    public var problemCount: Int { lintReport?.problemCount ?? 0 }
 
     // MARK: - Derived view data
 
@@ -279,8 +273,6 @@ public final class AppModel {
             return browser.options(in: category)
         case .customized:
             return browser.customizedOptions
-        case .unused:
-            return browser.unusedOptions
         case .problems:
             return [] // rendered by ProblemsView, not the option list
         case .themes:

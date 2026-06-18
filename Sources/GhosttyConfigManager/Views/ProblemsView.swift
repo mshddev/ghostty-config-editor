@@ -21,11 +21,16 @@ struct ProblemsView: View {
                                 unavailableRow(reason)
                             }
                         }
-                        if case .completed(let validation) = report.validation,
-                           !validation.isValid, !validation.messages.isEmpty {
+                        if case .completed(let validation) = report.validation, !validation.isValid {
                             Section("Validation errors") {
-                                ForEach(Array(validation.messages.enumerated()), id: \.offset) { _, message in
-                                    validationRow(message)
+                                if validation.messages.isEmpty {
+                                    // Validation failed but emitted nothing parseable — show a
+                                    // generic row so the surface is never blank for an .error state.
+                                    genericValidationFailureRow()
+                                } else {
+                                    ForEach(Array(validation.messages.enumerated()), id: \.offset) { _, message in
+                                        validationRow(message)
+                                    }
                                 }
                             }
                         }
@@ -62,6 +67,19 @@ struct ProblemsView: View {
             VStack(alignment: .leading, spacing: 2) {
                 Text("Couldn't run ghostty +validate-config").font(.body.bold())
                 Text("Static footguns are still listed, but live validation didn't run: \(reason)")
+                    .font(.callout).foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+        }
+        .padding(.vertical, 2)
+    }
+
+    private func genericValidationFailureRow() -> some View {
+        HStack(alignment: .top, spacing: 8) {
+            Image(systemName: "xmark.octagon.fill").foregroundStyle(.red)
+            VStack(alignment: .leading, spacing: 2) {
+                Text("Config failed validation").font(.body.bold())
+                Text("`ghostty +validate-config` reported your config as invalid but returned no specific message.")
                     .font(.callout).foregroundStyle(.secondary)
                     .fixedSize(horizontal: false, vertical: true)
             }

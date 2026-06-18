@@ -83,6 +83,63 @@ public struct LintReport: Sendable {
         else { validationFailed = false }
         return validationFailed || findings.contains { $0.severity != .info }
     }
+
+    /// At-a-glance config health for the window-chrome chip (R15, R16). `.error`
+    /// outranks `.warning`; `.unknown` means live validation couldn't run
+    /// (surfaced instead of a false all-clear), and `.clean` means
+    /// validated/not-run with no actionable footguns.
+    public enum Health: Sendable, Equatable {
+        case clean
+        case warning
+        case error
+        case unknown
+    }
+
+    /// Count of actionable problems: validation errors (only when validation ran
+    /// and failed) plus non-`.info` footguns. Single source of truth for the
+    /// count the sidebar previously rendered and the top-bar chip now shows.
+    ///
+    /// A failed validation that emitted no parseable messages still counts as one
+    /// problem (the failure itself), so `health == .error` always implies
+    /// `problemCount >= 1` — the chip never shows a red "0 problems".
+    public var problemCount: Int {
+        let validationErrors: Int
+        if case .completed(let result) = validation, !result.isValid {
+            validationErrors = max(1, result.messages.count)
+        } else {
+            validationErrors = 0
+        }
+        let footguns = findings.filter { $0.severity != .info }.count
+        return validationErrors + footguns
+    }
+
+    /// Severity classification for the top-bar health chip. Hard validation
+    /// errors outrank footgun warnings, which in turn outrank an unavailable
+    /// validation run: footgun lint is static (it doesn't need the validation
+    /// binary), so an actionable footgun still surfaces as `.warning` even when
+    /// `ghostty +validate-config` couldn't run. `.unknown` therefore means
+    /// validation was unavailable AND nothing else is actionable.
+    public var health: Health {
+        if case .completed(let result) = validation, !result.isValid { return .error }
+        if findings.contains(where: { $0.severity != .info }) { return .warning }
+        if case .unavailable = validation { return .unknown }
+        return .clean
+    }
+
+    /// One-line label for the top-bar health chip, derived entirely from this
+    /// report so the copy and its pluralization are tested in the kit rather
+    /// than the untested view layer.
+    public var badgeText: String {
+        switch health {
+        case .clean:
+            return "No problems"
+        case .warning, .error:
+            let count = problemCount
+            return "\(count) problem\(count == 1 ? "" : "s")"
+        case .unknown:
+            return "Health unknown"
+        }
+    }
 }
 
 /// Validates config via the Ghostty CLI and flags known footguns statically
