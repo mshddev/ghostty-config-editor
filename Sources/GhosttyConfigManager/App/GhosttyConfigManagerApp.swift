@@ -101,14 +101,14 @@ struct RootView: View {
             }
         }
         .toolbar {
-            ToolbarItem(placement: .navigation) {
-                customizedChip()
-            }
             ToolbarItem(placement: .status) {
                 statusChip(environment)
             }
             ToolbarItem(placement: .status) {
                 healthChip()
+            }
+            ToolbarItem(placement: .primaryAction) {
+                customizedChip()
             }
         }
     }
@@ -116,16 +116,30 @@ struct RootView: View {
     /// The "Customized" entry point, promoted from the sidebar into the window
     /// chrome (mirrors `healthChip`'s button-sets-selection pattern). Tapping it
     /// shows the user's customized options; it tints accent while that view is
-    /// active so the current surface is legible from the top bar.
+    /// active so the current surface is legible from the top bar. The sliders
+    /// glyph plus its visible title read as "your adjusted settings" — the bare
+    /// pencil it replaced was ambiguous with "edit".
+    ///
+    /// Built from the same `HStack(spacing: 6)` of icon + text as `statusChip`
+    /// and `healthChip` (rather than a `Label`, whose wider icon-title gap and
+    /// tighter metrics looked cramped under the Liquid Glass capsule). The
+    /// horizontal padding widens the glass capsule so the icon and title clear
+    /// its rounded ends — giving the action chip more presence than the adjacent
+    /// status chips.
     @ViewBuilder
     private func customizedChip() -> some View {
         let isActive = model.selection == .customized
         Button {
             model.selection = .customized
         } label: {
-            Label("Customized", systemImage: "pencil")
-                .font(.caption)
-                .foregroundStyle(isActive ? Color.accentColor : Color.primary)
+            HStack(spacing: 6) {
+                Image(systemName: "slider.horizontal.3")
+                    .accessibilityHidden(true)
+                Text("Customized")
+            }
+            .font(.caption)
+            .foregroundStyle(isActive ? Color.accentColor : Color.primary)
+            .padding(.horizontal, 12)
         }
         .buttonStyle(.plain)
         .help("Show customized options")
