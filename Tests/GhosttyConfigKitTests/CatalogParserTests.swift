@@ -268,6 +268,18 @@ final class CatalogParserTests: XCTestCase {
         XCTAssertNotEqual(catalog.option(named: "shell-integration-features")?.valueType, .enumeration)
     }
 
+    func testCompositeFlagOptionWithBulletedValuesStaysFreeText() throws {
+        let catalog = try realCatalog()
+        // bell-features documents its individual flags under "Valid values are:" so
+        // the bullet reader would extract them, but its default is a comma-separated
+        // flag list (`no-system,no-audio,attention,title,no-border`) with `no-`
+        // negations — a single-select dropdown would silently drop flags on edit
+        // (R4/KTD6/AE5). The comma-in-default guard keeps it free text.
+        let bell = try XCTUnwrap(catalog.option(named: "bell-features"))
+        XCTAssertNotEqual(bell.valueType, .enumeration)
+        XCTAssertTrue(bell.enumValues.isEmpty)
+    }
+
     func testParserResultWinsOverCuratedMap() throws {
         let catalog = try realCatalog()
         // cursor-style is parseable; the curated map must not override it.

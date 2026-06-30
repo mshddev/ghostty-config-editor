@@ -185,11 +185,26 @@ public enum CatalogParser {
         // `window-colorspace`, and `osc-color-report-format` all carry "color" in
         // their name yet enumerate a genuine closed set.
         if def.hasPrefix("#") { return [] }
+        // A comma-separated default marks a composite multi-flag value
+        // (`bell-features = no-system,no-audio,…`): these combine flags (often with
+        // `no-` negations) rather than pick one, so a single-select dropdown would
+        // silently drop the other flags the moment the user edits it (R4/KTD6).
+        // Keep them free text — value-based so it catches future composite options
+        // without a curated list.
+        if def.contains(",") { return [] }
         let parsed = extractEnumValues(documentation)
         // Curated map only fills gaps — a real parser result always wins.
         let documented = parsed.isEmpty ? (curatedEnumValues[name] ?? []) : parsed
-        guard let inert = macOSInertEnumValues[name] else { return documented }
-        return documented.filter { !inert.contains($0) }
+        let scoped: [String]
+        if let inert = macOSInertEnumValues[name] {
+            scoped = documented.filter { !inert.contains($0) }
+        } else {
+            scoped = documented
+        }
+        // Re-apply the two-choice floor after inert filtering, so a future option
+        // whose set collapses to a single macOS-relevant value doesn't render a
+        // degenerate one-item dropdown.
+        return scoped.count >= 2 ? scoped : []
     }
 
     /// Pull enumerated values from a doc section. Handles both Ghostty doc styles:
