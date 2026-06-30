@@ -452,35 +452,70 @@ enum GhosttyInstanceLister {
             .map { GhosttyInstance(pid: $0.processIdentifier, version: confirmableVersion(of: $0)) }
     }
 
-    /// The bundle's `CFBundleShortVersionString` — but **only** when the process is
-    /// known to be running that bundle's code: its `launchDate` is no earlier than the
-    /// bundle's modification time (KTD4 part b). When the process predates the bundle
-    /// (an upgrade-in-place that hasn't been restarted) or the version can't be read,
-    /// returns an **empty** string so the kit gate fails closed and never signals it —
-    /// `SIGUSR2` to a stale pre-1.2 binary would terminate the user's terminal.
+    /// The bundle's `CFBundleShortVersionString` — but **only** when the app can confirm
+    /// the running process is actually executing that bundle's code (KTD4 part b). When it
+    /// cannot confirm (the on-disk code looks newer than the process, or anything is
+    /// unreadable), returns an **empty** string so the kit gate fails closed and never
+    /// signals it — `SIGUSR2` to a stale pre-1.2 binary would terminate the user's terminal.
+    ///
+    /// Confirmation means *the on-disk code was already in place before this process
+    /// launched* — `launchDate >= codeDate`. The freshness signal is the **inode change
+    /// time (`st_ctime`) of the actual code artifacts** (the loaded executable and
+    /// `Info.plist`), taking the latest.
+    ///
+    /// It is deliberately **not** the `.app` directory's `mtime`, which is a *fail-deadly*
+    /// proxy (caught in code review): a directory's `mtime` ignores in-place rewrites of
+    /// nested files (so a content-level upgrade leaves it stale), and `mtime` is trivially
+    /// preserved by `ditto` / `cp -p` / `rsync -a` / many installers — so an old, still-
+    /// running, handler-less build could pass an `mtime` gate and then be **killed** by the
+    /// reload signal. `st_ctime` is bumped whenever the inode is created/replaced on the
+    /// volume and **cannot be backdated by userspace**, so an in-place or timestamp-
+    /// preserving upgrade reliably reads as "newer than the running process" and fails closed.
     private static func confirmableVersion(of app: NSRunningApplication) -> String {
         guard let bundleURL = app.bundleURL,
               let launchDate = app.launchDate,
-              let bundleModified = modificationDate(of: bundleURL),
-              launchDate >= bundleModified,
-              let version = shortVersion(ofBundleAt: bundleURL) else {
+              let info = bundleInfo(at: bundleURL),
+              let codeDate = codeArtifactDate(at: bundleURL, executable: info.executable),
+              launchDate >= codeDate else {
             return ""
         }
-        return version
+        return info.version
     }
 
-    private static func modificationDate(of url: URL) -> Date? {
-        let attributes = try? FileManager.default.attributesOfItem(atPath: url.path)
-        return attributes?[.modificationDate] as? Date
-    }
-
-    private static func shortVersion(ofBundleAt bundleURL: URL) -> String? {
+    /// `(version, executable)` read from the bundle's `Info.plist`, or nil when the version
+    /// is missing/unreadable (→ unconfirmable, fail closed). `executable` is the
+    /// `CFBundleExecutable` name used to locate the loaded binary for the freshness check.
+    private static func bundleInfo(at bundleURL: URL) -> (version: String, executable: String?)? {
         let plistURL = bundleURL.appendingPathComponent("Contents/Info.plist")
         guard let data = try? Data(contentsOf: plistURL),
               let plist = try? PropertyListSerialization.propertyList(from: data, format: nil) as? [String: Any],
               let version = plist["CFBundleShortVersionString"] as? String else {
             return nil
         }
-        return version
+        return (version, plist["CFBundleExecutable"] as? String)
+    }
+
+    /// The latest inode-change time (`st_ctime`) across the artifacts that establish what
+    /// the running process is executing: `Info.plist` (carries the version) and the loaded
+    /// executable. Returns nil — fail closed — when none can be read. Taking the **max**
+    /// biases safe: if *either* artifact landed after the process launched, the instance is
+    /// treated as unconfirmable.
+    private static func codeArtifactDate(at bundleURL: URL, executable: String?) -> Date? {
+        var paths = [bundleURL.appendingPathComponent("Contents/Info.plist").path]
+        if let executable {
+            paths.append(bundleURL.appendingPathComponent("Contents/MacOS/\(executable)").path)
+        }
+        return paths.compactMap(inodeChangeDate(ofPath:)).max()
+    }
+
+    /// The inode change time (`st_ctime`) of a path. Unlike `mtime`, `st_ctime` cannot be
+    /// set by userspace, so it is a trustworthy "when did this land on this machine" signal
+    /// for the upgrade-in-place safety gate (KTD4 part b). Uses `stat`, mirroring
+    /// `ConfigWriter`'s POSIX helpers.
+    private static func inodeChangeDate(ofPath path: String) -> Date? {
+        var info = stat()
+        guard stat(path, &info) == 0 else { return nil }
+        let ctime = info.st_ctimespec
+        return Date(timeIntervalSince1970: TimeInterval(ctime.tv_sec) + TimeInterval(ctime.tv_nsec) / 1_000_000_000)
     }
 }
