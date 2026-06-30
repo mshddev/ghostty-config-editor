@@ -362,6 +362,14 @@ final class ConfigWriterTests: XCTestCase {
         XCTAssertNotNil(titlebar.applyNotice)
         // "requires restarting Ghostty completely" → restart.
         XCTAssertEqual(catalog.option(named: "background-opacity")?.changeScope, .restart)
+
+        // U2: applyNotice is worded *additively* so it reads complementarily beneath
+        // the scope-neutral auto-reload caption (KTD8). It must no longer begin with
+        // the old corrective "This takes effect …" framing.
+        let newSurfaceNotice = try XCTUnwrap(titlebar.applyNotice)
+        XCTAssertFalse(newSurfaceNotice.hasPrefix("This takes effect"))
+        let restartNotice = try XCTUnwrap(catalog.option(named: "background-opacity")?.applyNotice)
+        XCTAssertFalse(restartNotice.hasPrefix("This takes effect"))
     }
 
     func testGitContextDetectsWorkingTree() throws {

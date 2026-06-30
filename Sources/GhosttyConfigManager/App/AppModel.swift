@@ -1,5 +1,6 @@
 import Foundation
 import Observation
+import AppKit
 import GhosttyConfigKit
 
 /// What the sidebar can select.
@@ -42,8 +43,10 @@ public final class AppModel {
         case idle
         case applying
         /// Saved successfully. `notice` carries a new-surface/restart hint (AE5);
-        /// `gitTracked` is true when the file lives in a git working tree (U7).
-        case succeeded(notice: String?, gitTracked: Bool)
+        /// `gitTracked` is true when the file lives in a git working tree (U7);
+        /// `reload` is the auto-reload outcome whose kit-derived caption the views
+        /// stack beneath the notice (R1, R6 — see `GhosttyReloader`).
+        case succeeded(notice: String?, gitTracked: Bool, reload: ReloadOutcome)
         case failed(String)
     }
 
@@ -62,9 +65,28 @@ public final class AppModel {
     public var query: String = ""
     public var selectedOptionName: String?
 
+    /// `UserDefaults` key for the auto-reload toggle (KTD7).
+    static let autoReloadDefaultsKey = "autoReloadEnabled"
+
+    /// Whether a successful in-app write auto-reloads the running Ghostty (R7, KTD7).
+    /// **On by default**; the toggle persists across launches. This is the app's first
+    /// persisted setting — `binaryOverride`/`selection`/`query` are in-memory only, so
+    /// they are not a persistence precedent. Stored (not computed) so a mid-session
+    /// toggle updates the in-memory value immediately while `didSet` mirrors it to
+    /// `UserDefaults`; the `Settings` toggle binds to this property, never to a bare
+    /// `@AppStorage` that would leave this stored value stale (U3).
+    public var autoReloadEnabled: Bool {
+        didSet { UserDefaults.standard.set(autoReloadEnabled, forKey: Self.autoReloadDefaultsKey) }
+    }
+
     private var environment: GhosttyEnvironment?
     private var catalog: OptionCatalog?
     private var lastReceipt: WriteReceipt?
+
+    /// Signals the running Ghostty to reload after a successful write (R1). The kit
+    /// owns the whole decision + safety policy; the app supplies only the AppKit
+    /// instance enumeration (KTD3) — so this is `.live` with the app-side lister.
+    private let reloader = GhosttyReloader.live(runningInstances: GhosttyInstanceLister.runningInstances)
 
     // Themes (U8)
     private var themeProvider: ThemeProvider?
@@ -81,7 +103,15 @@ public final class AppModel {
     public private(set) var keybindDefaults: [DefaultKeybind] = []
     public private(set) var keybindActions: [KeybindAction] = []
 
-    public init() {}
+    public init() {
+        // Default ON (KTD7): register the default so a fresh install reads `true`.
+        // A bare `bool(forKey:)` returns `false` for a missing key, which would ship
+        // auto-reload OFF and silently violate R7/AE8 — so the default is registered,
+        // not assumed. (Assigning in `init` does not trigger the `didSet` above.)
+        let defaults = UserDefaults.standard
+        defaults.register(defaults: [Self.autoReloadDefaultsKey: true])
+        autoReloadEnabled = defaults.bool(forKey: Self.autoReloadDefaultsKey)
+    }
 
     public var canUndo: Bool { lastReceipt?.previousText != nil }
 
@@ -180,7 +210,11 @@ public final class AppModel {
             lastReceipt = receipt
             let gitTracked = GitContext.isInsideWorkingTree(path: receipt.resolvedPath)
             if let catalog { await refreshConfig(environment: environment, catalog: catalog) }
-            applyState = .succeeded(notice: option.option.applyNotice, gitTracked: gitTracked)
+            // Best-effort: ask the running Ghostty to reload now that the new bytes are
+            // committed (R1). Never throws — the only throwing call here is the write
+            // above — and never downgrades a successful save to a failure (R5/KTD5).
+            let reload = reloader.reload(enabled: autoReloadEnabled)
+            applyState = .succeeded(notice: option.option.applyNotice, gitTracked: gitTracked, reload: reload)
         } catch ConfigWriteError.validationFailed(let messages) {
             applyState = .failed(messages.first?.message ?? "The change didn't validate.")
         } catch ConfigWriteError.staleOnDisk {
@@ -200,7 +234,10 @@ public final class AppModel {
             _ = try ConfigWriter().restore(from: receipt)
             lastReceipt = nil
             await refreshConfig(environment: environment, catalog: catalog)
-            applyState = .succeeded(notice: "Reverted to the previous value.", gitTracked: false)
+            // Reload after an undo too, so the live terminal reverts (closes the undo
+            // gap — undo previously refreshed only the app's own view) (R1/AE5).
+            let reload = reloader.reload(enabled: autoReloadEnabled)
+            applyState = .succeeded(notice: "Reverted to the previous value.", gitTracked: false, reload: reload)
         } catch {
             applyState = .failed(error.localizedDescription)
         }
@@ -395,5 +432,90 @@ public final class AppModel {
 
     public func snippet(for option: MergedOption) -> String {
         browser?.snippet(for: option) ?? "\(option.option.name) = \(option.option.defaultValue)"
+    }
+}
+
+/// The app-side instance lister behind `GhosttyReloader.live` (KTD2/KTD3).
+///
+/// Lives in the app target — not the kit — because `NSRunningApplication` is AppKit
+/// system state the kit deliberately stays free of. It is a plain (`nonisolated`)
+/// enum so its static method satisfies the kit's `@Sendable () -> [GhosttyInstance]`
+/// seam; the reloader invokes it from `AppModel`'s `@MainActor` context.
+enum GhosttyInstanceLister {
+
+    /// Every running Ghostty GUI process (discovered by **bundle id**, never by
+    /// process name — a name probe would also match the transient `ghostty +…` CLI
+    /// subprocesses this app spawns) mapped to a pid and a **confirmable** version.
+    static func runningInstances() -> [GhosttyInstance] {
+        NSRunningApplication
+            .runningApplications(withBundleIdentifier: GhosttyReloader.ghosttyBundleID)
+            .map { GhosttyInstance(pid: $0.processIdentifier, version: confirmableVersion(of: $0)) }
+    }
+
+    /// The bundle's `CFBundleShortVersionString` — but **only** when the app can confirm
+    /// the running process is actually executing that bundle's code (KTD4 part b). When it
+    /// cannot confirm (the on-disk code looks newer than the process, or anything is
+    /// unreadable), returns an **empty** string so the kit gate fails closed and never
+    /// signals it — `SIGUSR2` to a stale pre-1.2 binary would terminate the user's terminal.
+    ///
+    /// Confirmation means *the on-disk code was already in place before this process
+    /// launched* — `launchDate >= codeDate`. The freshness signal is the **inode change
+    /// time (`st_ctime`) of the actual code artifacts** (the loaded executable and
+    /// `Info.plist`), taking the latest.
+    ///
+    /// It is deliberately **not** the `.app` directory's `mtime`, which is a *fail-deadly*
+    /// proxy (caught in code review): a directory's `mtime` ignores in-place rewrites of
+    /// nested files (so a content-level upgrade leaves it stale), and `mtime` is trivially
+    /// preserved by `ditto` / `cp -p` / `rsync -a` / many installers — so an old, still-
+    /// running, handler-less build could pass an `mtime` gate and then be **killed** by the
+    /// reload signal. `st_ctime` is bumped whenever the inode is created/replaced on the
+    /// volume and **cannot be backdated by userspace**, so an in-place or timestamp-
+    /// preserving upgrade reliably reads as "newer than the running process" and fails closed.
+    private static func confirmableVersion(of app: NSRunningApplication) -> String {
+        guard let bundleURL = app.bundleURL,
+              let launchDate = app.launchDate,
+              let info = bundleInfo(at: bundleURL),
+              let codeDate = codeArtifactDate(at: bundleURL, executable: info.executable),
+              launchDate >= codeDate else {
+            return ""
+        }
+        return info.version
+    }
+
+    /// `(version, executable)` read from the bundle's `Info.plist`, or nil when the version
+    /// is missing/unreadable (→ unconfirmable, fail closed). `executable` is the
+    /// `CFBundleExecutable` name used to locate the loaded binary for the freshness check.
+    private static func bundleInfo(at bundleURL: URL) -> (version: String, executable: String?)? {
+        let plistURL = bundleURL.appendingPathComponent("Contents/Info.plist")
+        guard let data = try? Data(contentsOf: plistURL),
+              let plist = try? PropertyListSerialization.propertyList(from: data, format: nil) as? [String: Any],
+              let version = plist["CFBundleShortVersionString"] as? String else {
+            return nil
+        }
+        return (version, plist["CFBundleExecutable"] as? String)
+    }
+
+    /// The latest inode-change time (`st_ctime`) across the artifacts that establish what
+    /// the running process is executing: `Info.plist` (carries the version) and the loaded
+    /// executable. Returns nil — fail closed — when none can be read. Taking the **max**
+    /// biases safe: if *either* artifact landed after the process launched, the instance is
+    /// treated as unconfirmable.
+    private static func codeArtifactDate(at bundleURL: URL, executable: String?) -> Date? {
+        var paths = [bundleURL.appendingPathComponent("Contents/Info.plist").path]
+        if let executable {
+            paths.append(bundleURL.appendingPathComponent("Contents/MacOS/\(executable)").path)
+        }
+        return paths.compactMap(inodeChangeDate(ofPath:)).max()
+    }
+
+    /// The inode change time (`st_ctime`) of a path. Unlike `mtime`, `st_ctime` cannot be
+    /// set by userspace, so it is a trustworthy "when did this land on this machine" signal
+    /// for the upgrade-in-place safety gate (KTD4 part b). Uses `stat`, mirroring
+    /// `ConfigWriter`'s POSIX helpers.
+    private static func inodeChangeDate(ofPath path: String) -> Date? {
+        var info = stat()
+        guard stat(path, &info) == 0 else { return nil }
+        let ctime = info.st_ctimespec
+        return Date(timeIntervalSince1970: TimeInterval(ctime.tv_sec) + TimeInterval(ctime.tv_nsec) / 1_000_000_000)
     }
 }

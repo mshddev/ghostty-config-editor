@@ -247,10 +247,15 @@ struct OptionEditorView: View {
             EmptyView()
         case .applying:
             HStack(spacing: 6) { ProgressView().controlSize(.small); Text("Validating and saving…").font(.caption) }
-        case .succeeded(let notice, let gitTracked):
+        case .succeeded(let notice, let gitTracked, let reload):
             VStack(alignment: .leading, spacing: 3) {
                 Label("Saved", systemImage: "checkmark.circle.fill").foregroundStyle(.green).font(.callout)
                 if let notice { Text(notice).font(.caption).foregroundStyle(.secondary) }
+                // Scope-neutral reload caption, stacked as its own line beneath the
+                // notice — never composed into one sentence with it (KTD8).
+                if let reloadMessage = reload.message {
+                    Text(reloadMessage).font(.caption).foregroundStyle(.secondary)
+                }
                 if gitTracked {
                     Text("This file is git-tracked — commit it in your dotfiles repo.")
                         .font(.caption).foregroundStyle(.secondary)
