@@ -30,6 +30,14 @@ struct GhosttyConfigManagerApp: App {
                 .task { await model.bootstrap() }
         }
         .windowStyle(.titleBar)
+
+        // Standard ⌘, Preferences window for the auto-reload toggle (U3). The model
+        // is injected explicitly — SwiftUI does not propagate `.environment` across
+        // scenes, so the WindowGroup injection above does not reach this one (KTD7).
+        Settings {
+            SettingsView()
+                .environment(model)
+        }
     }
 }
 
