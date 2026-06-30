@@ -207,8 +207,15 @@ struct OptionEditorView: View {
             Toggle(isOn: boolBinding) { Text(draft == "true" ? "Enabled" : "Disabled") }
                 .toggleStyle(.switch)
         case .enumeration:
+            // Rows come from the kit helper (not raw enumValues) so a saved
+            // out-of-enum value stays selectable and is never silently dropped.
+            // Seed from `currentValue` (the saved value), never `draft` — passing
+            // the in-progress draft would make the out-of-enum row vanish the
+            // moment the selection moves off it (R3).
             Picker("Value", selection: $draft) {
-                ForEach(option.option.enumValues, id: \.self) { Text($0).tag($0) }
+                ForEach(option.enumChoices(current: currentValue)) { choice in
+                    Text(choice.label).tag(choice.value)
+                }
             }
             .pickerStyle(.menu)
             .labelsHidden()
