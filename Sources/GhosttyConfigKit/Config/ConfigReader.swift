@@ -36,6 +36,57 @@ public struct MergedOption: Sendable, Identifiable {
     }
 }
 
+/// One selectable row in an enumerated option's dropdown (R1, R2, R3).
+public struct EnumChoice: Sendable, Equatable, Identifiable {
+    public var id: String { value }
+    /// The value written/selected — the SwiftUI `Picker` tag.
+    public let value: String
+    /// Human-facing row text (a bare value, or an annotated current/unset entry).
+    public let label: String
+    /// True for the row the editor seeds its selection to.
+    public let isSelected: Bool
+
+    public init(value: String, label: String, isSelected: Bool) {
+        self.value = value
+        self.label = label
+        self.isSelected = isSelected
+    }
+}
+
+public extension MergedOption {
+    /// Ordered rows for an enumerated option's dropdown, made safe against the
+    /// SwiftUI `Picker` footgun where a selection with no matching tag renders
+    /// blank and silently overwrites the user's value (R3).
+    ///
+    /// - Parameter current: the option's *saved* value (the editor's seeded
+    ///   selection) — `userValues.first` when set, else the catalog default. Pass
+    ///   the saved value, never the in-progress draft, or an out-of-enum row would
+    ///   vanish the moment the selection moves off it.
+    /// - Returns: `enumValues` in documented order, prefixed by a distinct leading
+    ///   row whenever `current` is not one of them — an "— current value" row for a
+    ///   saved out-of-enum value, or a "Not set — uses default" row for an unset
+    ///   option whose default isn't itself listed. The leading row carries `current`
+    ///   as its tag so the editor's selection always has a match.
+    func enumChoices(current: String) -> [EnumChoice] {
+        let values = option.enumValues
+        if !current.isEmpty, values.contains(current) {
+            // The saved value is a listed choice — just mark it selected.
+            return values.map { EnumChoice(value: $0, label: $0, isSelected: $0 == current) }
+        }
+        // `current` is empty or outside the set: lead with a row that carries it as
+        // the tag so the seeded selection matches, and is the only selected row.
+        let leadLabel: String
+        if isSet {
+            leadLabel = "\(current) — current value"
+        } else {
+            let def = option.defaultValue
+            leadLabel = def.isEmpty ? "Not set — uses default" : "Not set — uses default (\(def))"
+        }
+        let lead = EnumChoice(value: current, label: leadLabel, isSelected: true)
+        return [lead] + values.map { EnumChoice(value: $0, label: $0, isSelected: false) }
+    }
+}
+
 /// The merged view the Explorer renders.
 public struct MergedConfig: Sendable {
     public let options: [MergedOption]
