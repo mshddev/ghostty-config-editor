@@ -136,6 +136,171 @@ final class CatalogParserTests: XCTestCase {
         XCTAssertTrue(titlebar.enumValues.contains("hidden"))
     }
 
+    // MARK: - Broadened enum detection (U1)
+
+    func testValidValuesColonHeaderIsDetected() throws {
+        let catalog = try realCatalog()
+        // "Valid values:" (no "are") was previously missed → free text.
+        let alpha = try XCTUnwrap(catalog.option(named: "alpha-blending"))
+        XCTAssertEqual(alpha.valueType, .enumeration)
+        XCTAssertEqual(alpha.enumValues, ["native", "linear", "linear-corrected"])
+
+        let scrollbar = try XCTUnwrap(catalog.option(named: "scrollbar"))
+        XCTAssertEqual(scrollbar.enumValues, ["system", "never"])
+
+        let rightClick = try XCTUnwrap(catalog.option(named: "right-click-action"))
+        XCTAssertEqual(rightClick.enumValues,
+                       ["context-menu", "paste", "copy", "copy-or-paste", "ignore"])
+
+        let newTab = try XCTUnwrap(catalog.option(named: "window-new-tab-position"))
+        XCTAssertEqual(newTab.enumValues, ["current", "end"])
+    }
+
+    func testAllowableValuesHeaderIsDetected() throws {
+        let catalog = try realCatalog()
+        // "Allowable values are:" was previously missed.
+        let osc = try XCTUnwrap(catalog.option(named: "osc-color-report-format"))
+        XCTAssertEqual(osc.valueType, .enumeration)
+        XCTAssertEqual(osc.enumValues, ["none", "8-bit", "16-bit"])
+    }
+
+    func testThreeValidValuesPhrasingIsDetected() throws {
+        let catalog = try realCatalog()
+        // "There are three valid values for this configuration:" — broad header match.
+        let saveState = try XCTUnwrap(catalog.option(named: "window-save-state"))
+        XCTAssertEqual(saveState.enumValues, ["default", "never", "always"])
+    }
+
+    func testCoListedBulletExtractsEveryValue() throws {
+        let catalog = try realCatalog()
+        // shell-integration co-lists `bash`, `elvish`, `fish`, `nushell`, `zsh` on
+        // one bullet — the multi-token reader must keep them all.
+        let shell = try XCTUnwrap(catalog.option(named: "shell-integration"))
+        XCTAssertEqual(shell.valueType, .enumeration)
+        XCTAssertEqual(shell.enumValues,
+                       ["none", "detect", "bash", "elvish", "fish", "nushell", "zsh"])
+    }
+
+    func testContinuationLineValuesAreExtracted() throws {
+        let catalog = try realCatalog()
+        // macos-icon wraps `paper`, `retro`, `xray` onto a non-bulleted continuation
+        // line after a dangling comma.
+        let icon = try XCTUnwrap(catalog.option(named: "macos-icon"))
+        XCTAssertEqual(icon.valueType, .enumeration)
+        for value in ["official", "blueprint", "holographic", "paper", "retro", "xray",
+                      "custom", "custom-style"] {
+            XCTAssertTrue(icon.enumValues.contains(value), "macos-icon should offer \(value)")
+        }
+    }
+
+    func testBooleanImpostorsWithBulletsBecomeEnumerations() throws {
+        let catalog = try realCatalog()
+        // Default `false` but the docs enumerate extra states → enum, not boolean.
+        let fullscreen = try XCTUnwrap(catalog.option(named: "fullscreen"))
+        XCTAssertEqual(fullscreen.valueType, .enumeration)
+        XCTAssertTrue(fullscreen.enumValues.contains("non-native"))
+        XCTAssertTrue(fullscreen.enumValues.contains("true"))
+        XCTAssertTrue(fullscreen.enumValues.contains("false"))
+
+        let nonNative = try XCTUnwrap(catalog.option(named: "macos-non-native-fullscreen"))
+        XCTAssertEqual(nonNative.valueType, .enumeration)
+        XCTAssertTrue(nonNative.enumValues.contains("visible-menu"))
+        XCTAssertTrue(nonNative.enumValues.contains("padded-notch"))
+    }
+
+    func testColorPlaceholderValuesAreNotEnumerated() throws {
+        let catalog = try realCatalog()
+        // search-foreground documents "Valid values:" followed by `#RRGGBB`
+        // placeholders — the literal-color guard + format rejection keep it free text.
+        let searchFg = try XCTUnwrap(catalog.option(named: "search-foreground"))
+        XCTAssertNotEqual(searchFg.valueType, .enumeration)
+        XCTAssertTrue(searchFg.enumValues.isEmpty)
+
+        let searchSel = try XCTUnwrap(catalog.option(named: "search-selected-foreground"))
+        XCTAssertNotEqual(searchSel.valueType, .enumeration)
+    }
+
+    func testColorNamedOptionsWithRealEnumsSurvive() throws {
+        let catalog = try realCatalog()
+        // "color" in the name but a non-`#` default and a genuine closed set — the
+        // value-literal color guard must NOT suppress these (regression guard).
+        let padding = try XCTUnwrap(catalog.option(named: "window-padding-color"))
+        XCTAssertEqual(padding.valueType, .enumeration)
+        XCTAssertEqual(padding.enumValues, ["background", "extend", "extend-always"])
+
+        let colorspace = try XCTUnwrap(catalog.option(named: "window-colorspace"))
+        XCTAssertEqual(colorspace.valueType, .enumeration)
+        XCTAssertEqual(colorspace.enumValues, ["srgb", "display-p3"])
+    }
+
+    func testExistingEnumsAreNotRegressed() throws {
+        let catalog = try realCatalog()
+        // Options detected before this change keep their exact value sets.
+        XCTAssertEqual(catalog.option(named: "cursor-style")?.enumValues,
+                       ["block", "bar", "underline", "block_hollow"])
+        XCTAssertEqual(catalog.option(named: "mouse-shift-capture")?.enumValues,
+                       ["true", "false", "always", "never"])
+    }
+
+    // MARK: - Curated fallback, inert filter, open-valued (U2)
+
+    func testCuratedFallbackTypesProseOnlyImpostors() throws {
+        let catalog = try realCatalog()
+        let confirm = try XCTUnwrap(catalog.option(named: "confirm-close-surface"))
+        XCTAssertEqual(confirm.valueType, .enumeration)
+        XCTAssertEqual(confirm.enumValues, ["true", "false", "always"])
+
+        let optionAsAlt = try XCTUnwrap(catalog.option(named: "macos-option-as-alt"))
+        XCTAssertEqual(optionAsAlt.valueType, .enumeration)
+        XCTAssertEqual(optionAsAlt.enumValues, ["true", "false", "left", "right"])
+
+        // link-previews silently loses `osc8` today (mis-typed boolean).
+        let links = try XCTUnwrap(catalog.option(named: "link-previews"))
+        XCTAssertEqual(links.valueType, .enumeration)
+        XCTAssertEqual(links.enumValues, ["true", "false", "osc8"])
+    }
+
+    func testGenuineBooleanAndCompositeNeighborsAreUntouched() throws {
+        let catalog = try realCatalog()
+        // A real two-state boolean in the impostor neighborhood stays boolean.
+        XCTAssertEqual(catalog.option(named: "mouse-reporting")?.valueType, .boolean)
+        // A composite comma-separated flag option is not single-choice → not enum.
+        XCTAssertNotEqual(catalog.option(named: "shell-integration-features")?.valueType, .enumeration)
+    }
+
+    func testParserResultWinsOverCuratedMap() throws {
+        let catalog = try realCatalog()
+        // cursor-style is parseable; the curated map must not override it.
+        XCTAssertEqual(catalog.option(named: "cursor-style")?.enumValues,
+                       ["block", "bar", "underline", "block_hollow"])
+    }
+
+    func testMacOSInertEnumValuesAreFiltered() throws {
+        let catalog = try realCatalog()
+        let theme = try XCTUnwrap(catalog.option(named: "window-theme"))
+        XCTAssertEqual(theme.valueType, .enumeration)
+        // `ghostty` is "only supported on Linux builds" → filtered on macOS.
+        XCTAssertEqual(theme.enumValues, ["auto", "system", "light", "dark"])
+        XCTAssertFalse(theme.enumValues.contains("ghostty"))
+    }
+
+    func testOpenValuedOptionsStayFreeTextWithReferenceValues() throws {
+        let catalog = try realCatalog()
+        // window-decoration also accepts boolean true/false beyond its named set →
+        // free text, with the macOS-relevant values kept for the reference badge
+        // (client/server are GTK-only and filtered out).
+        let decoration = try XCTUnwrap(catalog.option(named: "window-decoration"))
+        XCTAssertEqual(decoration.valueType, .string)
+        XCTAssertEqual(decoration.enumValues, ["none", "auto"])
+
+        // background-blur accepts any integer intensity → free text (would otherwise
+        // infer `.boolean` from its `false` default and render a toggle).
+        let blur = try XCTUnwrap(catalog.option(named: "background-blur"))
+        XCTAssertEqual(blur.valueType, .string)
+        XCTAssertTrue(blur.enumValues.contains("false"))
+        XCTAssertTrue(blur.enumValues.contains("true"))
+    }
+
     // MARK: - Repeatable keys (R9 foundation)
 
     func testRepeatableKeysAreRepresentedAsSuch() throws {
