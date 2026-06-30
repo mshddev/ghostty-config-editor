@@ -59,4 +59,22 @@ final class IntegrationTests: XCTestCase {
         let result = try await cli.run(["+validate-config"])
         XCTAssertEqual(result.exitCode, 0, "the current config should validate clean: \(result.stderrString)")
     }
+
+    func testLiveKeybindReferenceListsDefaultsAndActions() async throws {
+        let cli = try requireGhostty()
+        let environment = GhosttyEnvironment(cli: cli, version: try await cli.version())
+        let provider = KeybindReferenceProvider.live(environment)
+
+        // U1 verification: a non-empty defaults list and ~85 actions from the live
+        // binary, parsed through the real provider path (not just the fixture).
+        let actions = try await provider.actions()
+        XCTAssertGreaterThan(actions.count, 50, "live +list-actions should list many actions")
+        XCTAssertTrue(actions.contains(KeybindAction(name: "new_tab")))
+
+        let defaults = try await provider.defaults()
+        XCTAssertGreaterThan(defaults.count, 50, "live +list-keybinds --default should list many binds")
+        // The `=`-key default is the canary that the action-set-aware split works
+        // end-to-end against real output.
+        XCTAssertTrue(defaults.contains { $0.canonicalTrigger == "super+=" && $0.actionName == "increase_font_size" })
+    }
 }
