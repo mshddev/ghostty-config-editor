@@ -84,6 +84,7 @@ struct RootView: View {
             switch model.selection {
             case .problems: ProblemsView()
             case .themes: ThemeBrowserView()
+            case .category("Keybindings"): KeybindEditorView()
             default: OptionListView()
             }
         } detail: {
@@ -96,6 +97,10 @@ struct RootView: View {
                 ContentUnavailableView("Pick a theme",
                                        systemImage: "paintpalette",
                                        description: Text("Click a theme to apply it. Previews are read from each theme's file."))
+            case .category("Keybindings"):
+                ContentUnavailableView("Keybindings",
+                                       systemImage: "keyboard",
+                                       description: Text("Press a binding to edit it, or add one — record the keys and pick an action."))
             default:
                 OptionDetailView()
             }

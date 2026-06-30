@@ -76,6 +76,11 @@ public final class AppModel {
     public private(set) var themeColors: [String: ThemeColors] = [:]
     public private(set) var fonts: [String] = []
 
+    // Keybindings (U5)
+    private var keybindReference: KeybindReferenceProvider?
+    public private(set) var keybindDefaults: [DefaultKeybind] = []
+    public private(set) var keybindActions: [KeybindAction] = []
+
     public init() {}
 
     public var canUndo: Bool { lastReceipt?.previousText != nil }
@@ -90,6 +95,9 @@ public final class AppModel {
         themeColors = [:]
         fonts = []
         failedThemes = []
+        keybindReference = nil
+        keybindDefaults = []
+        keybindActions = []
         environmentState = .loading
         contentState = .idle
         do {
@@ -249,6 +257,104 @@ public final class AppModel {
     public func applyTheme(_ name: String) async {
         guard let themeOption = browser?.merged.option(named: "theme") else { return }
         await applyEdit(option: themeOption, values: [name])
+    }
+
+    // MARK: - Keybindings (U5)
+
+    /// The `keybind` repeatable option, joined with the user's bindings. Present
+    /// even when unset (the catalog always carries `keybind`), so a first edit
+    /// targets the real primary config.
+    private var keybindOption: MergedOption? { browser?.merged.option(named: "keybind") }
+
+    /// The action names from `+list-actions`, for the parser and validation.
+    public var keybindActionNames: Set<String> { Set(keybindActions.map(\.name)) }
+
+    /// Lazily load (once) Ghostty's default keybinds + action list, mirroring
+    /// `loadThemesIfNeeded`. Reset on re-`bootstrap`. Degrades to empty lists when
+    /// the binary can't list them (the editor still edits user bindings, R19).
+    public func loadKeybindReferenceIfNeeded() async {
+        guard keybindReference == nil, let environment else { return }
+        let provider = KeybindReferenceProvider.live(environment)
+        keybindReference = provider
+        let actions = (try? await provider.actions()) ?? []
+        // A re-`bootstrap` mid-load clears `keybindReference`; don't repopulate
+        // published state from the now-stale provider (mirrors the color-task guard).
+        guard keybindReference === provider else { return }
+        keybindActions = actions
+        let defaults = (try? await provider.defaults()) ?? []
+        guard keybindReference === provider else { return }
+        keybindDefaults = defaults
+    }
+
+    /// Ghostty's defaults merged with the user's bindings, marking overrides (RK1).
+    public var mergedKeybinds: [MergedKeybind] {
+        let user = KeybindMerge.userBindings(
+            values: keybindOption?.userValues ?? [],
+            sources: keybindOption?.sources ?? [],
+            knownActions: keybindActionNames
+        )
+        return KeybindMerge.merge(defaults: keybindDefaults, user: user)
+    }
+
+    /// The single file the writer would target for `keybind` (R8). New/edited
+    /// bindings land here; bindings defined elsewhere are shown read-only (R-F).
+    private var keybindTargetPath: String? {
+        guard let model = browser?.merged.model else { return nil }
+        return ConfigWriter().targetFile(forOption: "keybind", in: model).resolvedPath
+    }
+
+    /// True when a merged row's user binding lives outside the writer's target
+    /// file, so editing it here would risk duplicating it across files (R-F). Such
+    /// rows are rendered read-only by the surface.
+    public func isReadOnly(_ row: MergedKeybind) -> Bool {
+        guard let source = row.source, let target = keybindTargetPath else { return false }
+        return ConfigReader.canonicalPath(source.file) != ConfigReader.canonicalPath(target)
+    }
+
+    /// Add a new binding (`originalTrigger == nil`) or update an existing one. When
+    /// editing, `originalTrigger` is the row's canonical trigger so a trigger change
+    /// *moves* the binding instead of orphaning the old one (R8/R11/RK4). Pre-validates
+    /// in the kit (KTD7/RK5) and short-circuits to a failure before touching disk,
+    /// then reuses the safe write path (R17).
+    public func applyKeybindEdit(originalTrigger: String? = nil, trigger: String, action: String) async {
+        let trigger = trigger.trimmingCharacters(in: .whitespaces)
+        let action = action.trimmingCharacters(in: .whitespaces)
+        let issues = KeybindValidation.validate(trigger: trigger, action: action, knownActions: keybindActionNames)
+        if let hardError = issues.first(where: { $0.severity == .error }) {
+            applyState = .failed(hardError.message)
+            return
+        }
+        await writeKeybinds { $0.updating(originalTrigger: originalTrigger, trigger: trigger, action: action) }
+    }
+
+    /// Remove a user binding (any default with that trigger reactivates).
+    public func removeKeybind(trigger: String) async {
+        await writeKeybinds { $0.removing(trigger: trigger) }
+    }
+
+    /// Disable a default by writing `trigger=unbind`.
+    public func unbindDefaultKeybind(trigger: String) async {
+        await writeKeybinds { $0.unbindingDefault(trigger: trigger) }
+    }
+
+    /// Scope the user's keybinds to the writer's target file (R-F), apply a pure
+    /// transform to get the next ordered value list, and route it through the
+    /// existing repeatable-key write path. A transform that changes nothing is a
+    /// no-op (no needless write/backup).
+    private func writeKeybinds(_ transform: (TargetScopedBindings) -> [String]) async {
+        guard let option = keybindOption, let target = keybindTargetPath else {
+            applyState = .failed("Couldn't locate the keybind setting in the catalog.")
+            return
+        }
+        let scoped = TargetScopedBindings(
+            userValues: option.userValues,
+            sources: option.sources,
+            targetResolvedPath: target,
+            knownActions: keybindActionNames
+        )
+        let newValues = transform(scoped)
+        guard newValues != scoped.rawValues else { return }
+        await applyEdit(option: option, values: newValues)
     }
 
     /// Count of actionable problems (validation errors + non-info footguns).
