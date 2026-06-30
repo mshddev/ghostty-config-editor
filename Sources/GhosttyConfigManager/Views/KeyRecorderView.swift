@@ -1,0 +1,227 @@
+import SwiftUI
+import AppKit
+import Carbon.HIToolbox
+import GhosttyConfigKit
+
+/// A focusable control that records a single modifier+key chord — press the real
+/// hotkey, exactly like a system shortcut field — and hands a canonical trigger
+/// token back to SwiftUI (RK3, KTD6). All the token logic lives in the kit
+/// (`KeybindTrigger.token(from:)`); this view only captures the keystroke and
+/// resolves the layout-correct character (KTD5).
+struct KeyRecorderView: NSViewRepresentable {
+    /// The trigger token to display (the binding's current trigger).
+    let token: String
+    /// Called with a freshly captured canonical token.
+    let onCapture: (String) -> Void
+    /// Called with a soft warning (e.g. "add a modifier") or nil to clear it.
+    var onWarning: (String?) -> Void = { _ in }
+
+    func makeNSView(context: Context) -> KeyRecorderNSView {
+        let view = KeyRecorderNSView()
+        view.onToken = onCapture
+        view.onWarning = onWarning
+        view.displayToken = token
+        return view
+    }
+
+    func updateNSView(_ view: KeyRecorderNSView, context: Context) {
+        view.onToken = onCapture
+        view.onWarning = onWarning
+        view.displayToken = token
+        view.needsDisplay = true
+    }
+}
+
+/// The AppKit control behind `KeyRecorderView`. Owns a local `NSEvent` monitor so
+/// it sees menu key-equivalents (⌘Q/⌘W) *before* the menu does and swallows them
+/// (KTD6), and resolves character keys against the live keyboard layout so
+/// non-US layouts bind correctly (KTD5).
+final class KeyRecorderNSView: NSView {
+    var onToken: ((String) -> Void)?
+    var onWarning: ((String?) -> Void)?
+    var displayToken: String = "" { didSet { needsDisplay = true } }
+
+    /// Held **strongly**: a weak token deallocates the moment install returns,
+    /// orphaning the app-wide `.keyDown` handler so it swallows every keystroke for
+    /// the rest of the session (the bug `KeyboardShortcuts`/`MASShortcut` avoid by
+    /// retaining it). Torn down on resign / window removal.
+    private var monitor: Any?
+    private var isRecording = false { didSet { needsDisplay = true } }
+
+    override var acceptsFirstResponder: Bool { true }
+    override var isFlipped: Bool { true }
+
+    override init(frame frameRect: NSRect) {
+        super.init(frame: frameRect)
+        setAccessibilityRole(.button)
+        setAccessibilityLabel("Keyboard shortcut recorder")
+    }
+
+    required init?(coder: NSCoder) { fatalError("init(coder:) has not been implemented") }
+
+    // MARK: - Focus / lifecycle
+
+    override func mouseDown(with event: NSEvent) {
+        window?.makeFirstResponder(self)
+    }
+
+    override func becomeFirstResponder() -> Bool {
+        let became = super.becomeFirstResponder()
+        if became { startRecording() }
+        return became
+    }
+
+    override func resignFirstResponder() -> Bool {
+        stopRecording()
+        return super.resignFirstResponder()
+    }
+
+    override func viewWillMove(toWindow newWindow: NSWindow?) {
+        // Leaving the window (sheet dismissed, view torn down) must remove the
+        // monitor — otherwise it lingers and swallows keystrokes app-wide.
+        if newWindow == nil { stopRecording() }
+        super.viewWillMove(toWindow: newWindow)
+    }
+
+    private func startRecording() {
+        guard monitor == nil else { return }
+        onWarning?(nil)
+        isRecording = true
+        monitor = NSEvent.addLocalMonitorForEvents(matching: .keyDown) { [weak self] event in
+            guard let self else { return event }
+            return self.handle(event)
+        }
+    }
+
+    private func stopRecording() {
+        if let monitor { NSEvent.removeMonitor(monitor) }
+        monitor = nil
+        isRecording = false
+    }
+
+    // MARK: - Capture
+
+    /// Process a key-down while recording. Returns nil to swallow the event (so no
+    /// menu fires and there's no beep) or the event to let the system handle it
+    /// (Tab focus traversal). Runs synchronously on the main thread; only Sendable
+    /// value types are extracted from the `NSEvent` (KTD1, Swift 6).
+    private func handle(_ event: NSEvent) -> NSEvent? {
+        let flags = event.modifierFlags.intersection(.deviceIndependentFlagsMask)
+        let hasCommand = flags.contains(.command)
+        let hasControl = flags.contains(.control)
+        let hasOption = flags.contains(.option)
+        let hasRealModifier = hasCommand || hasControl || hasOption
+        let keyCode = event.keyCode
+
+        // Bare navigation keys keep their conventional editing meaning.
+        if !hasRealModifier {
+            switch Int(keyCode) {
+            case kVK_Escape:
+                window?.makeFirstResponder(nil) // cancel
+                return nil
+            case kVK_Delete, kVK_ForwardDelete:
+                onWarning?(nil)
+                onToken?("") // clear the trigger
+                return nil
+            case kVK_Tab:
+                return event // let focus move to the next field
+            default:
+                break
+            }
+        }
+
+        let named = KeybindTrigger.namedKey(forKeyCode: keyCode)
+
+        // A character key with no ⌘/⌃/⌥ fires on ordinary typing — reject and keep
+        // recording. (Bare named keys like F5 / arrows are allowed.)
+        if !hasRealModifier, named == nil {
+            onWarning?("Add ⌘, ⌃, or ⌥ — that key alone would fire while you type.")
+            return nil
+        }
+
+        // Character keys resolve against the live layout (KTD5); named keys are
+        // named by the kit from their position-stable keyCode.
+        let resolved = named == nil ? Self.unshiftedCharacter(forKeyCode: keyCode) : nil
+        let captured = CapturedKey(keyCode: keyCode, modifierFlags: event.modifierFlags.rawValue, resolvedCharacter: resolved)
+        guard let token = KeybindTrigger.token(from: captured) else {
+            return nil // unmappable (e.g. a dead key) — keep listening
+        }
+
+        onWarning?(nil)
+        onToken?(token)
+        window?.makeFirstResponder(nil) // chord captured; stop recording
+        return nil
+    }
+
+    /// The unshifted, layout-correct character a key produces in the *current*
+    /// keyboard layout (so `[` on US, `ü` on QWERTZ), via Carbon `UCKeyTranslate`
+    /// — the same approach `MASShortcut`/`KeyboardShortcuts` use, which a
+    /// deliberately NSEvent-free kit can't replicate (KTD5).
+    static func unshiftedCharacter(forKeyCode keyCode: UInt16) -> String? {
+        guard let source = TISCopyCurrentKeyboardLayoutInputSource()?.takeRetainedValue(),
+              let layoutPtr = TISGetInputSourceProperty(source, kTISPropertyUnicodeKeyLayoutData)
+        else { return nil }
+
+        let layoutData = Unmanaged<CFData>.fromOpaque(layoutPtr).takeUnretainedValue() as Data
+        var deadKeyState: UInt32 = 0
+        var chars = [UniChar](repeating: 0, count: 8)
+        var length = 0
+        let status = layoutData.withUnsafeBytes { raw -> OSStatus in
+            guard let layout = raw.bindMemory(to: UCKeyboardLayout.self).baseAddress else { return -1 }
+            return UCKeyTranslate(
+                layout,
+                keyCode,
+                UInt16(kUCKeyActionDisplay),
+                0, // no modifier bits → the unshifted base character
+                UInt32(LMGetKbdType()),
+                OptionBits(kUCKeyTranslateNoDeadKeysBit),
+                &deadKeyState,
+                chars.count,
+                &length,
+                &chars
+            )
+        }
+        guard status == noErr, length > 0 else { return nil }
+        let character = String(utf16CodeUnits: chars, count: length)
+        // Ignore control characters / whitespace that aren't real bindable glyphs.
+        return character.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? nil : character
+    }
+
+    // MARK: - Drawing
+
+    override func draw(_ dirtyRect: NSRect) {
+        let bounds = self.bounds.insetBy(dx: 1, dy: 1)
+        let path = NSBezierPath(roundedRect: bounds, xRadius: 6, yRadius: 6)
+        (isRecording ? NSColor.controlAccentColor.withAlphaComponent(0.12) : NSColor.controlBackgroundColor).setFill()
+        path.fill()
+        (isRecording ? NSColor.controlAccentColor : NSColor.separatorColor).setStroke()
+        path.lineWidth = isRecording ? 2 : 1
+        path.stroke()
+
+        let text: String
+        let color: NSColor
+        if isRecording {
+            text = displayToken.isEmpty ? "Press the keys…" : "Press the keys…  (\(displayToken))"
+            color = .secondaryLabelColor
+        } else if displayToken.isEmpty {
+            text = "Click to record a shortcut"
+            color = .tertiaryLabelColor
+        } else {
+            text = displayToken
+            color = .labelColor
+        }
+
+        let attributes: [NSAttributedString.Key: Any] = [
+            .font: NSFont.monospacedSystemFont(ofSize: NSFont.systemFontSize, weight: .regular),
+            .foregroundColor: color,
+        ]
+        let attributed = NSAttributedString(string: text, attributes: attributes)
+        let size = attributed.size()
+        let origin = NSPoint(x: bounds.minX + 10, y: bounds.midY - size.height / 2)
+        attributed.draw(at: origin)
+    }
+
+    override var intrinsicContentSize: NSSize {
+        NSSize(width: NSView.noIntrinsicMetric, height: 30)
+    }
+}
