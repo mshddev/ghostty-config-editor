@@ -72,11 +72,17 @@ public extension CatalogOption {
     }
 
     /// A human-facing notice for non-live changes (AE5), or nil when live.
+    ///
+    /// Worded **additively**, not correctively, so it reads complementarily when the
+    /// app stacks it above the scope-neutral auto-reload caption (KTD8, U2): the reload
+    /// caption says Ghostty was asked to reload, and this line clarifies that *this
+    /// particular* option needs a new surface or a full restart on top of that — the
+    /// two never contradict. (Tested not to begin with the old "This takes effect …".)
     var applyNotice: String? {
         switch changeScope {
         case .live: return nil
-        case .newSurface: return "This affects new terminals, not the current session."
-        case .restart: return "This takes effect after you fully restart Ghostty."
+        case .newSurface: return "Affects new terminals — open a new window or tab to see it."
+        case .restart: return "Needs a full Ghostty restart to take full effect."
         }
     }
 }

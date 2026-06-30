@@ -28,13 +28,30 @@ struct ThemeBrowserView: View {
                     .accessibilityHint("Apply this theme")
                 }
             }
-            if case .failed(let message) = model.applyState {
-                Label(message, systemImage: "xmark.octagon.fill")
-                    .foregroundStyle(.red).font(.caption).padding(8)
-            }
+            applyFeedback
         }
         .navigationTitle("Themes")
         .task { await model.loadThemesIfNeeded() }
+    }
+
+    /// Apply feedback for the Themes surface. Today the option editor owns the rich
+    /// success card; here we surface the failure banner *and* — added in U2 — the
+    /// auto-reload caption, which would otherwise be invisible when a theme is applied
+    /// from this surface (R6). The reload copy is kit-derived (`ReloadOutcome.message`).
+    @ViewBuilder
+    private var applyFeedback: some View {
+        switch model.applyState {
+        case .failed(let message):
+            Label(message, systemImage: "xmark.octagon.fill")
+                .foregroundStyle(.red).font(.caption).padding(8)
+        case .succeeded(_, _, let reload):
+            if let reloadMessage = reload.message {
+                Label(reloadMessage, systemImage: "checkmark.circle.fill")
+                    .foregroundStyle(.secondary).font(.caption).padding(8)
+            }
+        case .idle, .applying:
+            EmptyView()
+        }
     }
 
     private var disclaimerBar: some View {

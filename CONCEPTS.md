@@ -16,3 +16,10 @@ A single entry in the Option Catalog: one configuration key together with its do
 
 ### Config Health
 An at-a-glance severity classification derived from a `LintReport`: `.clean` (no actionable issues), `.warning` (at least one non-`.info` footgun), `.error` (live validation failed), or `.unknown` (validation could not run *and* nothing else is actionable). Severity precedence is error > warning > unknown: because footgun lint is static (it doesn't need the validation binary), an actionable footgun still surfaces as `.warning` even when `ghostty +validate-config` couldn't run. Surfaced in the window's top-bar health chip, which opens the Problems surface when clicked. Distinct from the Problems list's own clean check, which also surfaces `.info`-only findings that Config Health deliberately excludes from its count.
+
+## Apply & Reload
+
+### Auto-Reload
+After a successful in-app config write — an option apply, a theme apply, or an undo — the app signals the running Ghostty GUI process(es) to reload their configuration, so live terminals reflect the change immediately instead of waiting for a manual reload.
+
+The signal is POSIX `SIGUSR2` (Ghostty's macOS config-reload signal, available 1.2.0+), sent to every process discovered by bundle id `com.mitchellh.ghostty` (not by process name, which would match the short-lived `ghostty +…` CLI subprocesses the app itself spawns). It is *best-effort and version-gated*: a missing, unreachable, or unsupported Ghostty never turns a successful save into a failure, and a Ghostty older than 1.2.0 is never signaled (the signal would terminate a build without the reload handler). On by default, with a user toggle to disable it. Because the signal is one-way, the app reports that it *asked* Ghostty to reload rather than confirming the reload succeeded.
