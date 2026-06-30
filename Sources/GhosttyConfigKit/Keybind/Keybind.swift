@@ -96,21 +96,23 @@ public struct KeybindTrigger: Sendable, Equatable {
 
     /// Split one chord into modifier tokens + key. Consumes `+`-separated known
     /// modifiers left-to-right; the remainder is the key, so `+`/`=` survive as
-    /// keys (`super++` → mods `[super]`, key `+`).
+    /// keys (`super++` → mods `[super]`, key `+`). Tokens are whitespace-trimmed so
+    /// a hand-typed `super + t` parses the same as `super+t` (case is preserved on
+    /// modifier tokens for validation).
     static func parseChord(_ step: String) -> Chord {
         var rest = Substring(step)
         var mods: [String] = []
         while let plus = rest.firstIndex(of: "+") {
-            let head = rest[rest.startIndex..<plus]
+            let token = rest[rest.startIndex..<plus].trimmingCharacters(in: .whitespaces)
             let tail = rest[rest.index(after: plus)...]
             // Only peel a leading token off as a modifier when it *is* one and
             // something remains to be the key; otherwise the rest (incl. a `+`
             // key) is the key.
-            guard !tail.isEmpty, KeyModifier.normalize(String(head)) != nil else { break }
-            mods.append(String(head))
+            guard !tail.isEmpty, KeyModifier.normalize(token) != nil else { break }
+            mods.append(token)
             rest = tail
         }
-        return Chord(rawModifiers: mods, key: String(rest))
+        return Chord(rawModifiers: mods, key: rest.trimmingCharacters(in: .whitespaces))
     }
 
     /// Re-emit the trigger canonically: prefixes verbatim, modifiers lowercased in
@@ -127,9 +129,11 @@ public struct KeybindTrigger: Sendable, Equatable {
 
     /// Lowercase only single-character keys (letters such as `T`→`t`, and
     /// layout-resolved characters); named keys (`arrow_left`) and punctuation
-    /// (`=`, `[`) pass through unchanged.
+    /// (`=`, `[`) pass through unchanged. Whitespace is trimmed so a stray space
+    /// can't make `super+t ` canonicalize differently from `super+t`.
     static func canonicalizeKey(_ key: String) -> String {
-        key.count == 1 ? key.lowercased() : key
+        let trimmed = key.trimmingCharacters(in: .whitespaces)
+        return trimmed.count == 1 ? trimmed.lowercased() : trimmed
     }
 }
 
@@ -180,7 +184,11 @@ public extension KeybindTrigger {
         if flags & flagShift != 0 { mods.append(.shift) }
 
         let keyToken: String
-        if let character = key.resolvedCharacter, !character.isEmpty {
+        if let character = key.resolvedCharacter,
+           !character.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+            // A whitespace/control "character" (e.g. space or return mistakenly
+            // resolved) is treated as absent so the position-stable named-key
+            // table still names it (`space`/`enter`), not `super+ `.
             keyToken = character.lowercased()
         } else if let named = namedKey(forKeyCode: key.keyCode) {
             keyToken = named
@@ -312,7 +320,10 @@ public struct Keybind: Sendable, Equatable {
         guard !eqIndices.isEmpty else { return (value, "") }
 
         func split(at index: String.Index) -> (String, String) {
-            (String(value[..<index]), String(value[value.index(after: index)...]))
+            // Trim each half so spaces around the boundary (`super+t = new_tab`)
+            // don't leak into the trigger/action and break canonical matching.
+            (String(value[..<index]).trimmingCharacters(in: .whitespaces),
+             String(value[value.index(after: index)...]).trimmingCharacters(in: .whitespaces))
         }
 
         // 1) First boundary whose RHS is a *known* action (most precise).
@@ -388,11 +399,19 @@ public enum KeybindValidation {
             }
         }
 
-        // A modifier-less single-character chord fires on every literal keystroke
-        // of that character — almost never intended (the example: a bare `t`).
-        if let first = parsed.chords.first, first.modifiers.isEmpty, first.key.count == 1 {
-            issues.append(KeybindIssue(severity: .warning,
-                                       message: "“\(first.key)” has no modifier, so it fires on every press of that key."))
+        // A single-character chord with no real modifier fires on ordinary typing
+        // — a footgun. Only flag a single chord (in a sequence the first key starts
+        // the sequence, it doesn't fire per-press); Shift-only counts (Shift+a
+        // fires when you type a capital A). Bare named keys (F5, arrows) are fine.
+        if parsed.chords.count == 1, let only = parsed.chords.first, only.key.count == 1 {
+            let mods = only.modifiers
+            if mods.isEmpty {
+                issues.append(KeybindIssue(severity: .warning,
+                                           message: "“\(only.key)” has no modifier, so it fires on every press of that key."))
+            } else if mods == [.shift] {
+                issues.append(KeybindIssue(severity: .warning,
+                                           message: "“\(only.key)” uses only Shift, so it fires whenever you type that character."))
+            }
         }
 
         let name = Keybind.actionName(action)

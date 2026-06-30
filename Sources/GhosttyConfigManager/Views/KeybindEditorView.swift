@@ -12,14 +12,17 @@ struct KeybindEditorView: View {
     @State private var editing: KeybindDraft?
 
     var body: some View {
-        VStack(spacing: 0) {
-            headerBar
+        // Compute the merged list once per render (the header count and the list
+        // both need it).
+        let rows = model.mergedKeybinds
+        return VStack(spacing: 0) {
+            headerBar(count: rows.count)
             Divider()
             if !didLoad {
                 ProgressView("Loading keybindings…")
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
             } else {
-                bindingList
+                bindingList(rows)
             }
             lintBar
             feedbackBar
@@ -34,9 +37,9 @@ struct KeybindEditorView: View {
         }
     }
 
-    private var headerBar: some View {
+    private func headerBar(count: Int) -> some View {
         HStack(spacing: 8) {
-            Text("\(model.mergedKeybinds.count) bindings")
+            Text("\(count) bindings")
                 .font(.caption)
                 .foregroundStyle(.secondary)
             Spacer()
@@ -50,8 +53,8 @@ struct KeybindEditorView: View {
         .padding(8)
     }
 
-    private var bindingList: some View {
-        List(model.mergedKeybinds) { row in
+    private func bindingList(_ rows: [MergedKeybind]) -> some View {
+        List(rows) { row in
             KeybindRow(row: row, isReadOnly: model.isReadOnly(row))
                 .contentShape(Rectangle())
                 .onTapGesture {
@@ -210,6 +213,7 @@ struct KeybindEditForm: View {
             triggerSection
             actionSection
             issuesSection
+            writeFeedback
 
             Divider()
             footer
@@ -217,6 +221,21 @@ struct KeybindEditForm: View {
         .padding(20)
         .frame(width: 480)
     }
+
+    /// A write that the kit's pre-validation didn't catch (e.g. the binary's
+    /// `+validate-config` rejecting it, or a stale-on-disk conflict) keeps the
+    /// sheet open — surface the reason here, where the user is looking, instead of
+    /// only behind the sheet in the list's feedback bar.
+    @ViewBuilder
+    private var writeFeedback: some View {
+        if case .failed(let message) = model.applyState {
+            Label(message, systemImage: "xmark.octagon.fill")
+                .font(.caption).foregroundStyle(.red)
+                .fixedSize(horizontal: false, vertical: true)
+        }
+    }
+
+    private var isApplying: Bool { model.applyState == .applying }
 
     // MARK: Trigger
 
@@ -342,13 +361,13 @@ struct KeybindEditForm: View {
                 .keyboardShortcut(.cancelAction)
             Button("Save") {
                 Task {
-                    await model.applyKeybindEdit(trigger: trigger, action: action)
+                    await model.applyKeybindEdit(originalTrigger: draft.row?.canonicalTrigger, trigger: trigger, action: action)
                     if case .failed = model.applyState { return }
                     dismiss()
                 }
             }
             .keyboardShortcut(.defaultAction)
-            .disabled(!canSave)
+            .disabled(!canSave || isApplying)
         }
     }
 
@@ -359,14 +378,17 @@ struct KeybindEditForm: View {
             Button("Remove", role: .destructive) {
                 Task { await model.removeKeybind(trigger: row.canonicalTrigger); dismiss() }
             }
+            .disabled(isApplying)
         case .default:
             Button("Disable") {
                 Task { await model.unbindDefaultKeybind(trigger: row.canonicalTrigger); dismiss() }
             }
+            .disabled(isApplying)
         case .userDisablesDefault:
             Button("Re-enable") {
                 Task { await model.removeKeybind(trigger: row.canonicalTrigger); dismiss() }
             }
+            .disabled(isApplying)
         }
     }
 }

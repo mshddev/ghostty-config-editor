@@ -39,14 +39,20 @@ struct KeyRecorderView: NSViewRepresentable {
 final class KeyRecorderNSView: NSView {
     var onToken: ((String) -> Void)?
     var onWarning: ((String?) -> Void)?
-    var displayToken: String = "" { didSet { needsDisplay = true } }
+    var displayToken: String = "" { didSet { needsDisplay = true; updateAccessibilityValue() } }
 
     /// Held **strongly**: a weak token deallocates the moment install returns,
     /// orphaning the app-wide `.keyDown` handler so it swallows every keystroke for
     /// the rest of the session (the bug `KeyboardShortcuts`/`MASShortcut` avoid by
     /// retaining it). Torn down on resign / window removal.
     private var monitor: Any?
-    private var isRecording = false { didSet { needsDisplay = true } }
+    private var isRecording = false {
+        didSet {
+            needsDisplay = true
+            updateAccessibilityValue()
+            NSAccessibility.post(element: self, notification: .valueChanged)
+        }
+    }
 
     override var acceptsFirstResponder: Bool { true }
     override var isFlipped: Bool { true }
@@ -55,9 +61,20 @@ final class KeyRecorderNSView: NSView {
         super.init(frame: frameRect)
         setAccessibilityRole(.button)
         setAccessibilityLabel("Keyboard shortcut recorder")
+        updateAccessibilityValue()
     }
 
     required init?(coder: NSCoder) { fatalError("init(coder:) has not been implemented") }
+
+    /// Expose the current shortcut (or the recording state) to VoiceOver, which
+    /// otherwise reads only the static label.
+    private func updateAccessibilityValue() {
+        if isRecording {
+            setAccessibilityValue("Recording — press the shortcut")
+        } else {
+            setAccessibilityValue(displayToken.isEmpty ? "No shortcut set" : displayToken)
+        }
+    }
 
     // MARK: - Focus / lifecycle
 

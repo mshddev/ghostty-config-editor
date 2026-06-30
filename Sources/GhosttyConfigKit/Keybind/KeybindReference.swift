@@ -42,7 +42,8 @@ public enum KeybindReference {
         for rawLine in output.split(separator: "\n", omittingEmptySubsequences: false) {
             let line = String(rawLine)
             guard let (key, value) = ConfigLine.splitSetting(line), key == "keybind" else { continue }
-            guard case .binding(let bind) = Keybind.parse(value: value, knownActions: knownActions) else { continue }
+            guard case .binding(let bind) = Keybind.parse(value: value, knownActions: knownActions),
+                  !bind.actionName.isEmpty else { continue }
             defaults.append(DefaultKeybind(trigger: bind.trigger, action: bind.action))
         }
         return defaults
@@ -55,8 +56,10 @@ public enum KeybindReference {
         var actions: [KeybindAction] = []
         var seen = Set<String>()
         for rawLine in output.split(separator: "\n", omittingEmptySubsequences: false) {
-            let trimmed = String(rawLine).trimmingCharacters(in: .whitespaces)
-            guard let name = trimmed.split(separator: " ").first.map(String.init), !name.isEmpty else { continue }
+            // First whitespace-delimited token (any whitespace, incl. tabs) so an
+            // accidental `--docs` description column can't leak into the name.
+            guard let name = String(rawLine).split(whereSeparator: { $0.isWhitespace }).first.map(String.init),
+                  !name.isEmpty else { continue }
             if seen.insert(name).inserted { actions.append(KeybindAction(name: name)) }
         }
         return actions

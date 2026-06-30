@@ -73,7 +73,16 @@ public enum KeybindMerge {
     /// place); user-added bindings (triggers not among the defaults) follow in
     /// config order. When two user bindings share a canonical trigger the last
     /// wins, matching Ghostty.
-    public static func merge(defaults: [DefaultKeybind], user: [UserKeybind]) -> [MergedKeybind] {
+    public static func merge(defaults rawDefaults: [DefaultKeybind], user: [UserKeybind]) -> [MergedKeybind] {
+        // Defaults should be unique by canonical trigger, but a degenerate listing
+        // (Risk R-B) could repeat one — collapse to the last (matches Ghostty)
+        // so merged rows keep unique ids and SwiftUI never sees a duplicate.
+        var lastDefaultIndex: [String: Int] = [:]
+        for (index, def) in rawDefaults.enumerated() { lastDefaultIndex[def.canonicalTrigger] = index }
+        let defaults = rawDefaults.enumerated()
+            .filter { lastDefaultIndex[$0.element.canonicalTrigger] == $0.offset }
+            .map(\.element)
+
         var userByTrigger: [String: UserKeybind] = [:]
         var firstSeenOrder: [String] = []
         for binding in user {
@@ -147,6 +156,30 @@ public struct TargetScopedBindings: Sendable, Equatable {
     init(rawValues: [String], canonicalTriggers: [String?]) {
         self.rawValues = rawValues
         self.canonicalTriggers = canonicalTriggers
+    }
+
+    /// Edit an existing binding (identified by `originalTrigger`) or add a new one.
+    /// When the trigger **changed**, the old entry is removed so a trigger edit
+    /// *moves* the binding rather than leaving a duplicate behind (the orphan bug:
+    /// R8/R11/RK4). `nil` (a brand-new binding) or an unchanged trigger behaves
+    /// like an in-place add/update. The new value lands at the first slot that
+    /// matched either the old or the new trigger, preserving order.
+    public func updating(originalTrigger: String?, trigger: String, action: String) -> [String] {
+        let newCanonical = KeybindTrigger.parse(trigger).canonical()
+        let oldCanonical = originalTrigger.map { KeybindTrigger.parse($0).canonical() }
+        let newValue = "\(trigger)=\(action)"
+        var result: [String] = []
+        var placed = false
+        for (value, canon) in zip(rawValues, canonicalTriggers) {
+            if canon == newCanonical || (oldCanonical != nil && canon == oldCanonical) {
+                if !placed { result.append(newValue); placed = true }
+                // drop any further duplicate of the old or new trigger
+            } else {
+                result.append(value)
+            }
+        }
+        if !placed { result.append(newValue) }
+        return result
     }
 
     /// Replace the target-file binding(s) with this canonical trigger, else append.

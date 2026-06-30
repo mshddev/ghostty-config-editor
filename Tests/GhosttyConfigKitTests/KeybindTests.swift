@@ -159,6 +159,35 @@ final class KeybindTests: XCTestCase {
         XCTAssertTrue(KeybindValidation.isWritable(trigger: "super+t", action: "new_tab", knownActions: actions))
     }
 
+    func testWhitespaceAroundBoundaryAndModifiersIsNormalized() {
+        // A hand-typed trigger with stray spaces must canonicalize to the clean
+        // form so it still matches a default and dedupes (no duplicate write).
+        guard case .binding(let spaced) = Keybind.parse(value: "super+t = new_tab") else {
+            return XCTFail("expected a binding")
+        }
+        XCTAssertEqual(spaced.canonicalTrigger, "super+t")
+        XCTAssertEqual(spaced.action, "new_tab")
+
+        XCTAssertEqual(KeybindTrigger.parse("super + shift + t").canonical(), "super+shift+t")
+    }
+
+    func testTokenTreatsWhitespaceResolvedCharacterAsAbsent() {
+        // Defense in depth: a whitespace "character" (e.g. space resolved for the
+        // space key) must fall through to the named-key table, not become `super+ `.
+        let space = CapturedKey(keyCode: 0x31, modifierFlags: Self.command, resolvedCharacter: " ")
+        XCTAssertEqual(KeybindTrigger.token(from: space), "super+space")
+    }
+
+    func testFootgunWarnsShiftOnlyButNotSequenceFirstKey() {
+        let actions: Set<String> = ["new_tab"]
+        let shiftOnly = KeybindValidation.validate(trigger: "shift+a", action: "new_tab", knownActions: actions)
+        XCTAssertTrue(shiftOnly.contains { $0.severity == .warning }, "Shift-only single key is a footgun")
+
+        let sequence = KeybindValidation.validate(trigger: "a>b", action: "new_tab", knownActions: actions)
+        XCTAssertFalse(sequence.contains { $0.severity == .warning }, "a sequence's first key doesn't fire per-press")
+        XCTAssertFalse(sequence.contains { $0.severity == .error })
+    }
+
     func testSpecialActionsValidateWithoutAKnownActionSet() {
         // `unbind` is accepted even when +list-actions wasn't available.
         XCTAssertTrue(KeybindValidation.isWritable(trigger: "super+shift+t", action: "unbind"))

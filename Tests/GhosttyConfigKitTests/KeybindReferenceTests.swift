@@ -93,6 +93,19 @@ final class KeybindReferenceTests: XCTestCase {
         XCTAssertEqual(defaults.map(\.trigger), ["super+t", "super+shift+t"])
     }
 
+    func testParseDefaultsSkipsActionlessLines() {
+        // A `keybind = super+t` with no action would otherwise yield a blank-action row.
+        let defaults = KeybindReference.parseDefaults("keybind = super+t\nkeybind = super+w=new_window",
+                                                      knownActions: ["new_window"])
+        XCTAssertEqual(defaults.map(\.trigger), ["super+w"])
+    }
+
+    func testParseActionsSplitsOnAnyWhitespace() {
+        // A tab-separated `--docs` column must not leak into the action name.
+        let actions = KeybindReference.parseActions("new_tab\tOpen a new tab\ngoto_split")
+        XCTAssertEqual(actions.map(\.name), ["new_tab", "goto_split"])
+    }
+
     func testParserToleratesUnknownActionsWithoutASet() {
         // With no action set the shape heuristic still splits the boundary.
         let defaults = KeybindReference.parseDefaults("keybind = super+t=some_future_action")

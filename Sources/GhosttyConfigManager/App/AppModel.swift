@@ -276,8 +276,14 @@ public final class AppModel {
         guard keybindReference == nil, let environment else { return }
         let provider = KeybindReferenceProvider.live(environment)
         keybindReference = provider
-        keybindActions = (try? await provider.actions()) ?? []
-        keybindDefaults = (try? await provider.defaults()) ?? []
+        let actions = (try? await provider.actions()) ?? []
+        // A re-`bootstrap` mid-load clears `keybindReference`; don't repopulate
+        // published state from the now-stale provider (mirrors the color-task guard).
+        guard keybindReference === provider else { return }
+        keybindActions = actions
+        let defaults = (try? await provider.defaults()) ?? []
+        guard keybindReference === provider else { return }
+        keybindDefaults = defaults
     }
 
     /// Ghostty's defaults merged with the user's bindings, marking overrides (RK1).
@@ -305,16 +311,20 @@ public final class AppModel {
         return ConfigReader.canonicalPath(source.file) != ConfigReader.canonicalPath(target)
     }
 
-    /// Add a new binding or update an existing one (the recorder's trigger + the
-    /// chosen action). Pre-validates in the kit (KTD7/RK5) and short-circuits to a
-    /// failure before touching disk, then reuses the safe write path (R17).
-    public func applyKeybindEdit(trigger: String, action: String) async {
+    /// Add a new binding (`originalTrigger == nil`) or update an existing one. When
+    /// editing, `originalTrigger` is the row's canonical trigger so a trigger change
+    /// *moves* the binding instead of orphaning the old one (R8/R11/RK4). Pre-validates
+    /// in the kit (KTD7/RK5) and short-circuits to a failure before touching disk,
+    /// then reuses the safe write path (R17).
+    public func applyKeybindEdit(originalTrigger: String? = nil, trigger: String, action: String) async {
+        let trigger = trigger.trimmingCharacters(in: .whitespaces)
+        let action = action.trimmingCharacters(in: .whitespaces)
         let issues = KeybindValidation.validate(trigger: trigger, action: action, knownActions: keybindActionNames)
         if let hardError = issues.first(where: { $0.severity == .error }) {
             applyState = .failed(hardError.message)
             return
         }
-        await writeKeybinds { $0.addingOrUpdating(trigger: trigger, action: action) }
+        await writeKeybinds { $0.updating(originalTrigger: originalTrigger, trigger: trigger, action: action) }
     }
 
     /// Remove a user binding (any default with that trigger reactivates).

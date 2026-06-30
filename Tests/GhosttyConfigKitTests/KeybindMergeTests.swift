@@ -126,4 +126,53 @@ final class KeybindMergeTests: XCTestCase {
         let mutated = ConfigWriter.mutate(primaryLines, key: "keybind", newValues: newValues, isRepeatable: true)
         XCTAssertEqual(mutated.compactMap(\.value), ["super+a=goto_split:left", "super+b=new_window"])
     }
+
+    // MARK: - updating() — trigger change must move, not duplicate
+
+    private func scoped(_ values: [String], _ known: Set<String>) -> TargetScopedBindings {
+        TargetScopedBindings(
+            userValues: values,
+            sources: values.indices.map { loc(primary, $0 + 1) },
+            targetResolvedPath: primary,
+            knownActions: known)
+    }
+
+    func testUpdatingTriggerChangeMovesBindingInsteadOfDuplicating() {
+        // The orphan bug: recording a new trigger over an existing binding must
+        // replace it in place, not append a second line.
+        let s = scoped(["super+t=new_window"], ["new_window"])
+        let result = s.updating(originalTrigger: "super+t", trigger: "super+y", action: "new_window")
+        XCTAssertEqual(result, ["super+y=new_window"])
+    }
+
+    func testUpdatingActionOnlyKeepsPositionAndPreservesPrefix() {
+        // Editing the action of a prefixed binding (recorder untouched) keeps the
+        // global: prefix and the line's position (RK4/R11).
+        let s = scoped(["global:ctrl+a=reload_config", "super+b=new_window"], ["reload_config", "new_window", "new_tab"])
+        let result = s.updating(originalTrigger: "global:ctrl+a", trigger: "global:ctrl+a", action: "new_tab")
+        XCTAssertEqual(result, ["global:ctrl+a=new_tab", "super+b=new_window"])
+    }
+
+    func testUpdatingWithNilOriginalAppendsLikeAdd() {
+        let s = scoped(["super+t=new_tab"], ["new_tab", "new_window"])
+        XCTAssertEqual(s.updating(originalTrigger: nil, trigger: "super+w", action: "new_window"),
+                       ["super+t=new_tab", "super+w=new_window"])
+    }
+
+    func testUpdatingTriggerChangeCollapsesACollisionWithAnExistingTrigger() {
+        // Moving super+t onto super+w (which already exists) collapses to one line.
+        let s = scoped(["super+t=new_tab", "super+w=new_window"], ["new_tab", "new_window"])
+        let result = s.updating(originalTrigger: "super+t", trigger: "super+w", action: "new_tab")
+        XCTAssertEqual(result, ["super+w=new_tab"])
+    }
+
+    func testMergeDeduplicatesDefaultsThatCanonicalizeIdentically() {
+        // A degenerate defaults listing (Risk R-B) with two same-canonical triggers
+        // collapses to one row so SwiftUI ids stay unique.
+        let defaults = [DefaultKeybind(trigger: "super+t", action: "new_tab"),
+                        DefaultKeybind(trigger: "Super+T", action: "new_window")]
+        let merged = KeybindMerge.merge(defaults: defaults, user: [])
+        XCTAssertEqual(merged.filter { $0.canonicalTrigger == "super+t" }.count, 1)
+        XCTAssertEqual(merged.first?.action, "new_window", "last wins, matching Ghostty")
+    }
 }
