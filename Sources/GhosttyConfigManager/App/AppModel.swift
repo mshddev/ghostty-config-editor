@@ -330,14 +330,17 @@ public final class AppModel {
         keybindDefaults = defaults
     }
 
-    /// Ghostty's defaults merged with the user's bindings, marking overrides (RK1).
+    /// Ghostty's defaults merged with the user's bindings, marking overrides (RK1),
+    /// then padded with an empty row per still-unbound action so the whole action set
+    /// is listed and bindable inline (like a system shortcuts pane).
     public var mergedKeybinds: [MergedKeybind] {
         let user = KeybindMerge.userBindings(
             values: keybindOption?.userValues ?? [],
             sources: keybindOption?.sources ?? [],
             knownActions: keybindActionNames
         )
-        return KeybindMerge.merge(defaults: keybindDefaults, user: user)
+        let merged = KeybindMerge.merge(defaults: keybindDefaults, user: user)
+        return KeybindMerge.withUnboundActions(merged, allActions: keybindActions)
     }
 
     /// The single file the writer would target for `keybind` (R8). New/edited
@@ -369,6 +372,21 @@ public final class AppModel {
             return
         }
         await writeKeybinds { $0.updating(originalTrigger: originalTrigger, trigger: trigger, action: action) }
+    }
+
+    /// Rebind a **Ghostty default** to a new trigger from inline recording: write the
+    /// new binding *and* disable the old default (`oldTrigger=unbind`) in one write, so
+    /// the action moves to the new keys instead of firing on both (the "rebind replaces
+    /// the shortcut" expectation). Pre-validates like `applyKeybindEdit`.
+    public func rebindDefaultKeybind(oldTrigger: String, newTrigger: String, action: String) async {
+        let newTrigger = newTrigger.trimmingCharacters(in: .whitespaces)
+        let action = action.trimmingCharacters(in: .whitespaces)
+        let issues = KeybindValidation.validate(trigger: newTrigger, action: action, knownActions: keybindActionNames)
+        if let hardError = issues.first(where: { $0.severity == .error }) {
+            applyState = .failed(hardError.message)
+            return
+        }
+        await writeKeybinds { $0.movingDefault(fromTrigger: oldTrigger, toTrigger: newTrigger, action: action) }
     }
 
     /// Remove a user binding (any default with that trigger reactivates).

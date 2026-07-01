@@ -221,7 +221,7 @@ final class KeyRecorderNSView: NSView {
             text = displayToken.isEmpty ? "Press the keys…" : "Press the keys…  (\(displayToken))"
             color = .secondaryLabelColor
         } else if displayToken.isEmpty {
-            text = "Click to record a shortcut"
+            text = "Click to record"
             color = .tertiaryLabelColor
         } else {
             text = displayToken

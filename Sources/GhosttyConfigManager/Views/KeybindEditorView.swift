@@ -2,25 +2,28 @@ import SwiftUI
 import AppKit
 import GhosttyConfigKit
 
-/// The Keybindings editor surface: Ghostty's defaults merged with the user's
-/// bindings, an action picker, the press-the-keys recorder, a raw-text fallback
-/// for advanced grammar, and the existing footgun lint shown inline (RK1–RK4,
-/// R16, AE4). Edits route through `AppModel` to the safe write path.
+/// The Keybindings editor surface: Ghostty's whole action set as one row per action
+/// (defaults + the user's bindings + every still-unbound action), each editable
+/// **inline** — click its shortcut and press the new keys, exactly like a system
+/// shortcuts pane (RK1–RK4, R16, AE4). There is no modal: advanced grammar and extra
+/// shortcuts live in each row's `⋯` menu. Edits route through `AppModel` to the safe
+/// write path, and the existing footgun lint is shown inline.
 struct KeybindEditorView: View {
     @Environment(AppModel.self) private var model
     @State private var didLoad = false
-    @State private var editing: KeybindDraft?
+    @State private var filter = ""
 
     var body: some View {
-        // Compute the merged list once per render (the header count and the list
-        // both need it).
-        let rows = model.mergedKeybinds
+        let all = model.mergedKeybinds
+        let rows = filtered(all)
         return VStack(spacing: 0) {
-            headerBar(count: rows.count)
+            headerBar(all: all)
             Divider()
             if !didLoad {
                 ProgressView("Loading keybindings…")
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
+            } else if rows.isEmpty {
+                ContentUnavailableView.search(text: filter)
             } else {
                 bindingList(rows)
             }
@@ -32,36 +35,56 @@ struct KeybindEditorView: View {
             await model.loadKeybindReferenceIfNeeded()
             didLoad = true
         }
-        .sheet(item: $editing) { draft in
-            KeybindEditForm(draft: draft)
-        }
     }
 
-    private func headerBar(count: Int) -> some View {
-        HStack(spacing: 8) {
-            Text("\(count) bindings")
-                .font(.caption)
-                .foregroundStyle(.secondary)
-            Spacer()
-            Button {
-                model.resetApplyState()
-                editing = KeybindDraft(row: nil)
-            } label: {
-                Label("Add binding", systemImage: "plus")
+    /// Filter by action name or shortcut text (case-insensitive), so ~140 rows stay
+    /// navigable.
+    private func filtered(_ rows: [MergedKeybind]) -> [MergedKeybind] {
+        let q = filter.trimmingCharacters(in: .whitespaces).lowercased()
+        guard !q.isEmpty else { return rows }
+        return rows.filter { $0.action.lowercased().contains(q) || $0.trigger.lowercased().contains(q) }
+    }
+
+    private func headerBar(all: [MergedKeybind]) -> some View {
+        let boundCount = all.filter { $0.origin != .unbound }.count
+        return VStack(alignment: .leading, spacing: 8) {
+            HStack(spacing: 8) {
+                Text("\(boundCount) shortcuts")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                if model.applyState == .applying {
+                    ProgressView().controlSize(.small)
+                }
+                Spacer()
             }
+            searchField
+            Text("Click a shortcut and press the new keys to rebind. Actions with no shortcut are listed too.")
+                .font(.caption2)
+                .foregroundStyle(.tertiary)
         }
         .padding(8)
+    }
+
+    private var searchField: some View {
+        HStack(spacing: 6) {
+            Image(systemName: "magnifyingglass").foregroundStyle(.secondary).font(.caption)
+            TextField("Filter by action or shortcut", text: $filter)
+                .textFieldStyle(.plain)
+            if !filter.isEmpty {
+                Button { filter = "" } label: {
+                    Image(systemName: "xmark.circle.fill").foregroundStyle(.secondary)
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel("Clear filter")
+            }
+        }
+        .padding(.horizontal, 8).padding(.vertical, 5)
+        .background(Color.secondary.opacity(0.10), in: RoundedRectangle(cornerRadius: 7))
     }
 
     private func bindingList(_ rows: [MergedKeybind]) -> some View {
         List(rows) { row in
             KeybindRow(row: row, isReadOnly: model.isReadOnly(row))
-                .contentShape(Rectangle())
-                .onTapGesture {
-                    guard !model.isReadOnly(row) else { return }
-                    model.resetApplyState()
-                    editing = KeybindDraft(row: row)
-                }
         }
     }
 
@@ -119,39 +142,297 @@ struct KeybindEditorView: View {
     }
 }
 
-/// One row in the merged list: trigger, action, and an origin badge (RK1).
+/// One row: the action (the config item) on the left with an origin badge, and its
+/// trigger on the right as an **inline key recorder** — click and press the new chord
+/// to (re)bind. Everything else lives in the trailing `⋯` menu: type an advanced
+/// trigger, add a second shortcut, disable/remove/re-enable. Out-of-target bindings
+/// render read-only (Risk R-F); unbound actions render as an empty, bindable row.
 private struct KeybindRow: View {
+    @Environment(AppModel.self) private var model
     let row: MergedKeybind
     let isReadOnly: Bool
 
+    /// A soft, transient warning from the recorder (e.g. "add a modifier").
+    @State private var warning: String?
+    /// "Edit as text" popover (advanced trigger grammar for this row's binding).
+    @State private var showingText = false
+    @State private var textDraft = ""
+    /// "Add another shortcut" popover (a second trigger for this row's action).
+    @State private var showingAddAnother = false
+    @State private var addAnotherDraft = ""
+
+    /// Fixed width for the trigger control so every row's recorder/pill lines up.
+    private static let triggerWidth: CGFloat = 190
+
     var body: some View {
         HStack(spacing: 12) {
-            Text(row.trigger)
-                .font(.body.monospaced())
-                .padding(.horizontal, 8).padding(.vertical, 3)
-                .background(Color.secondary.opacity(0.12), in: RoundedRectangle(cornerRadius: 5))
-                .strikethrough(isDisabled, color: .secondary)
-                .frame(minWidth: 140, alignment: .leading)
-
-            Text(row.action)
-                .font(.callout.monospaced())
-                .foregroundStyle(isDisabled ? .tertiary : .secondary)
-
-            Spacer()
-
-            if isReadOnly, let source = row.source {
-                Label("in \((source.file as NSString).lastPathComponent)", systemImage: "lock")
-                    .font(.caption2).foregroundStyle(.tertiary)
-            } else {
-                badge
-            }
+            actionColumn
+            Spacer(minLength: 12)
+            trigger
         }
-        .padding(.vertical, 2)
+        .padding(.vertical, 3)
         .accessibilityElement(children: .combine)
-        .accessibilityLabel("\(row.trigger), \(row.action), \(badgeText)")
+        .accessibilityLabel("\(row.action), \(triggerAccessibilityValue), \(badgeText)")
     }
 
     private var isDisabled: Bool { row.origin == .userDisablesDefault }
+    private var isUnbound: Bool { row.origin == .unbound }
+
+    private var triggerAccessibilityValue: String {
+        isUnbound ? "no shortcut" : "bound to \(row.trigger)"
+    }
+
+    // MARK: Action (the config item)
+
+    private var actionColumn: some View {
+        VStack(alignment: .leading, spacing: 3) {
+            Text(row.action)
+                .font(.body.monospaced())
+                .foregroundStyle(actionColor)
+                .strikethrough(isDisabled, color: .secondary)
+                .lineLimit(1)
+                .truncationMode(.middle)
+            HStack(spacing: 6) {
+                badge
+                if let warning {
+                    Label(warning, systemImage: "exclamationmark.triangle.fill")
+                        .font(.caption2)
+                        .foregroundStyle(.orange)
+                        .lineLimit(2)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+            }
+        }
+    }
+
+    private var actionColor: HierarchicalShapeStyle {
+        if isDisabled { return .tertiary }
+        if isUnbound { return .secondary }
+        return .primary
+    }
+
+    // MARK: Trigger (the inline recorder)
+
+    @ViewBuilder
+    private var trigger: some View {
+        if isReadOnly {
+            readOnlyTrigger
+        } else if isDisabled {
+            disabledTrigger
+        } else {
+            editableTrigger
+        }
+    }
+
+    /// Default / user / override / unbound rows: an inline recorder (empty for an
+    /// unbound action) plus the `⋯` menu.
+    private var editableTrigger: some View {
+        HStack(spacing: 6) {
+            KeyRecorderView(
+                token: row.trigger,
+                onCapture: { setTrigger($0) },
+                onWarning: { warning = $0 }
+            )
+            .frame(width: Self.triggerWidth, height: 30)
+            actionsMenu
+        }
+    }
+
+    /// A binding defined in another file: shown but not editable here (Risk R-F).
+    private var readOnlyTrigger: some View {
+        HStack(spacing: 6) {
+            triggerPill(strikethrough: false)
+            if let source = row.source {
+                Label("in \((source.file as NSString).lastPathComponent)", systemImage: "lock")
+                    .font(.caption2).foregroundStyle(.tertiary)
+                    .lineLimit(1)
+            }
+        }
+    }
+
+    /// A default the user turned off: struck-through trigger with a one-click re-enable.
+    private var disabledTrigger: some View {
+        HStack(spacing: 6) {
+            triggerPill(strikethrough: true)
+            Button {
+                perform { await model.removeKeybind(trigger: row.canonicalTrigger) }
+            } label: {
+                Image(systemName: "arrow.uturn.backward")
+            }
+            .buttonStyle(.borderless)
+            .help("Re-enable this default binding")
+        }
+    }
+
+    private func triggerPill(strikethrough: Bool) -> some View {
+        Text(row.trigger)
+            .font(.body.monospaced())
+            .foregroundStyle(strikethrough ? AnyShapeStyle(.tertiary) : AnyShapeStyle(.secondary))
+            .strikethrough(strikethrough, color: .secondary)
+            .lineLimit(1)
+            .truncationMode(.middle)
+            .padding(.horizontal, 8).padding(.vertical, 6)
+            .frame(width: Self.triggerWidth, alignment: .leading)
+            .background(Color.secondary.opacity(0.10), in: RoundedRectangle(cornerRadius: 6))
+    }
+
+    // MARK: Trailing actions menu
+
+    private var actionsMenu: some View {
+        Menu {
+            Button("Edit as text…") {
+                textDraft = row.trigger
+                showingText = true
+            }
+            if !isUnbound {
+                Button("Add another shortcut…") {
+                    addAnotherDraft = ""
+                    showingAddAnother = true
+                }
+            }
+            menuOriginActions
+        } label: {
+            Image(systemName: "ellipsis.circle")
+                .foregroundStyle(.secondary)
+        }
+        .menuStyle(.borderlessButton)
+        .menuIndicator(.hidden)
+        .fixedSize()
+        .help("More actions")
+        .popover(isPresented: $showingText, arrowEdge: .bottom) { textEditor }
+        .popover(isPresented: $showingAddAnother, arrowEdge: .bottom) { addAnotherEditor }
+    }
+
+    @ViewBuilder
+    private var menuOriginActions: some View {
+        switch row.origin {
+        case .default:
+            Divider()
+            Button("Disable this default") {
+                perform { await model.unbindDefaultKeybind(trigger: row.canonicalTrigger) }
+            }
+        case .userAdded:
+            Divider()
+            Button("Remove binding", role: .destructive) {
+                perform { await model.removeKeybind(trigger: row.canonicalTrigger) }
+            }
+        case .userOverridesDefault:
+            Divider()
+            Button("Reset to default", role: .destructive) {
+                perform { await model.removeKeybind(trigger: row.canonicalTrigger) }
+            }
+        case .userDisablesDefault, .unbound:
+            EmptyView()
+        }
+    }
+
+    // MARK: Inline popovers (advanced grammar / extra shortcut)
+
+    private var textEditor: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Text("Trigger for \(row.action)")
+                .font(.callout.weight(.semibold)).lineLimit(1)
+            TextField("e.g. global:ctrl+a>n", text: $textDraft)
+                .textFieldStyle(.roundedBorder)
+                .font(.body.monospaced())
+                .onSubmit { commitText() }
+            Text("Supports sequences (ctrl+a>n) and prefixes (global:, unconsumed:, all:, performable:).")
+                .font(.caption2).foregroundStyle(.secondary)
+                .fixedSize(horizontal: false, vertical: true)
+            HStack {
+                Spacer()
+                Button("Cancel") { showingText = false }
+                Button(isUnbound ? "Bind" : "Save") { commitText() }
+                    .keyboardShortcut(.defaultAction)
+                    .disabled(textDraft.trimmingCharacters(in: .whitespaces).isEmpty)
+            }
+        }
+        .padding(12)
+        .frame(width: 300)
+    }
+
+    private var addAnotherEditor: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Text("Additional shortcut for \(row.action)")
+                .font(.callout.weight(.semibold)).lineLimit(1)
+            KeyRecorderView(
+                token: "",
+                onCapture: { token in showingAddAnother = false; addAnother(token) },
+                onWarning: { warning = $0 }
+            )
+            .frame(height: 30)
+            TextField("…or type it (ctrl+a>n, global:…)", text: $addAnotherDraft)
+                .textFieldStyle(.roundedBorder)
+                .font(.body.monospaced())
+                .onSubmit { commitAddAnother() }
+            HStack {
+                Spacer()
+                Button("Cancel") { showingAddAnother = false }
+                Button("Add") { commitAddAnother() }
+                    .keyboardShortcut(.defaultAction)
+                    .disabled(addAnotherDraft.trimmingCharacters(in: .whitespaces).isEmpty)
+            }
+        }
+        .padding(12)
+        .frame(width: 300)
+    }
+
+    private func commitText() {
+        let token = textDraft.trimmingCharacters(in: .whitespaces)
+        guard !token.isEmpty else { return }
+        showingText = false
+        setTrigger(token)
+    }
+
+    private func commitAddAnother() {
+        let token = addAnotherDraft.trimmingCharacters(in: .whitespaces)
+        guard !token.isEmpty else { return }
+        showingAddAnother = false
+        addAnother(token)
+    }
+
+    // MARK: Write actions
+
+    /// Set (or move) *this row's* trigger to `token`. Pressing the keys already bound
+    /// is a no-op. A default moves to the new keys and disables its old default; an
+    /// unbound action gains its first binding; a user binding moves in place.
+    private func setTrigger(_ token: String) {
+        warning = nil
+        let token = token.trimmingCharacters(in: .whitespaces)
+        guard !token.isEmpty else { return }
+        if !row.canonicalTrigger.isEmpty,
+           KeybindTrigger.parse(token).canonical() == row.canonicalTrigger { return }
+        perform {
+            switch row.origin {
+            case .default:
+                await model.rebindDefaultKeybind(oldTrigger: row.trigger, newTrigger: token, action: row.action)
+            case .unbound:
+                await model.applyKeybindEdit(originalTrigger: nil, trigger: token, action: row.action)
+            case .userAdded, .userOverridesDefault, .userDisablesDefault:
+                await model.applyKeybindEdit(originalTrigger: row.canonicalTrigger, trigger: token, action: row.action)
+            }
+        }
+    }
+
+    /// Add an *additional* shortcut for this row's action, never moving the existing
+    /// one (Ghostty accepts multiple triggers for the same action).
+    private func addAnother(_ token: String) {
+        warning = nil
+        let token = token.trimmingCharacters(in: .whitespaces)
+        guard !token.isEmpty else { return }
+        perform {
+            await model.applyKeybindEdit(originalTrigger: nil, trigger: token, action: row.action)
+        }
+    }
+
+    /// Run a model write with a clean apply state so this row's operation isn't
+    /// shadowed by stale feedback from a previous edit.
+    private func perform(_ work: @escaping () async -> Void) {
+        model.resetApplyState()
+        Task { await work() }
+    }
+
+    // MARK: Origin badge
 
     private var badge: some View {
         Text(badgeText)
@@ -167,6 +448,7 @@ private struct KeybindRow: View {
         case .userAdded: return "yours"
         case .userOverridesDefault(let action): return "overrides \(action)"
         case .userDisablesDefault: return "disabled"
+        case .unbound: return "no shortcut"
         }
     }
 
@@ -176,219 +458,7 @@ private struct KeybindRow: View {
         case .userAdded: return .accentColor
         case .userOverridesDefault: return .orange
         case .userDisablesDefault: return .red
-        }
-    }
-}
-
-/// What the edit sheet is editing: an existing merged row, or a new binding.
-struct KeybindDraft: Identifiable {
-    var id: String { row?.id ?? "∅new" }
-    let row: MergedKeybind?
-}
-
-/// The add/edit sheet: the recorder, a raw-text fallback, a searchable action
-/// picker, live kit validation, and contextual remove/disable actions.
-struct KeybindEditForm: View {
-    @Environment(AppModel.self) private var model
-    @Environment(\.dismiss) private var dismiss
-
-    let draft: KeybindDraft
-    @State private var trigger: String
-    @State private var action: String
-    @State private var actionQuery: String = ""
-    @State private var recorderWarning: String?
-
-    init(draft: KeybindDraft) {
-        self.draft = draft
-        // A default row prefills its trigger/action so editing the action creates
-        // an override; a new binding starts blank.
-        _trigger = State(initialValue: draft.row?.trigger ?? "")
-        _action = State(initialValue: draft.row?.action ?? "")
-    }
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: 14) {
-            Text(draft.row == nil ? "New binding" : "Edit binding").font(.headline)
-
-            triggerSection
-            actionSection
-            issuesSection
-            writeFeedback
-
-            Divider()
-            footer
-        }
-        .padding(20)
-        .frame(width: 480)
-    }
-
-    /// A write that the kit's pre-validation didn't catch (e.g. the binary's
-    /// `+validate-config` rejecting it, or a stale-on-disk conflict) keeps the
-    /// sheet open — surface the reason here, where the user is looking, instead of
-    /// only behind the sheet in the list's feedback bar.
-    @ViewBuilder
-    private var writeFeedback: some View {
-        if case .failed(let message) = model.applyState {
-            Label(message, systemImage: "xmark.octagon.fill")
-                .font(.caption).foregroundStyle(.red)
-                .fixedSize(horizontal: false, vertical: true)
-        }
-    }
-
-    private var isApplying: Bool { model.applyState == .applying }
-
-    // MARK: Trigger
-
-    private var triggerSection: some View {
-        VStack(alignment: .leading, spacing: 6) {
-            Text("Trigger").font(.subheadline.bold())
-            KeyRecorderView(
-                token: trigger,
-                onCapture: { trigger = $0; recorderWarning = nil },
-                onWarning: { recorderWarning = $0 }
-            )
-            .frame(height: 30)
-            if let recorderWarning {
-                Text(recorderWarning).font(.caption).foregroundStyle(.orange)
-            }
-            TextField("Or type a trigger (sequences, global:/unconsumed: prefixes…)", text: $trigger)
-                .textFieldStyle(.roundedBorder)
-                .font(.body.monospaced())
-        }
-    }
-
-    // MARK: Action
-
-    private var filteredActions: [KeybindAction] {
-        let all = model.keybindActions.sorted()
-        let query = actionQuery.trimmingCharacters(in: .whitespaces).lowercased()
-        guard !query.isEmpty else { return all }
-        return all.filter { $0.name.contains(query) }
-    }
-
-    private var selectedActionName: String {
-        if let colon = action.firstIndex(of: ":") { return String(action[..<colon]) }
-        return action
-    }
-
-    private var actionSection: some View {
-        VStack(alignment: .leading, spacing: 6) {
-            Text("Action").font(.subheadline.bold())
-            TextField("Search actions", text: $actionQuery)
-                .textFieldStyle(.roundedBorder)
-            if model.keybindActions.isEmpty {
-                Text("Couldn’t load Ghostty’s action list — type the action name below.")
-                    .font(.caption).foregroundStyle(.secondary)
-            } else {
-                ScrollView {
-                    LazyVStack(alignment: .leading, spacing: 0) {
-                        ForEach(filteredActions) { item in
-                            Button {
-                                selectAction(item.name)
-                            } label: {
-                                HStack {
-                                    Text(item.name).font(.body.monospaced())
-                                    Spacer()
-                                    if item.name == selectedActionName {
-                                        Image(systemName: "checkmark").foregroundStyle(.tint)
-                                    }
-                                }
-                                .padding(.vertical, 4).padding(.horizontal, 8)
-                                .contentShape(Rectangle())
-                            }
-                            .buttonStyle(.plain)
-                            .background(item.name == selectedActionName ? Color.accentColor.opacity(0.15) : .clear)
-                        }
-                    }
-                }
-                .frame(height: 150)
-                .background(Color(nsColor: .textBackgroundColor), in: RoundedRectangle(cornerRadius: 6))
-                .overlay(RoundedRectangle(cornerRadius: 6).strokeBorder(.separator))
-            }
-            TextField("Action (with any :parameters, e.g. goto_tab:1)", text: $action)
-                .textFieldStyle(.roundedBorder)
-                .font(.body.monospaced())
-        }
-    }
-
-    /// Pick a base action name, preserving any `:parameters` already typed.
-    private func selectAction(_ name: String) {
-        if let colon = action.firstIndex(of: ":") {
-            action = name + String(action[colon...])
-        } else {
-            action = name
-        }
-    }
-
-    // MARK: Validation preview
-
-    private var issues: [KeybindIssue] {
-        guard !trigger.isEmpty, !action.isEmpty else { return [] }
-        return KeybindValidation.validate(trigger: trigger, action: action, knownActions: model.keybindActionNames)
-    }
-
-    private var hasError: Bool { issues.contains { $0.severity == .error } }
-
-    @ViewBuilder
-    private var issuesSection: some View {
-        if !issues.isEmpty {
-            VStack(alignment: .leading, spacing: 3) {
-                ForEach(Array(issues.enumerated()), id: \.offset) { _, issue in
-                    Label(issue.message, systemImage: issue.severity == .error ? "xmark.octagon.fill" : "exclamationmark.triangle.fill")
-                        .font(.caption)
-                        .foregroundStyle(issue.severity == .error ? .red : .orange)
-                        .fixedSize(horizontal: false, vertical: true)
-                }
-            }
-        }
-    }
-
-    // MARK: Footer
-
-    private var canSave: Bool {
-        !trigger.trimmingCharacters(in: .whitespaces).isEmpty &&
-        !action.trimmingCharacters(in: .whitespaces).isEmpty &&
-        !hasError
-    }
-
-    private var footer: some View {
-        HStack(spacing: 12) {
-            if let row = draft.row {
-                contextualActions(for: row)
-            }
-            Spacer()
-            Button("Cancel") { dismiss() }
-                .keyboardShortcut(.cancelAction)
-            Button("Save") {
-                Task {
-                    await model.applyKeybindEdit(originalTrigger: draft.row?.canonicalTrigger, trigger: trigger, action: action)
-                    if case .failed = model.applyState { return }
-                    dismiss()
-                }
-            }
-            .keyboardShortcut(.defaultAction)
-            .disabled(!canSave || isApplying)
-        }
-    }
-
-    @ViewBuilder
-    private func contextualActions(for row: MergedKeybind) -> some View {
-        switch row.origin {
-        case .userAdded, .userOverridesDefault:
-            Button("Remove", role: .destructive) {
-                Task { await model.removeKeybind(trigger: row.canonicalTrigger); dismiss() }
-            }
-            .disabled(isApplying)
-        case .default:
-            Button("Disable") {
-                Task { await model.unbindDefaultKeybind(trigger: row.canonicalTrigger); dismiss() }
-            }
-            .disabled(isApplying)
-        case .userDisablesDefault:
-            Button("Re-enable") {
-                Task { await model.removeKeybind(trigger: row.canonicalTrigger); dismiss() }
-            }
-            .disabled(isApplying)
+        case .unbound: return .secondary
         }
     }
 }
