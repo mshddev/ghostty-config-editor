@@ -5,11 +5,11 @@ import GhosttyConfigKit
 
 /// What the sidebar can select.
 ///
-/// `.all` is the initial default (it has no sidebar row — the unfiltered list is
-/// the launch content) and `.problems` is entered from the top-bar health chip
-/// rather than a sidebar row; the rest map to visible rows.
+/// `.themes` is the launch default (the first sidebar row); `.customized` and
+/// `.problems` are entered from the top bar rather than a sidebar row; the rest
+/// map to visible rows. A `nil` selection is a defensive fallback that shows the
+/// unfiltered option list.
 public enum SidebarSelection: Hashable {
-    case all
     case customized
     case problems
     case themes
@@ -61,7 +61,7 @@ public final class AppModel {
     public private(set) var applyState: ApplyState = .idle
 
     public var binaryOverride: String?
-    public var selection: SidebarSelection? = .all
+    public var selection: SidebarSelection? = .themes
     public var query: String = ""
     public var selectedOptionName: String?
 
@@ -420,7 +420,9 @@ public final class AppModel {
             return [] // rendered by ProblemsView, not the option list
         case .themes:
             return [] // rendered by ThemeBrowserView
-        case .all, .none:
+        case .none:
+            // Defensive fallback only — the sidebar always keeps a row selected,
+            // so this nil branch isn't reachable through normal navigation.
             return browser.merged.options.sorted { $0.option.name < $1.option.name }
         }
     }
