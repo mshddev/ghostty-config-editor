@@ -72,7 +72,7 @@ final class KeyRecorderNSView: NSView {
         if isRecording {
             setAccessibilityValue("Recording — press the shortcut")
         } else {
-            setAccessibilityValue(displayToken.isEmpty ? "No shortcut set" : displayToken)
+            setAccessibilityValue(displayToken.isEmpty ? "No shortcut set" : KeybindTrigger.displaySymbol(for: displayToken))
         }
     }
 
@@ -215,16 +215,18 @@ final class KeyRecorderNSView: NSView {
         path.lineWidth = isRecording ? 2 : 1
         path.stroke()
 
+        // The stored token is Ghostty's raw `super+…` spelling; show the macOS glyphs.
+        let shown = KeybindTrigger.displaySymbol(for: displayToken)
         let text: String
         let color: NSColor
         if isRecording {
-            text = displayToken.isEmpty ? "Press the keys…" : "Press the keys…  (\(displayToken))"
+            text = displayToken.isEmpty ? "Press the keys…" : "Press the keys…  (\(shown))"
             color = .secondaryLabelColor
         } else if displayToken.isEmpty {
             text = "Click to record"
             color = .tertiaryLabelColor
         } else {
-            text = displayToken
+            text = shown
             color = .labelColor
         }
 

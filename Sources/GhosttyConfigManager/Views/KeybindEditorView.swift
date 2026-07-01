@@ -42,7 +42,11 @@ struct KeybindEditorView: View {
     private func filtered(_ rows: [MergedKeybind]) -> [MergedKeybind] {
         let q = filter.trimmingCharacters(in: .whitespaces).lowercased()
         guard !q.isEmpty else { return rows }
-        return rows.filter { $0.action.lowercased().contains(q) || $0.trigger.lowercased().contains(q) }
+        return rows.filter {
+            $0.action.lowercased().contains(q)
+                || $0.trigger.lowercased().contains(q)
+                || KeybindTrigger.displaySymbol(for: $0.trigger).lowercased().contains(q)
+        }
     }
 
     private func headerBar(all: [MergedKeybind]) -> some View {
@@ -179,7 +183,7 @@ private struct KeybindRow: View {
     private var isUnbound: Bool { row.origin == .unbound }
 
     private var triggerAccessibilityValue: String {
-        isUnbound ? "no shortcut" : "bound to \(row.trigger)"
+        isUnbound ? "no shortcut" : "bound to \(KeybindTrigger.displaySymbol(for: row.trigger))"
     }
 
     // MARK: Action (the config item)
@@ -265,7 +269,7 @@ private struct KeybindRow: View {
     }
 
     private func triggerPill(strikethrough: Bool) -> some View {
-        Text(row.trigger)
+        Text(KeybindTrigger.displaySymbol(for: row.trigger))
             .font(.body.monospaced())
             .foregroundStyle(strikethrough ? AnyShapeStyle(.tertiary) : AnyShapeStyle(.secondary))
             .strikethrough(strikethrough, color: .secondary)
