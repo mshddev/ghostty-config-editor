@@ -26,10 +26,15 @@ struct GhosttyConfigManagerApp: App {
         WindowGroup {
             RootView()
                 .environment(model)
-                .frame(minWidth: 900, minHeight: 560)
+                .frame(minWidth: 720, minHeight: 560)
                 .task { await model.bootstrap() }
         }
         .windowStyle(.titleBar)
+        // Each option row right-aligns its value control (the standard settings
+        // idiom), so a wide window strands a big gap between every name and its
+        // field. Open compact — the value controls sit near the names — and let
+        // the lower `minWidth` shrink it further from there.
+        .defaultSize(width: 760, height: 620)
 
         // Standard ⌘, Preferences window for the auto-reload toggle (U3). The model
         // is injected explicitly — SwiftUI does not propagate `.environment` across
@@ -83,7 +88,7 @@ struct RootView: View {
     }
 
     private func statusView(_ content: some View) -> some View {
-        content.frame(minWidth: 900, minHeight: 560)
+        content.frame(minWidth: 720, minHeight: 560)
     }
 
     @ViewBuilder
