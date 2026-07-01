@@ -81,23 +81,20 @@ private struct ThemeRow: View {
                     )
                 )
             Text(theme.name)
-                .fontWeight(isCurrent ? .semibold : .regular)
+                .fontWeight(isCurrent ? .bold : .regular)
+                .foregroundStyle(isCurrent ? AnyShapeStyle(Color.accentColor) : AnyShapeStyle(.primary))
                 .lineLimit(1)
             Spacer(minLength: 8)
-            if isCurrent {
-                Label("Current", systemImage: "checkmark")
-                    .font(.caption2.weight(.semibold))
-                    .foregroundStyle(.white)
-                    .padding(.horizontal, 7).padding(.vertical, 2)
-                    .background(Color.accentColor, in: Capsule())
-                    .fixedSize()
-            }
         }
-        .padding(.vertical, 6)
-        .padding(.horizontal, 8)
+        .padding(.vertical, isCurrent ? 10 : 6)
+        .padding(.horizontal, 10)
         .background(
-            RoundedRectangle(cornerRadius: 8)
-                .fill(isCurrent ? Color.accentColor.opacity(0.12) : Color.clear)
+            RoundedRectangle(cornerRadius: 10)
+                .fill(isCurrent ? Color.accentColor.opacity(0.18) : Color.clear)
+        )
+        .overlay(
+            RoundedRectangle(cornerRadius: 10)
+                .strokeBorder(isCurrent ? Color.accentColor : Color.clear, lineWidth: 1.5)
         )
         .contentShape(Rectangle())
     }
