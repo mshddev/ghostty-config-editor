@@ -74,24 +74,31 @@ private struct ThemeRow: View {
             preview
                 .frame(width: 180, height: 40)
                 .clipShape(RoundedRectangle(cornerRadius: 6))
-                .overlay(RoundedRectangle(cornerRadius: 6).strokeBorder(.separator))
-            VStack(alignment: .leading, spacing: 2) {
-                HStack(spacing: 6) {
-                    Text(theme.name)
-                    if isCurrent {
-                        Text("current").font(.caption2)
-                            .padding(.horizontal, 6).padding(.vertical, 1)
-                            .background(.green.opacity(0.2), in: Capsule())
-                    }
-                }
-                Text(theme.source).font(.caption).foregroundStyle(.tertiary)
+                .overlay(
+                    RoundedRectangle(cornerRadius: 6).strokeBorder(
+                        isCurrent ? AnyShapeStyle(Color.accentColor) : AnyShapeStyle(.separator),
+                        lineWidth: isCurrent ? 2 : 1
+                    )
+                )
+            Text(theme.name)
+                .fontWeight(isCurrent ? .semibold : .regular)
+                .lineLimit(1)
+            Spacer(minLength: 8)
+            if isCurrent {
+                Label("Current", systemImage: "checkmark")
+                    .font(.caption2.weight(.semibold))
+                    .foregroundStyle(.white)
+                    .padding(.horizontal, 7).padding(.vertical, 2)
+                    .background(Color.accentColor, in: Capsule())
+                    .fixedSize()
             }
-            Spacer()
-            Image(systemName: "chevron.right")
-                .font(.caption2)
-                .foregroundStyle(.tertiary)
         }
-        .padding(.vertical, 3)
+        .padding(.vertical, 6)
+        .padding(.horizontal, 8)
+        .background(
+            RoundedRectangle(cornerRadius: 8)
+                .fill(isCurrent ? Color.accentColor.opacity(0.12) : Color.clear)
+        )
         .contentShape(Rectangle())
     }
 
