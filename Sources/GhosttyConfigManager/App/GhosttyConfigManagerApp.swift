@@ -85,32 +85,45 @@ struct RootView: View {
         content.frame(minWidth: 900, minHeight: 560)
     }
 
+    /// Only the option editor is a genuine master-detail surface (a list of
+    /// options on the left, the selected option's editor on the right). Themes,
+    /// Problems, and Keybindings are self-contained single panes — giving them a
+    /// third column just left an empty "pick something" placeholder, so those
+    /// surfaces drop to a two-column layout (sidebar · content) instead.
+    private var showsDetailColumn: Bool {
+        switch model.selection {
+        case .problems, .themes, .category("Keybindings"): return false
+        default: return true
+        }
+    }
+
+    @ViewBuilder
+    private var mainColumn: some View {
+        switch model.selection {
+        case .problems: ProblemsView()
+        case .themes: ThemeBrowserView()
+        case .category("Keybindings"): KeybindEditorView()
+        default: OptionListView()
+        }
+    }
+
+    @ViewBuilder
     private func browser(_ environment: GhosttyEnvironment) -> some View {
-        NavigationSplitView {
-            SidebarView()
-        } content: {
-            switch model.selection {
-            case .problems: ProblemsView()
-            case .themes: ThemeBrowserView()
-            case .category("Keybindings"): KeybindEditorView()
-            default: OptionListView()
-            }
-        } detail: {
-            switch model.selection {
-            case .problems:
-                ContentUnavailableView("Config health",
-                                       systemImage: "stethoscope",
-                                       description: Text("Validation runs against your live config via `ghostty +validate-config`."))
-            case .themes:
-                ContentUnavailableView("Pick a theme",
-                                       systemImage: "paintpalette",
-                                       description: Text("Click a theme to apply it. Previews are read from each theme's file."))
-            case .category("Keybindings"):
-                ContentUnavailableView("Keybindings",
-                                       systemImage: "keyboard",
-                                       description: Text("Press a binding to edit it, or add one — record the keys and pick an action."))
-            default:
-                OptionDetailView()
+        Group {
+            if showsDetailColumn {
+                NavigationSplitView {
+                    SidebarView()
+                } content: {
+                    mainColumn
+                } detail: {
+                    OptionDetailView()
+                }
+            } else {
+                NavigationSplitView {
+                    SidebarView()
+                } detail: {
+                    mainColumn
+                }
             }
         }
         .toolbar {
