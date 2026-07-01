@@ -16,6 +16,18 @@ public enum KeyModifier: String, CaseIterable, Sendable, Equatable {
     /// The fixed re-emission order (KTD4).
     public static let canonicalOrder: [KeyModifier] = [.superKey, .ctrl, .alt, .shift]
 
+    /// The macOS glyph for this modifier, for DISPLAY ONLY (the config always stores
+    /// the lowercase word). `super` is ⌘ on macOS (Ghostty maps the Command key to
+    /// `super`).
+    public var symbol: String {
+        switch self {
+        case .superKey: return "⌘"
+        case .ctrl: return "⌃"
+        case .alt: return "⌥"
+        case .shift: return "⇧"
+        }
+    }
+
     /// Map a written modifier token (any case, including aliases) to its canonical
     /// form, or nil when the token is not a modifier (so the caller can treat it
     /// as the key).
@@ -125,6 +137,25 @@ public struct KeybindTrigger: Sendable, Equatable {
             return (mods + [Self.canonicalizeKey(chord.key)]).joined(separator: "+")
         }.joined(separator: ">")
         return prefixPart + chordPart
+    }
+
+    /// A macOS-symbol rendering of this trigger, for **display only** — modifiers
+    /// become ⌘⌃⌥⇧ (in Ghostty's canonical `super→ctrl→alt→shift` order, matching how
+    /// Mac apps stack them) joined with no `+`, while prefixes, the sequence `>` joins,
+    /// and the key token are preserved (`super+shift+,` → `⌘⇧,`, `ctrl+a>n` → `⌃a>n`,
+    /// `global:super+t` → `global:⌘t`). The config file always keeps the raw `super+…`
+    /// tokens; this never round-trips back to disk.
+    public func displaySymbol() -> String {
+        let prefixPart = prefixes.joined()
+        let chordPart = chords.map { chord -> String in
+            chord.modifiers.map(\.symbol).joined() + Self.canonicalizeKey(chord.key)
+        }.joined(separator: ">")
+        return prefixPart + chordPart
+    }
+
+    /// Convenience: parse a raw trigger then render it with macOS symbols.
+    public static func displaySymbol(for trigger: String) -> String {
+        parse(trigger).displaySymbol()
     }
 
     /// Lowercase only single-character keys (letters such as `T`→`t`, and

@@ -199,4 +199,21 @@ final class KeybindTests: XCTestCase {
         let issues = KeybindValidation.validate(trigger: "super+t", action: "frobnicate")
         XCTAssertFalse(issues.contains { $0.severity == .error })
     }
+
+    // MARK: - macOS symbol display (display-only)
+
+    func testDisplaySymbolRendersModifiersAsMacGlyphs() {
+        XCTAssertEqual(KeybindTrigger.displaySymbol(for: "super+shift+,"), "⌘⇧,")
+        XCTAssertEqual(KeybindTrigger.displaySymbol(for: "super+t"), "⌘t")
+        XCTAssertEqual(KeybindTrigger.displaySymbol(for: "ctrl+alt+["), "⌃⌥[")
+        // Ghostty's canonical super→ctrl→alt→shift order is preserved (not reordered).
+        XCTAssertEqual(KeybindTrigger.displaySymbol(for: "shift+super+a"), "⌘⇧a")
+    }
+
+    func testDisplaySymbolPreservesPrefixesSequencesAndBareKeys() {
+        XCTAssertEqual(KeybindTrigger.displaySymbol(for: "global:super+t"), "global:⌘t")
+        XCTAssertEqual(KeybindTrigger.displaySymbol(for: "ctrl+a>n"), "⌃a>n")
+        XCTAssertEqual(KeybindTrigger.displaySymbol(for: "arrow_left"), "arrow_left")
+        XCTAssertEqual(KeybindTrigger.displaySymbol(for: ""), "")
+    }
 }
