@@ -270,7 +270,7 @@ private struct KeybindRow: View {
 
     private func triggerPill(strikethrough: Bool) -> some View {
         Text(KeybindTrigger.displaySymbol(for: row.trigger))
-            .font(.body.monospaced())
+            .font(.body)
             .foregroundStyle(strikethrough ? AnyShapeStyle(.tertiary) : AnyShapeStyle(.secondary))
             .strikethrough(strikethrough, color: .secondary)
             .lineLimit(1)

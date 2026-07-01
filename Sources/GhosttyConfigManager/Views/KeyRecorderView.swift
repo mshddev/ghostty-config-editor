@@ -231,7 +231,9 @@ final class KeyRecorderNSView: NSView {
         }
 
         let attributes: [NSAttributedString.Key: Any] = [
-            .font: NSFont.monospacedSystemFont(ofSize: NSFont.systemFontSize, weight: .regular),
+            // System font (not monospaced): the macOS shortcut glyphs (⌘⇧⌥⌃) render
+            // with correct spacing here — monospaced cells cram them together.
+            .font: NSFont.systemFont(ofSize: NSFont.systemFontSize),
             .foregroundColor: color,
         ]
         let attributed = NSAttributedString(string: text, attributes: attributes)
