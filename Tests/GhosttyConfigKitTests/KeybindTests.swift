@@ -203,16 +203,20 @@ final class KeybindTests: XCTestCase {
     // MARK: - macOS symbol display (display-only)
 
     func testDisplaySymbolRendersModifiersAsMacGlyphs() {
-        XCTAssertEqual(KeybindTrigger.displaySymbol(for: "super+shift+,"), "⌘⇧,")
-        XCTAssertEqual(KeybindTrigger.displaySymbol(for: "super+t"), "⌘t")
-        XCTAssertEqual(KeybindTrigger.displaySymbol(for: "ctrl+alt+["), "⌃⌥[")
+        // Thin spaces (U+2009) separate the glyphs so ⌘= isn't cramped.
+        let s = "\u{2009}"
+        XCTAssertEqual(KeybindTrigger.displaySymbol(for: "super+shift+,"), "⌘\(s)⇧\(s),")
+        XCTAssertEqual(KeybindTrigger.displaySymbol(for: "super+t"), "⌘\(s)t")
+        XCTAssertEqual(KeybindTrigger.displaySymbol(for: "ctrl+alt+["), "⌃\(s)⌥\(s)[")
         // Ghostty's canonical super→ctrl→alt→shift order is preserved (not reordered).
-        XCTAssertEqual(KeybindTrigger.displaySymbol(for: "shift+super+a"), "⌘⇧a")
+        XCTAssertEqual(KeybindTrigger.displaySymbol(for: "shift+super+a"), "⌘\(s)⇧\(s)a")
     }
 
     func testDisplaySymbolPreservesPrefixesSequencesAndBareKeys() {
-        XCTAssertEqual(KeybindTrigger.displaySymbol(for: "global:super+t"), "global:⌘t")
-        XCTAssertEqual(KeybindTrigger.displaySymbol(for: "ctrl+a>n"), "⌃a>n")
+        let s = "\u{2009}"
+        XCTAssertEqual(KeybindTrigger.displaySymbol(for: "global:super+t"), "global:⌘\(s)t")
+        XCTAssertEqual(KeybindTrigger.displaySymbol(for: "ctrl+a>n"), "⌃\(s)a>n")
+        // A bare key with no modifiers has nothing to separate.
         XCTAssertEqual(KeybindTrigger.displaySymbol(for: "arrow_left"), "arrow_left")
         XCTAssertEqual(KeybindTrigger.displaySymbol(for: ""), "")
     }

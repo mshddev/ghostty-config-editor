@@ -148,7 +148,10 @@ public struct KeybindTrigger: Sendable, Equatable {
     public func displaySymbol() -> String {
         let prefixPart = prefixes.joined()
         let chordPart = chords.map { chord -> String in
-            chord.modifiers.map(\.symbol).joined() + Self.canonicalizeKey(chord.key)
+            // Thin spaces between the modifier glyphs and the key so the cluster
+            // breathes (⌘ ⇧ , rather than a cramped ⌘⇧,); the key token stays intact.
+            (chord.modifiers.map(\.symbol) + [Self.canonicalizeKey(chord.key)])
+                .joined(separator: "\u{2009}")
         }.joined(separator: ">")
         return prefixPart + chordPart
     }
