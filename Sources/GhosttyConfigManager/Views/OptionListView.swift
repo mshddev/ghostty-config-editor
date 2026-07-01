@@ -206,6 +206,8 @@ private struct InlineOptionEditor: View {
     @Environment(AppModel.self) private var model
     let option: MergedOption
     @State private var draft: String = ""
+    /// Drives the color-editing popover anchored to the row's swatch.
+    @State private var showingColorPopover = false
 
     var body: some View {
         control
@@ -252,6 +254,25 @@ private struct InlineOptionEditor: View {
                     .onSubmit { commit() }
                 Stepper("", value: numberBinding, step: 1).labelsHidden()
             }
+        case .color:
+            // The swatch opens our own color popover — anchored to the row, and with
+            // a text input built in so any value Ghostty accepts (hex, an X11 name,
+            // or cell-foreground / cell-background) is resolvable in the same place
+            // you pick one visually. We roll our own because the system's color well
+            // popover is closed (no text field) and SwiftUI's ColorPicker floats the
+            // shared panel at a screen corner.
+            Button { showingColorPopover.toggle() } label: { swatch }
+                .buttonStyle(.plain)
+                .help("Edit color")
+                .popover(isPresented: $showingColorPopover, arrowEdge: .bottom) {
+                    colorEditor
+                }
+                // Seed the draft from the saved value each time the popover opens,
+                // so it never shows a stale (or first-open empty) value and any
+                // uncommitted edit from a previous open is discarded.
+                .onChange(of: showingColorPopover) { _, isOpen in
+                    if isOpen { draft = currentValue }
+                }
         default:
             TextField("value", text: $draft)
                 .textFieldStyle(.roundedBorder)
@@ -304,6 +325,90 @@ private struct InlineOptionEditor: View {
                 apply(newValue)
             }
         )
+    }
+
+    // MARK: Color editing
+
+    /// The row's color chip: the saved color, or a neutral fill for values a swatch
+    /// can't render (a named color or `cell-foreground` / `cell-background`).
+    private var swatch: some View {
+        RoundedRectangle(cornerRadius: 5)
+            .fill(Color(hex: currentValue) ?? Color(nsColor: .quaternaryLabelColor))
+            .frame(width: 44, height: 22)
+            .overlay(RoundedRectangle(cornerRadius: 5).strokeBorder(.separator, lineWidth: 1))
+            .contentShape(RoundedRectangle(cornerRadius: 5))
+    }
+
+    /// A curated spread of neutrals and hues for one-click picking. The text field
+    /// covers everything else — any hex, plus the values a swatch can't express.
+    private static let colorPresets: [String] = [
+        "#000000", "#1e1e2e", "#282c34", "#3b4252", "#4c566a", "#7f849c", "#abb2bf", "#ffffff",
+        "#e06c75", "#d19a66", "#e5c07b", "#98c379", "#56b6c2", "#61afef", "#c678dd", "#ff79c6",
+    ]
+
+    private var colorEditor: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            HStack(spacing: 10) {
+                RoundedRectangle(cornerRadius: 6)
+                    .fill(Color(hex: draft) ?? Color(nsColor: .quaternaryLabelColor))
+                    .frame(width: 36, height: 36)
+                    .overlay(RoundedRectangle(cornerRadius: 6).strokeBorder(.separator, lineWidth: 1))
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(option.option.name).font(.callout.weight(.semibold)).lineLimit(1)
+                    Text(draft.isEmpty ? "no value" : draft)
+                        .font(.caption.monospaced()).foregroundStyle(.secondary).lineLimit(1)
+                }
+            }
+            HStack(spacing: 6) {
+                TextField("#1e1e2e, tomato, cell-foreground", text: $draft)
+                    .textFieldStyle(.roundedBorder)
+                    .onSubmit { commitColor() }
+                Button("Set") { commitColor() }
+                    .disabled(!canApplyColorDraft)
+            }
+            LazyVGrid(columns: Array(repeating: GridItem(.fixed(22), spacing: 5), count: 8), spacing: 5) {
+                ForEach(Self.colorPresets, id: \.self) { hex in
+                    Button {
+                        draft = hex
+                        apply(hex)
+                    } label: {
+                        RoundedRectangle(cornerRadius: 4)
+                            .fill(Color(hex: hex) ?? .gray)
+                            .frame(width: 22, height: 22)
+                            .overlay(
+                                RoundedRectangle(cornerRadius: 4)
+                                    .strokeBorder(isSelectedPreset(hex) ? Color.accentColor : Color(nsColor: .separatorColor),
+                                                  lineWidth: isSelectedPreset(hex) ? 2 : 1)
+                            )
+                    }
+                    .buttonStyle(.plain)
+                    .help(hex)
+                }
+            }
+            Text("Type a hex code, an X11 color name, or cell-foreground / cell-background.")
+                .font(.caption2).foregroundStyle(.secondary)
+                .fixedSize(horizontal: false, vertical: true)
+        }
+        .padding(12)
+        .frame(width: 250)
+    }
+
+    private func isSelectedPreset(_ hex: String) -> Bool {
+        hex.caseInsensitiveCompare(currentValue) == .orderedSame
+    }
+
+    /// A blank field or one that matches the saved value is never a valid write.
+    private var canApplyColorDraft: Bool {
+        let trimmed = draft.trimmingCharacters(in: .whitespaces)
+        return !trimmed.isEmpty && trimmed != currentValue
+    }
+
+    private func commitColor() {
+        let value = draft.trimmingCharacters(in: .whitespaces)
+        guard !value.isEmpty, value != currentValue else { return }
+        if value != draft { draft = value }
+        apply(value)
+        showingColorPopover = false
     }
 
     private var numberBinding: Binding<Double> {
