@@ -42,7 +42,8 @@ struct GhosttyConfigManagerApp: App {
 }
 
 /// Top-level shell. Until Ghostty is located it shows a status view; once ready
-/// it presents the three-column Explorer (sidebar · option list · detail).
+/// it presents the two-column Explorer (sidebar · content). Options are edited
+/// inline in the list, so there is no separate detail column.
 struct RootView: View {
     @Environment(AppModel.self) private var model
 
@@ -85,18 +86,6 @@ struct RootView: View {
         content.frame(minWidth: 900, minHeight: 560)
     }
 
-    /// Only the option editor is a genuine master-detail surface (a list of
-    /// options on the left, the selected option's editor on the right). Themes,
-    /// Problems, and Keybindings are self-contained single panes — giving them a
-    /// third column just left an empty "pick something" placeholder, so those
-    /// surfaces drop to a two-column layout (sidebar · content) instead.
-    private var showsDetailColumn: Bool {
-        switch model.selection {
-        case .problems, .themes, .category("Keybindings"): return false
-        default: return true
-        }
-    }
-
     @ViewBuilder
     private var mainColumn: some View {
         switch model.selection {
@@ -107,24 +96,15 @@ struct RootView: View {
         }
     }
 
+    /// Every surface is now a self-contained two-column pane (sidebar · content).
+    /// The option list edits each option inline, so the old third "detail" column
+    /// — which only ever held one option's editor — is gone entirely.
     @ViewBuilder
     private func browser(_ environment: GhosttyEnvironment) -> some View {
-        Group {
-            if showsDetailColumn {
-                NavigationSplitView {
-                    SidebarView()
-                } content: {
-                    mainColumn
-                } detail: {
-                    OptionDetailView()
-                }
-            } else {
-                NavigationSplitView {
-                    SidebarView()
-                } detail: {
-                    mainColumn
-                }
-            }
+        NavigationSplitView {
+            SidebarView()
+        } detail: {
+            mainColumn
         }
         .toolbar {
             ToolbarItem(placement: .status) {

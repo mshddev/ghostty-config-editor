@@ -1,8 +1,11 @@
 import SwiftUI
+import AppKit
 import GhosttyConfigKit
 
-/// The middle column: a searchable list of options for the current selection.
-/// Search is intent-aware (R4) and name/doc full-text (R3).
+/// The main column: a searchable list of options for the current selection.
+/// Each row edits its option inline (U7), so there is no separate detail pane —
+/// the value control lives on the row and the fuller docs/metadata/actions live
+/// in a popover behind the row's info button.
 struct OptionListView: View {
     @Environment(AppModel.self) private var model
 
@@ -24,7 +27,10 @@ struct OptionListView: View {
         .searchable(text: $model.query, placement: .toolbar,
                     prompt: "Search options or describe a behavior")
         .navigationTitle(title)
-        .navigationSplitViewColumnWidth(min: 260, ideal: 320)
+        .navigationSplitViewColumnWidth(min: 360, ideal: 460)
+        // Leaving a surface clears any lingering per-row apply feedback so the
+        // next surface doesn't show a stale "Saved" on some unrelated row.
+        .onChange(of: model.selection) { _, _ in model.resetApplyState() }
     }
 
     private var title: String {
@@ -54,39 +60,53 @@ struct OptionListView: View {
     }
 }
 
-/// One row in the option list: name, a state dot, a short value summary, and an
-/// info button that reveals the option's full documentation in a popover.
+/// One row in the option list: a state dot, the option's name and default, the
+/// inline editing control, and an info button that reveals the fuller docs,
+/// metadata, and actions in a popover. Apply feedback (saving/saved/error) is
+/// shown inline beneath the row while this option is the one being written.
 struct OptionRow: View {
+    @Environment(AppModel.self) private var model
     let option: MergedOption
-    @State private var showingDoc = false
+    @State private var showingInfo = false
 
     var body: some View {
-        HStack(spacing: 8) {
-            Circle()
-                .fill(stateColor)
-                .frame(width: 7, height: 7)
-                .help(stateHelp)
-                .accessibilityHidden(true)
-            VStack(alignment: .leading, spacing: 1) {
-                Text(option.option.name)
-                    .font(.body)
-                Text(summary)
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-                    .lineLimit(1)
+        VStack(alignment: .leading, spacing: 4) {
+            HStack(spacing: 8) {
+                Circle()
+                    .fill(stateColor)
+                    .frame(width: 7, height: 7)
+                    .help(stateHelp)
+                    .accessibilityHidden(true)
+                VStack(alignment: .leading, spacing: 1) {
+                    Text(option.option.name)
+                        .font(.body)
+                    Text(subtitle)
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                        .lineLimit(1)
+                }
+                Spacer(minLength: 12)
+                editor
+                infoButton
             }
-            Spacer()
-            infoButton
+            feedback
         }
-        .padding(.vertical, 1)
+        .padding(.vertical, 2)
     }
 
-    /// The docs live one click (or hover) from every option, not just the
-    /// selected one — hover shows the full text as a native tooltip, click
-    /// opens the richer, selectable popover.
+    /// Repeatable keys (keybind, palette, …) can't be edited from a single inline
+    /// control, so those rows show no editor — their values are summarised in the
+    /// subtitle and edited via "Reveal in editor" in the info popover.
+    @ViewBuilder
+    private var editor: some View {
+        if !option.option.isRepeatable {
+            InlineOptionEditor(option: option)
+        }
+    }
+
     private var infoButton: some View {
         Button {
-            showingDoc.toggle()
+            showingInfo.toggle()
         } label: {
             Image(systemName: "info.circle")
                 .imageScale(.medium)
@@ -95,9 +115,51 @@ struct OptionRow: View {
         }
         .buttonStyle(.plain)
         .help(docHelp)
-        .accessibilityLabel("Documentation for \(option.option.name)")
-        .popover(isPresented: $showingDoc, arrowEdge: .trailing) {
-            DocumentationPopover(option: option)
+        .accessibilityLabel("Info for \(option.option.name)")
+        .popover(isPresented: $showingInfo, arrowEdge: .trailing) {
+            OptionInfoPopover(option: option)
+        }
+    }
+
+    /// Per-row apply status, shown only while this option is the one being written
+    /// (`applyingOptionName`), so a single global apply state never decorates the
+    /// wrong row.
+    @ViewBuilder
+    private var feedback: some View {
+        if model.applyingOptionName == option.option.name {
+            switch model.applyState {
+            case .idle:
+                EmptyView()
+            case .applying:
+                HStack(spacing: 6) {
+                    ProgressView().controlSize(.small)
+                    Text("Saving…").font(.caption2).foregroundStyle(.secondary)
+                }
+                .padding(.leading, 15)
+            case .succeeded(let notice, let gitTracked, let reload):
+                VStack(alignment: .leading, spacing: 2) {
+                    Label("Saved", systemImage: "checkmark.circle.fill")
+                        .foregroundStyle(.green).font(.caption)
+                    if let notice { Text(notice).font(.caption2).foregroundStyle(.secondary) }
+                    if let reloadMessage = reload.message {
+                        Text(reloadMessage).font(.caption2).foregroundStyle(.secondary)
+                    }
+                    if gitTracked {
+                        Text("This file is git-tracked — commit it in your dotfiles repo.")
+                            .font(.caption2).foregroundStyle(.secondary)
+                    }
+                    if model.canUndo {
+                        Button("Undo") { Task { await model.undoLastApply() } }
+                            .buttonStyle(.link).font(.caption2)
+                    }
+                }
+                .padding(.leading, 15)
+            case .failed(let message):
+                Label(message, systemImage: "xmark.octagon.fill")
+                    .foregroundStyle(.red).font(.caption2)
+                    .fixedSize(horizontal: false, vertical: true)
+                    .padding(.leading, 15)
+            }
         }
     }
 
@@ -106,12 +168,15 @@ struct OptionRow: View {
         return doc.isEmpty ? "No documentation available." : doc
     }
 
-    private var summary: String {
-        if option.isSet {
-            return option.userValues.joined(separator: ", ")
+    /// The default (or, for repeatable keys, the current values) — the inline
+    /// control already shows the *current* scalar value, so the subtitle carries
+    /// the complementary context instead of repeating it.
+    private var subtitle: String {
+        if option.option.isRepeatable {
+            return option.isSet ? option.userValues.joined(separator: ", ") : "not set"
         }
         let def = option.option.defaultValue
-        return def.isEmpty ? "not set" : "default: \(def)"
+        return def.isEmpty ? "no default" : "default: \(def)"
     }
 
     private var stateColor: Color {
@@ -131,29 +196,284 @@ struct OptionRow: View {
     }
 }
 
-/// The documentation popover anchored to a row's info button. Scrollable and
-/// width-constrained so long docs stay readable; text is selectable so users
-/// can copy examples out.
-private struct DocumentationPopover: View {
+// MARK: - Inline editor (U7)
+
+/// A type-appropriate editing control rendered directly on the row. Discrete
+/// controls (toggle, dropdown, stepper) apply immediately on change; free-text
+/// commits on Return. Every write is validated against the live binary by the
+/// model, so on failure the control snaps back to the value that's actually saved.
+private struct InlineOptionEditor: View {
+    @Environment(AppModel.self) private var model
     let option: MergedOption
+    @State private var draft: String = ""
+
+    var body: some View {
+        control
+            .disabled(isApplyingThis)
+            .onAppear { draft = currentValue }
+            // The row view is reused across list rebuilds (keyed by option name),
+            // so `onAppear` won't fire again after a value changes on disk — resync
+            // the draft here instead. `currentValue` only changes once a write has
+            // actually landed (an apply, an undo, or an external reload), which is
+            // exactly when the control should follow it — so resync unconditionally.
+            // (Guarding this on "not mid-apply" was wrong: during an undo the value
+            // updates while `applyState` is still `.applying`, so the guard swallowed
+            // the one change that mattered and the control kept the stale value.)
+            .onChange(of: currentValue) { _, newValue in
+                draft = newValue
+            }
+    }
+
+    @ViewBuilder
+    private var control: some View {
+        switch option.option.valueType {
+        case .boolean:
+            Toggle("", isOn: boolBinding)
+                .labelsHidden()
+                .toggleStyle(.switch)
+                .controlSize(.mini)
+        case .enumeration:
+            // Rows come from the kit helper (not raw enumValues) so a saved
+            // out-of-enum value stays selectable and is never silently dropped.
+            // Seed from `currentValue` (the saved value), never `draft`.
+            Picker("", selection: enumBinding) {
+                ForEach(option.enumChoices(current: currentValue)) { choice in
+                    Text(choice.label).tag(choice.value)
+                }
+            }
+            .labelsHidden()
+            .pickerStyle(.menu)
+            .fixedSize()
+        case .number:
+            HStack(spacing: 4) {
+                TextField("value", text: $draft)
+                    .textFieldStyle(.roundedBorder)
+                    .frame(width: 80)
+                    .onSubmit { commit() }
+                Stepper("", value: numberBinding, step: 1).labelsHidden()
+            }
+        default:
+            TextField("value", text: $draft)
+                .textFieldStyle(.roundedBorder)
+                .frame(width: 160)
+                .onSubmit { commit() }
+        }
+    }
+
+    private var currentValue: String {
+        option.isSet ? (option.userValues.first ?? "") : option.option.defaultValue
+    }
+
+    private var isApplyingThis: Bool {
+        model.applyingOptionName == option.option.name && model.applyState == .applying
+    }
+
+    /// Commit the free-text draft, but only when it actually differs from the
+    /// saved value — Return on an unchanged field is a no-op, not a redundant write.
+    private func commit() {
+        guard draft != currentValue else { return }
+        apply(draft)
+    }
+
+    private func apply(_ value: String) {
+        Task {
+            await model.applyEdit(option: option, values: [value])
+            // A rejected write never touched disk, so the option still holds its
+            // old value — snap the control back to it rather than leave the failed
+            // value showing as if it stuck.
+            if case .failed = model.applyState { draft = currentValue }
+        }
+    }
+
+    private var boolBinding: Binding<Bool> {
+        Binding(
+            get: { draft == "true" },
+            set: { newValue in
+                let text = newValue ? "true" : "false"
+                draft = text
+                apply(text)
+            }
+        )
+    }
+
+    private var enumBinding: Binding<String> {
+        Binding(
+            get: { draft },
+            set: { newValue in
+                draft = newValue
+                apply(newValue)
+            }
+        )
+    }
+
+    private var numberBinding: Binding<Double> {
+        Binding(
+            get: { Double(draft) ?? 0 },
+            set: { value in
+                let text = value.truncatingRemainder(dividingBy: 1) == 0 ? String(Int(value)) : String(value)
+                draft = text
+                apply(text)
+            }
+        )
+    }
+}
+
+// MARK: - Info popover
+
+/// The popover behind a row's info button: the fuller documentation plus the
+/// metadata and read-only actions that used to live in the detail pane (default,
+/// where it's defined, Copy snippet, Reveal in editor). Scrollable and
+/// width-constrained so long docs stay readable; text is selectable so users can
+/// copy examples out.
+private struct OptionInfoPopover: View {
+    @Environment(AppModel.self) private var model
+    let option: MergedOption
+    @State private var copied = false
 
     var body: some View {
         ScrollView {
-            VStack(alignment: .leading, spacing: 8) {
-                Text(option.option.name)
-                    .font(.headline)
-                    .textSelection(.enabled)
-                Text(hasDoc ? option.option.documentation : "No documentation available.")
-                    .font(.callout)
-                    .foregroundStyle(hasDoc ? .primary : .secondary)
-                    .textSelection(.enabled)
-                    .fixedSize(horizontal: false, vertical: true)
+            VStack(alignment: .leading, spacing: 12) {
+                header
+                Divider()
+                documentation
+                Divider()
+                metadata
+                actions
             }
             .frame(width: 360, alignment: .leading)
             .padding(16)
         }
-        .frame(maxHeight: 420)
+        .frame(maxHeight: 460)
+    }
+
+    private var header: some View {
+        VStack(alignment: .leading, spacing: 6) {
+            Text(option.option.name)
+                .font(.headline)
+                .textSelection(.enabled)
+            HStack(spacing: 8) {
+                Badge(text: option.option.category, systemImage: "folder")
+                Badge(text: option.option.valueType.rawValue, systemImage: "tag")
+                if option.option.isRepeatable {
+                    Badge(text: "repeatable", systemImage: "plus.square.on.square")
+                }
+                stateBadge
+            }
+        }
+    }
+
+    @ViewBuilder
+    private var stateBadge: some View {
+        switch option.state {
+        case .setNonDefault:
+            Badge(text: "customized", systemImage: "pencil", tint: .accentColor)
+        case .setToDefault:
+            Badge(text: "at default", systemImage: "equal", tint: .secondary)
+        case .unset:
+            Badge(text: "not using yet", systemImage: "sparkles", tint: .orange)
+        }
+    }
+
+    private var documentation: some View {
+        Text(hasDoc ? option.option.documentation : "No documentation available.")
+            .font(.callout)
+            .foregroundStyle(hasDoc ? .primary : .secondary)
+            .textSelection(.enabled)
+            .fixedSize(horizontal: false, vertical: true)
+    }
+
+    private var metadata: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            if option.isSet {
+                LabeledRow("Your value") {
+                    Text(option.userValues.joined(separator: "\n"))
+                        .font(.callout.monospaced())
+                        .textSelection(.enabled)
+                }
+            }
+            LabeledRow("Default") {
+                Text(option.option.defaultValue.isEmpty ? "—" : option.option.defaultValue)
+                    .font(.callout.monospaced())
+                    .foregroundStyle(.secondary)
+                    .textSelection(.enabled)
+            }
+            if let source = option.sources.first {
+                LabeledRow("Defined in") {
+                    Text("\((source.file as NSString).lastPathComponent):\(source.line)")
+                        .font(.caption.monospaced())
+                        .foregroundStyle(.secondary)
+                }
+            }
+        }
+    }
+
+    private var actions: some View {
+        HStack(spacing: 8) {
+            Button {
+                copySnippet()
+            } label: {
+                Label(copied ? "Copied" : "Copy snippet", systemImage: copied ? "checkmark" : "doc.on.doc")
+            }
+            if let source = option.sources.first {
+                Button {
+                    NSWorkspace.shared.open(URL(fileURLWithPath: source.file))
+                } label: {
+                    Label("Reveal in editor", systemImage: "arrow.up.forward.app")
+                }
+            }
+        }
+        .buttonStyle(.bordered)
+        .controlSize(.small)
     }
 
     private var hasDoc: Bool { !option.option.documentation.isEmpty }
+
+    private func copySnippet() {
+        let pasteboard = NSPasteboard.general
+        pasteboard.clearContents()
+        pasteboard.setString(model.snippet(for: option), forType: .string)
+        copied = true
+        Task {
+            try? await Task.sleep(for: .seconds(1.5))
+            copied = false
+        }
+    }
+}
+
+// MARK: - Small reusable bits
+
+private struct Badge: View {
+    let text: String
+    var systemImage: String? = nil
+    var tint: Color = .secondary
+
+    var body: some View {
+        Label {
+            Text(text)
+        } icon: {
+            if let systemImage { Image(systemName: systemImage) }
+        }
+        .font(.caption)
+        .padding(.horizontal, 7)
+        .padding(.vertical, 3)
+        .background(tint.opacity(0.12), in: Capsule())
+        .foregroundStyle(tint == .secondary ? Color.secondary : tint)
+    }
+}
+
+private struct LabeledRow<Content: View>: View {
+    let label: String
+    @ViewBuilder let content: Content
+
+    init(_ label: String, @ViewBuilder content: () -> Content) {
+        self.label = label
+        self.content = content()
+    }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 2) {
+            Text(label).font(.caption).foregroundStyle(.secondary)
+            content
+        }
+    }
 }

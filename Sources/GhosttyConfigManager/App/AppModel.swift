@@ -59,6 +59,11 @@ public final class AppModel {
     /// all-unset view (R6, first-launch state).
     public private(set) var configMissing = false
     public private(set) var applyState: ApplyState = .idle
+    /// Which option the current `applyState` describes. Editing is now inline in
+    /// the list, so a single global `applyState` needs an anchor — each row shows
+    /// feedback only while this matches its own name (the detail pane that owned
+    /// the state unambiguously is gone).
+    public private(set) var applyingOptionName: String?
 
     public var binaryOverride: String?
     public var selection: SidebarSelection? = .themes
@@ -197,6 +202,7 @@ public final class AppModel {
     /// then reload so the UI reflects disk. Surfaces explicit feedback (R17).
     public func applyEdit(option: MergedOption, values: [String]) async {
         guard let environment, let browser else { return }
+        applyingOptionName = option.option.name
         applyState = .applying
         let writer = ConfigWriter()
         do {
@@ -245,6 +251,7 @@ public final class AppModel {
 
     public func resetApplyState() {
         applyState = .idle
+        applyingOptionName = nil
     }
 
     // MARK: - Themes (U8)
