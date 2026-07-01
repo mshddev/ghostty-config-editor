@@ -25,12 +25,20 @@ public enum GhosttyCLIError: Error, Equatable, Sendable {
 
 /// Runs `ghostty` subcommands, capturing stdout/stderr asynchronously.
 ///
-/// Uses `Foundation.Process` with **concurrent** pipe draining (KTD4 fallback):
-/// verbose output such as `+show-config --default --docs` (~176 KB here) would
-/// deadlock a naive read-then-wait because the child blocks once the 64 KB pipe
-/// buffer fills. Reading stdout and stderr concurrently before awaiting exit
-/// avoids that. `swift-subprocess` is the intended future swap; this dependency-
-/// free path is the documented fallback and keeps the build hermetic.
+/// Uses `Foundation.Process` with **concurrent, deadline-bounded** pipe draining
+/// (KTD4 fallback):
+///  - Verbose output such as `+show-config --default --docs` (~176 KB here) would
+///    deadlock a naive read-then-wait because the child blocks once the 64 KB
+///    pipe buffer fills. Reading stdout and stderr concurrently avoids that.
+///  - Draining to **EOF alone is unsafe**: if the child leaks its write-end to a
+///    lingering helper the pipe never closes, so a blocking read-to-EOF hangs
+///    forever (this is what intermittently wedged the test suite — the pid-only
+///    watchdog can't force EOF). The drains are therefore **non-blocking and
+///    bounded by an absolute deadline**, so a wedged or FD-leaking child yields
+///    `.timedOut` and never blocks the caller.
+///
+/// `swift-subprocess` is the intended future swap; this dependency-free path is
+/// the documented fallback and keeps the build hermetic.
 public struct GhosttyCLI: Sendable {
     public let binaryPath: String
 
@@ -63,32 +71,35 @@ public struct GhosttyCLI: Sendable {
             throw GhosttyCLIError.launchFailed(error.localizedDescription)
         }
 
-        // Watchdog: if the child outlives the deadline, kill it. Killing closes
-        // its pipe write-ends, so the drains below hit EOF and we unwind instead
-        // of blocking forever. `Process` is not Sendable, so the watchdog touches
-        // only the pid via POSIX `kill` (signal 0 = liveness probe).
+        // `Process` is not Sendable, so the timeout path touches only the pid via
+        // POSIX `kill` (signal 0 = liveness probe).
         let pid = process.processIdentifier
-        let timedOut = AtomicFlag()
-        let watchdog = Task {
-            try? await Task.sleep(for: .seconds(timeout))
-            guard kill(pid, 0) == 0 else { return } // already exited
-            timedOut.set()
+
+        // Drain both pipes concurrently, bounded by an absolute deadline rather
+        // than by EOF (see the type doc): a child that never closes its write-end
+        // — or leaks it to a helper — stops the read at the deadline instead of
+        // hanging the caller and, in tests, the whole suite.
+        let deadline = DispatchTime.now() + timeout
+        async let outResult = Self.drain(fd: outFD, deadline: deadline)
+        async let errResult = Self.drain(fd: errFD, deadline: deadline)
+        let (out, err) = await (outResult, errResult)
+
+        if out.hitDeadline || err.hitDeadline {
+            // The child outlived its deadline: force it down (escalating to
+            // SIGKILL off the hot path so teardown never blocks this call) and
+            // surface a timeout rather than reporting a partial run.
             kill(pid, SIGTERM)
-            try? await Task.sleep(for: .milliseconds(500))
-            if kill(pid, 0) == 0 { kill(pid, SIGKILL) }
+            Task.detached {
+                try? await Task.sleep(for: .milliseconds(500))
+                if kill(pid, 0) == 0 { kill(pid, SIGKILL) }
+            }
+            throw GhosttyCLIError.timedOut
         }
 
-        async let outData = Self.drain(fd: outFD)
-        async let errData = Self.drain(fd: errFD)
-        let (out, err) = await (outData, errData)
-
-        // Both pipes hit EOF, so the child has closed its write ends and is
-        // exiting; this returns promptly.
+        // Both pipes hit EOF within the deadline, so the child has closed its
+        // write ends and is exiting; this returns promptly.
         process.waitUntilExit()
-        watchdog.cancel()
-
-        if timedOut.isSet { throw GhosttyCLIError.timedOut }
-        return CLIResult(stdout: out, stderr: err, exitCode: process.terminationStatus)
+        return CLIResult(stdout: out.data, stderr: err.data, exitCode: process.terminationStatus)
     }
 
     /// Run `+version` and return the parsed version string (e.g., "1.3.1").
@@ -118,28 +129,47 @@ public struct GhosttyCLI: Sendable {
 
     // MARK: - Concurrent drain
 
-    /// Drain a file descriptor to EOF on a background queue, bridged to async.
-    /// Reads raw bytes (fd is Sendable) so nothing non-Sendable crosses the
-    /// continuation boundary under Swift 6 concurrency checking.
-    private static func drain(fd: Int32) async -> Data {
-        await withCheckedContinuation { (continuation: CheckedContinuation<Data, Never>) in
+    /// One pipe's drained bytes plus whether the read stopped at the deadline
+    /// (rather than EOF) — the caller's timeout signal.
+    private struct DrainResult: Sendable {
+        let data: Data
+        let hitDeadline: Bool
+    }
+
+    /// Drain a file descriptor until EOF *or* `deadline`, whichever comes first,
+    /// on a background queue bridged to async. Uses **non-blocking** reads so a
+    /// child that never closes its write-end (or leaks it to a helper) cannot
+    /// wedge the read past the deadline — the loop always terminates. Reads raw
+    /// bytes (fd is Sendable) so nothing non-Sendable crosses the continuation
+    /// boundary under Swift 6 concurrency checking.
+    private static func drain(fd: Int32, deadline: DispatchTime) async -> DrainResult {
+        await withCheckedContinuation { (continuation: CheckedContinuation<DrainResult, Never>) in
             DispatchQueue.global(qos: .userInitiated).async {
+                // Non-blocking so a stalled child surfaces as EAGAIN we can poll
+                // against the deadline, instead of parking forever inside read().
+                let flags = fcntl(fd, F_GETFL)
+                if flags != -1 { _ = fcntl(fd, F_SETFL, flags | O_NONBLOCK) }
+
                 var data = Data()
                 let bufferSize = 65_536
                 var buffer = [UInt8](repeating: 0, count: bufferSize)
+                var hitDeadline = false
                 while true {
+                    if DispatchTime.now() >= deadline { hitDeadline = true; break }
                     let count = buffer.withUnsafeMutableBytes { read(fd, $0.baseAddress, bufferSize) }
                     if count > 0 {
                         data.append(buffer, count: count)
                     } else if count == 0 {
-                        break // EOF
+                        break // EOF: the child closed this write end
+                    } else if errno == EAGAIN || errno == EWOULDBLOCK {
+                        usleep(5_000) // nothing available yet; back off (bounded by the deadline)
                     } else if errno == EINTR {
                         continue // interrupted by a signal — retry, don't truncate
                     } else {
                         break // genuine read error
                     }
                 }
-                continuation.resume(returning: data)
+                continuation.resume(returning: DrainResult(data: data, hitDeadline: hitDeadline))
             }
         }
     }
@@ -162,13 +192,4 @@ public struct GhosttyEnvironment: Sendable {
         let version = try await cli.version()
         return GhosttyEnvironment(cli: cli, version: version)
     }
-}
-
-/// A one-way Sendable boolean: set from the timeout watchdog Task, read by the
-/// caller after the subprocess unwinds.
-final class AtomicFlag: @unchecked Sendable {
-    private let lock = NSLock()
-    private var flag = false
-    func set() { lock.lock(); flag = true; lock.unlock() }
-    var isSet: Bool { lock.lock(); defer { lock.unlock() }; return flag }
 }
