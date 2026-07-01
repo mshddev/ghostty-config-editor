@@ -2,9 +2,10 @@ import SwiftUI
 import AppKit
 import GhosttyConfigKit
 
-/// The trailing column: documentation, default, the user's current value, a
-/// discovery indicator for unused options, and read-only actions (M1). Editing
-/// controls are layered on in U7.
+/// The trailing column: default, the user's current value, a discovery
+/// indicator for unused options, and read-only actions (M1). Editing controls
+/// are layered on in U7. Documentation now lives in a popover on each list
+/// row's info button, not here.
 struct OptionDetailView: View {
     @Environment(AppModel.self) private var model
     @State private var copied = false
@@ -31,7 +32,6 @@ struct OptionDetailView: View {
                 }
                 Divider()
                 editorSection(option)
-                docSection(option)
                 Spacer(minLength: 0)
             }
             .padding(20)
@@ -115,16 +115,6 @@ struct OptionDetailView: View {
             }
         } else {
             OptionEditorView(option: option)
-        }
-    }
-
-    private func docSection(_ option: MergedOption) -> some View {
-        VStack(alignment: .leading, spacing: 6) {
-            Text("Documentation").font(.headline)
-            Text(option.option.documentation.isEmpty ? "No documentation available." : option.option.documentation)
-                .font(.callout)
-                .textSelection(.enabled)
-                .fixedSize(horizontal: false, vertical: true)
         }
     }
 

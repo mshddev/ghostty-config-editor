@@ -54,9 +54,11 @@ struct OptionListView: View {
     }
 }
 
-/// One row in the option list: name, a state dot, and a short value summary.
+/// One row in the option list: name, a state dot, a short value summary, and an
+/// info button that reveals the option's full documentation in a popover.
 struct OptionRow: View {
     let option: MergedOption
+    @State private var showingDoc = false
 
     var body: some View {
         HStack(spacing: 8) {
@@ -74,8 +76,34 @@ struct OptionRow: View {
                     .lineLimit(1)
             }
             Spacer()
+            infoButton
         }
         .padding(.vertical, 1)
+    }
+
+    /// The docs live one click (or hover) from every option, not just the
+    /// selected one — hover shows the full text as a native tooltip, click
+    /// opens the richer, selectable popover.
+    private var infoButton: some View {
+        Button {
+            showingDoc.toggle()
+        } label: {
+            Image(systemName: "info.circle")
+                .imageScale(.medium)
+                .foregroundStyle(.secondary)
+                .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .help(docHelp)
+        .accessibilityLabel("Documentation for \(option.option.name)")
+        .popover(isPresented: $showingDoc, arrowEdge: .trailing) {
+            DocumentationPopover(option: option)
+        }
+    }
+
+    private var docHelp: String {
+        let doc = option.option.documentation
+        return doc.isEmpty ? "No documentation available." : doc
     }
 
     private var summary: String {
@@ -101,4 +129,31 @@ struct OptionRow: View {
         case .unset: return "Not set — using the default"
         }
     }
+}
+
+/// The documentation popover anchored to a row's info button. Scrollable and
+/// width-constrained so long docs stay readable; text is selectable so users
+/// can copy examples out.
+private struct DocumentationPopover: View {
+    let option: MergedOption
+
+    var body: some View {
+        ScrollView {
+            VStack(alignment: .leading, spacing: 8) {
+                Text(option.option.name)
+                    .font(.headline)
+                    .textSelection(.enabled)
+                Text(hasDoc ? option.option.documentation : "No documentation available.")
+                    .font(.callout)
+                    .foregroundStyle(hasDoc ? .primary : .secondary)
+                    .textSelection(.enabled)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+            .frame(width: 360, alignment: .leading)
+            .padding(16)
+        }
+        .frame(maxHeight: 420)
+    }
+
+    private var hasDoc: Bool { !option.option.documentation.isEmpty }
 }
