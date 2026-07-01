@@ -118,6 +118,9 @@ final class BinaryLocatorTests: XCTestCase {
     // MARK: - System integration (skipped when Ghostty is absent)
 
     func testSystemDiscoveryFindsLocalGhostty() async throws {
+        // Opt-in: `discover()` uses the login-shell fallback and spawns the real
+        // binary — both machine-dependent, so keep it out of the default suite.
+        try LiveGhostty.skipUnlessEnabled()
         guard BinaryLocator.systemIsExecutable("/Applications/Ghostty.app/Contents/MacOS/ghostty") else {
             throw XCTSkip("Ghostty not installed at the standard app-bundle path")
         }
