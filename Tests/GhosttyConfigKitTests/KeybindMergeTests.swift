@@ -166,6 +166,80 @@ final class KeybindMergeTests: XCTestCase {
         XCTAssertEqual(result, ["super+w=new_tab"])
     }
 
+    // MARK: - movingDefault() — inline rebind of a default replaces, not appends
+
+    func testMovingDefaultOnPristineFileWritesNewBindingAndUnbindsTheOld() {
+        // Recording a new chord on an untouched default: the action moves to the new
+        // keys and the old default is disabled, so it fires on the new keys only.
+        let empty = TargetScopedBindings(userValues: [], sources: [], targetResolvedPath: primary)
+        let values = empty.movingDefault(fromTrigger: "super+t", toTrigger: "super+shift+t", action: "new_tab")
+        XCTAssertEqual(values, ["super+t=unbind", "super+shift+t=new_tab"])
+
+        // Re-reading confirms the shape: the old default disabled, the new one added.
+        let defaults = [DefaultKeybind(trigger: "super+t", action: "new_tab")]
+        let user = KeybindMerge.userBindings(values: values, sources: [loc(primary, 1), loc(primary, 2)],
+                                             knownActions: ["new_tab", "unbind"])
+        let merged = KeybindMerge.merge(defaults: defaults, user: user)
+        XCTAssertEqual(row("super+t", in: merged)?.origin, .userDisablesDefault)
+        XCTAssertEqual(row("super+shift+t", in: merged)?.origin, .userAdded)
+    }
+
+    func testMovingDefaultToTheSameTriggerIsANoOp() {
+        let scoped = scoped(["super+b=new_window"], ["new_window", "new_tab"])
+        // Same canonical trigger (case/alias-insensitive) → nothing changes.
+        XCTAssertEqual(scoped.movingDefault(fromTrigger: "super+t", toTrigger: "Super+T", action: "new_tab"),
+                       ["super+b=new_window"])
+    }
+
+    func testMovingDefaultPreservesUnrelatedBindingsVerbatim() {
+        let scoped = scoped(["global:ctrl+a=reload_config", "super+b=new_window"],
+                            ["reload_config", "new_window", "new_tab"])
+        let result = scoped.movingDefault(fromTrigger: "super+t", toTrigger: "super+y", action: "new_tab")
+        XCTAssertEqual(result[0], "global:ctrl+a=reload_config", "unrelated prefixed binding round-trips verbatim")
+        XCTAssertTrue(result.contains("super+t=unbind"))
+        XCTAssertTrue(result.contains("super+y=new_tab"))
+    }
+
+    // MARK: - withUnboundActions() — list the whole action set
+
+    func testWithUnboundActionsAppendsEmptyRowsForActionsWithNoBinding() {
+        let defaults = [DefaultKeybind(trigger: "super+t", action: "new_tab")]
+        let merged = KeybindMerge.merge(defaults: defaults, user: [])
+        let actions = ["new_tab", "toggle_quick_terminal", "equalize_splits"].map { KeybindAction(name: $0) }
+
+        let full = KeybindMerge.withUnboundActions(merged, allActions: actions)
+
+        // The bound action keeps its single row; the two unbound ones get empty rows.
+        XCTAssertEqual(full.filter { $0.action == "new_tab" }.count, 1)
+        let quick = full.first { $0.action == "toggle_quick_terminal" }
+        XCTAssertEqual(quick?.origin, .unbound)
+        XCTAssertEqual(quick?.trigger, "")
+        XCTAssertEqual(quick?.canonicalTrigger, "")
+        // Unbound rows sort alphabetically and follow the bound rows.
+        XCTAssertEqual(full.map(\.action), ["new_tab", "equalize_splits", "toggle_quick_terminal"])
+        // Empty rows still get unique SwiftUI ids.
+        XCTAssertEqual(Set(full.map(\.id)).count, full.count)
+    }
+
+    func testWithUnboundActionsExcludesNonBindableAndAlreadyBoundActions() {
+        // A disabled default still counts as bound (its action shouldn't reappear as
+        // "unbound"); unbind/text/csi/esc/cursor_key are never listed as empty rows.
+        let defaults = [DefaultKeybind(trigger: "super+shift+t", action: "new_tab")]
+        let user = KeybindMerge.userBindings(values: ["super+shift+t=unbind"], sources: [loc(primary, 1)],
+                                             knownActions: ["unbind"])
+        let merged = KeybindMerge.merge(defaults: defaults, user: user)
+        let actions = ["new_tab", "unbind", "text", "csi", "esc", "cursor_key", "goto_window"].map { KeybindAction(name: $0) }
+
+        let full = KeybindMerge.withUnboundActions(merged, allActions: actions)
+        let unboundNames = full.filter { $0.origin == .unbound }.map(\.action)
+        XCTAssertEqual(unboundNames, ["goto_window"], "only the real, param-free, unbound action is listed")
+    }
+
+    func testWithUnboundActionsIsNoOpWhenActionListIsEmpty() {
+        let merged = KeybindMerge.merge(defaults: [DefaultKeybind(trigger: "super+t", action: "new_tab")], user: [])
+        XCTAssertEqual(KeybindMerge.withUnboundActions(merged, allActions: []), merged)
+    }
+
     func testMergeDeduplicatesDefaultsThatCanonicalizeIdentically() {
         // A degenerate defaults listing (Risk R-B) with two same-canonical triggers
         // collapses to one row so SwiftUI ids stay unique.

@@ -11,12 +11,19 @@ public enum KeybindOrigin: Sendable, Equatable {
     case userOverridesDefault(defaultAction: String)
     /// A user `trigger=unbind` that disables a default.
     case userDisablesDefault
+    /// An action Ghostty supports that has no binding at all — surfaced as an empty,
+    /// bindable row so the editor lists the whole action set (like a system shortcuts
+    /// pane), not just what's already bound.
+    case unbound
 }
 
 /// One row of the editor's merged display: a default and/or a user binding,
 /// resolved to a single trigger (RK1).
 public struct MergedKeybind: Sendable, Equatable, Identifiable {
-    public var id: String { canonicalTrigger }
+    /// Bound rows are unique by canonical trigger; an unbound-action row has no
+    /// trigger, so it identifies by its action name instead (keeping SwiftUI ids
+    /// unique across the ~39 empty rows).
+    public var id: String { canonicalTrigger.isEmpty ? "action:\(action)" : canonicalTrigger }
     /// The trigger to display (the user's spelling when set, else the default's).
     public let trigger: String
     /// The action to display (the user's when set; the default's action for a
@@ -120,6 +127,28 @@ public enum KeybindMerge {
 
         return rows
     }
+
+    /// Actions that can't be bound with just a chord: `unbind` is the disable
+    /// mechanism (not an action), and `text`/`csi`/`esc`/`cursor_key` are meaningless
+    /// without a `:parameter` this editor has no inline picker for — so they are never
+    /// listed as empty bindable rows. (When they *do* carry a param in an existing
+    /// binding, that binding is a normal row and unaffected.)
+    static let nonBindableActions: Set<String> = ["unbind", "text", "csi", "esc", "cursor_key"]
+
+    /// Append an empty, bindable row for every action Ghostty supports that has no
+    /// binding yet, so the editor lists the whole action set (like a system shortcuts
+    /// pane) rather than only what's already bound. An action with *any* existing
+    /// binding — even a disabled default — suppresses its unbound row. Sorted by name
+    /// for a stable, scannable tail. A no-op when `allActions` is empty (the binary
+    /// couldn't list them), so the editor still works against just the bound rows.
+    public static func withUnboundActions(_ merged: [MergedKeybind], allActions: [KeybindAction]) -> [MergedKeybind] {
+        let bound = Set(merged.map { Keybind.actionName($0.action) })
+        let unbound = allActions.map(\.name)
+            .filter { !nonBindableActions.contains($0) && !bound.contains($0) }
+            .sorted()
+            .map { MergedKeybind(trigger: "", action: $0, canonicalTrigger: "", origin: .unbound, source: nil) }
+        return merged + unbound
+    }
 }
 
 /// The user's keybind values **scoped to the writer's single target file**, plus
@@ -179,6 +208,39 @@ public struct TargetScopedBindings: Sendable, Equatable {
             }
         }
         if !placed { result.append(newValue) }
+        return result
+    }
+
+    /// **Move** a binding that currently comes from a Ghostty *default* (so there is
+    /// no user line for it yet) to a new trigger: write `newTrigger=action` **and**
+    /// disable the original with `oldTrigger=unbind`, so the action fires on the new
+    /// keys only — not on both. This is what inline recording on a `.default` row does,
+    /// matching the "rebind replaces the shortcut" expectation of a normal keybinding
+    /// UI. Rebinding to the same canonical trigger is a no-op. Any existing user entry
+    /// at the old or new trigger is collapsed (last-wins), and unrelated lines keep
+    /// their verbatim raw text (AE2).
+    public func movingDefault(fromTrigger oldTrigger: String, toTrigger newTrigger: String, action: String) -> [String] {
+        let oldCanonical = KeybindTrigger.parse(oldTrigger).canonical()
+        let newCanonical = KeybindTrigger.parse(newTrigger).canonical()
+        // Recording the same keys the default already uses: nothing to move.
+        guard oldCanonical != newCanonical else { return rawValues }
+
+        let newValue = "\(newTrigger)=\(action)"
+        let unbindValue = "\(oldTrigger)=unbind"
+        var result: [String] = []
+        var placedNew = false
+        var placedUnbind = false
+        for (value, canon) in zip(rawValues, canonicalTriggers) {
+            if canon == newCanonical {
+                if !placedNew { result.append(newValue); placedNew = true }
+            } else if canon == oldCanonical {
+                if !placedUnbind { result.append(unbindValue); placedUnbind = true }
+            } else {
+                result.append(value)
+            }
+        }
+        if !placedUnbind { result.append(unbindValue) }
+        if !placedNew { result.append(newValue) }
         return result
     }
 
