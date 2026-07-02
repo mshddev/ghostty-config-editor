@@ -97,9 +97,15 @@ struct OptionRow: View {
     /// Repeatable keys (keybind, palette, …) can't be edited from a single inline
     /// control, so those rows show no editor — their values are summarised in the
     /// subtitle and edited via "Reveal in editor" in the info popover.
+    ///
+    /// `font-family` and its bold/italic variants are the exception: they're
+    /// repeatable (primary + fallbacks, e.g. a Nerd Font for icons), but a font is
+    /// something you pick from a list, so they get a dedicated font picker instead.
     @ViewBuilder
     private var editor: some View {
-        if !option.option.isRepeatable {
+        if option.option.name.hasPrefix("font-family") {
+            FontFamilyEditor(option: option)
+        } else if !option.option.isRepeatable {
             InlineOptionEditor(option: option)
         }
     }
@@ -420,6 +426,308 @@ private struct InlineOptionEditor: View {
                 apply(text)
             }
         )
+    }
+}
+
+// MARK: - Font family picker
+
+/// A font selector for `font-family` (and its bold/italic variants). Ghostty treats
+/// these as repeatable — the first value is the primary face and any others are
+/// fallbacks for glyphs it lacks (the common "add a Nerd Font for icons" setup) —
+/// so this is a multi-select over the fonts Ghostty can actually use (`+list-fonts`,
+/// with the system font list as a fallback). Each write reuses the model's safe
+/// apply path, and an empty selection unsets the key back to Ghostty's built-in font.
+private struct FontFamilyEditor: View {
+    @Environment(AppModel.self) private var model
+    let option: MergedOption
+    @State private var showingPicker = false
+    @State private var search = ""
+
+    var body: some View {
+        Button { showingPicker.toggle() } label: { label }
+            .buttonStyle(.bordered)
+            .controlSize(.small)
+            .help("Choose a font family")
+            .disabled(isApplyingThis)
+            // Prefetch the font list when the row appears so the picker opens ready,
+            // rather than paying `+list-fonts` on first click. Cached after the first
+            // load, so the other font-family rows don't reload it.
+            .task { await model.loadFontsIfNeeded() }
+            .popover(isPresented: $showingPicker, arrowEdge: .bottom) { picker }
+    }
+
+    // MARK: Button label
+
+    private var label: some View {
+        HStack(spacing: 5) {
+            Image(systemName: "textformat")
+                .imageScale(.small)
+                .foregroundStyle(.secondary)
+            Text(summary)
+                .font(primaryPreviewFont)
+                .lineLimit(1)
+                .truncationMode(.middle)
+                .frame(maxWidth: 150, alignment: .leading)
+                .fixedSize(horizontal: true, vertical: false)
+            Image(systemName: "chevron.up.chevron.down")
+                .imageScale(.small)
+                .foregroundStyle(.secondary)
+        }
+    }
+
+    /// The live option from the model, not the captured `option` prop. A `.popover`
+    /// holds onto the view value it was presented with, so reading `option` directly
+    /// leaves the picker's checkmarks/labels stale after an in-place apply (the write
+    /// lands and the row's button updates, but the open popover keeps the old values).
+    /// Reading the observable model re-renders the popover on every write.
+    private var liveOption: MergedOption {
+        model.browser?.merged.option(named: option.option.name) ?? option
+    }
+
+    /// The current families, or empty when the option is unset (Ghostty's built-in).
+    private var selected: [String] { liveOption.isSet ? liveOption.userValues : [] }
+
+    private var summary: String {
+        if let primary = selected.first {
+            let name = displayName(primary)
+            return selected.count > 1 ? "\(name)  +\(selected.count - 1)" : name
+        }
+        let def = option.option.defaultValue
+        return def.isEmpty ? "Default font" : displayName(def)
+    }
+
+    /// Preview the chosen primary face in its own typeface (falls back to the system
+    /// font when the name doesn't resolve), like a real font menu.
+    private var primaryPreviewFont: Font {
+        if let primary = selected.first { return .custom(displayName(primary), size: 12) }
+        return .system(size: 12)
+    }
+
+    // MARK: Popover
+
+    private var picker: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Text(option.option.name)
+                .font(.callout.weight(.semibold))
+                .lineLimit(1)
+
+            TextField("Search fonts", text: $search)
+                .textFieldStyle(.roundedBorder)
+
+            if !searchTrimmed.isEmpty && !searchMatchesKnown {
+                Button {
+                    toggle(searchTrimmed)
+                    search = ""
+                } label: {
+                    Label("Use “\(searchTrimmed)”", systemImage: "plus.circle")
+                        .font(.caption)
+                }
+                .buttonStyle(.link)
+            }
+
+            ScrollView {
+                LazyVStack(alignment: .leading, spacing: 0) {
+                    if pickerRows.isEmpty {
+                        Text(fonts.isEmpty ? "Loading fonts…" : "No fonts match “\(searchTrimmed)”.")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                            .padding(.vertical, 6)
+                    } else {
+                        // One ForEach with section-scoped ids (not two ForEaches over a
+                        // shared \.self key): when a font moves between Selected and All
+                        // fonts its identity changes, so LazyVStack rebuilds it fresh
+                        // instead of reusing a cached row with a now-wrong checkmark.
+                        ForEach(pickerRows) { row in
+                            switch row {
+                            case .header(let title):
+                                if title == "All fonts" { Divider().padding(.vertical, 5) }
+                                sectionHeader(title)
+                            case .font(_, let value):
+                                FontRow(
+                                    name: displayName(value),
+                                    selectionLabel: selectionLabel(for: value),
+                                    isSelected: isSelected(value),
+                                    onTap: { toggle(value) }
+                                )
+                            }
+                        }
+                    }
+                }
+            }
+            .frame(height: 300)
+
+            Divider()
+            HStack(alignment: .top, spacing: 8) {
+                Text("The first font is the primary face; add more as fallbacks for glyphs it’s missing (e.g. a Nerd Font for icons).")
+                    .font(.caption2)
+                    .foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+                Spacer(minLength: 4)
+                if liveOption.isSet {
+                    Button("Reset") { apply([]) }
+                        .controlSize(.small)
+                        .help("Clear these fonts and use Ghostty’s built-in default")
+                }
+            }
+        }
+        .padding(12)
+        .frame(width: 300)
+    }
+
+    private func sectionHeader(_ text: String) -> some View {
+        Text(text.uppercased())
+            .font(.caption2.weight(.semibold))
+            .foregroundStyle(.secondary)
+            .padding(.top, 2)
+            .padding(.bottom, 3)
+    }
+
+    /// One entry in the picker list — a section header or a font, each with a stable,
+    /// section-scoped identity so `ForEach`/`LazyVStack` never reuse a row across
+    /// sections (which left a moved font showing a stale checkmark).
+    private enum PickerRow: Identifiable {
+        case header(String)
+        case font(section: String, value: String)
+
+        var id: String {
+            switch self {
+            case .header(let title): return "header:\(title)"
+            case .font(let section, let value): return "\(section):\(value)"
+            }
+        }
+    }
+
+    private var pickerRows: [PickerRow] {
+        var rows: [PickerRow] = []
+        let sel = filteredSelected
+        let rest = filteredRest
+        if !sel.isEmpty {
+            rows.append(.header("Selected"))
+            rows.append(contentsOf: sel.map { .font(section: "selected", value: $0) })
+        }
+        if !rest.isEmpty {
+            if !sel.isEmpty { rows.append(.header("All fonts")) }
+            rows.append(contentsOf: rest.map { .font(section: "all", value: $0) })
+        }
+        return rows
+    }
+
+    private func isSelected(_ value: String) -> Bool {
+        selected.contains { normalized($0) == normalized(value) }
+    }
+
+    /// "Primary" for the first family, "Fallback" for the rest, or nil when unselected.
+    private func selectionLabel(for value: String) -> String? {
+        guard let idx = selected.firstIndex(where: { normalized($0) == normalized(value) }) else { return nil }
+        return idx == 0 ? "Primary" : "Fallback"
+    }
+
+    // MARK: Font list
+
+    /// Ghostty's own discovery (`+list-fonts`) is the source of truth — it includes
+    /// faces Ghostty ships that aren't installed system-wide — with the AppKit family
+    /// list as a fallback so the picker is never empty while `+list-fonts` is loading
+    /// or if it returns nothing.
+    private var fonts: [String] {
+        model.fonts.isEmpty ? NSFontManager.shared.availableFontFamilies : model.fonts
+    }
+
+    private var searchTrimmed: String { search.trimmingCharacters(in: .whitespaces) }
+
+    /// True when the search text already names a known or selected font, so the
+    /// "Use “…”" free-text affordance doesn't shadow an existing entry.
+    private var searchMatchesKnown: Bool {
+        guard !searchTrimmed.isEmpty else { return false }
+        return (fonts + selected).contains { normalized($0) == normalized(searchTrimmed) }
+    }
+
+    private var filteredSelected: [String] { filterBySearch(selected) }
+
+    private var filteredRest: [String] {
+        let selectedNames = Set(selected.map(normalized))
+        return filterBySearch(fonts.filter { !selectedNames.contains(normalized($0)) })
+    }
+
+    private func filterBySearch(_ list: [String]) -> [String] {
+        guard !searchTrimmed.isEmpty else { return list }
+        let needle = normalized(searchTrimmed)
+        return list.filter { normalized($0).contains(needle) }
+    }
+
+    private var isApplyingThis: Bool {
+        model.applyingOptionName == option.option.name && model.applyState == .applying
+    }
+
+    /// Ghostty accepts quoted font names (`font-family = "MesloLGS NF"`); the quotes
+    /// are just a quoting mechanism, so strip one surrounding pair for display and
+    /// for the custom-font preview (a quoted name won't resolve).
+    private func displayName(_ font: String) -> String {
+        let trimmed = font.trimmingCharacters(in: .whitespaces)
+        if trimmed.count >= 2, trimmed.hasPrefix("\""), trimmed.hasSuffix("\"") {
+            return String(trimmed.dropFirst().dropLast())
+        }
+        return trimmed
+    }
+
+    /// The comparison key for a font: de-quoted and case-folded, so a quoted saved
+    /// value (`"MesloLGS NF"`) matches the unquoted name from `+list-fonts`
+    /// (`MesloLGS NF`) and the same font never appears in both sections — or gets
+    /// appended a second time.
+    private func normalized(_ font: String) -> String { displayName(font).lowercased() }
+
+    // MARK: Mutations
+
+    /// Add the font if it isn't selected, or remove it if it is — preserving the
+    /// order of the remaining families so the primary/fallback ordering is stable.
+    private func toggle(_ font: String) {
+        var values = selected
+        if let idx = values.firstIndex(where: { normalized($0) == normalized(font) }) {
+            values.remove(at: idx)
+        } else {
+            values.append(font)
+        }
+        apply(values)
+    }
+
+    /// Route through the model's safe apply path. An empty list unsets the key
+    /// (the writer removes every `font-family` line), reverting to the built-in font.
+    private func apply(_ values: [String]) {
+        Task { await model.applyEdit(option: option, values: values) }
+    }
+}
+
+/// One row in the font picker. A value-driven `View` (not a helper function) so its
+/// checkmark and label follow `isSelected`/`selectionLabel` when the selection
+/// changes — the row updates in place instead of holding a stale rendering.
+private struct FontRow: View {
+    let name: String
+    let selectionLabel: String?
+    let isSelected: Bool
+    let onTap: () -> Void
+
+    var body: some View {
+        Button(action: onTap) {
+            HStack(spacing: 8) {
+                Image(systemName: isSelected ? "checkmark.circle.fill" : "circle")
+                    .imageScale(.small)
+                    .foregroundStyle(isSelected ? Color.accentColor : Color.secondary.opacity(0.35))
+                Text(name)
+                    // Each name rendered in its own face, so the list reads like a
+                    // font menu; unresolvable names fall back to the system font.
+                    .font(.custom(name, size: 14))
+                    .lineLimit(1)
+                Spacer(minLength: 4)
+                if let selectionLabel {
+                    Text(selectionLabel)
+                        .font(.caption2)
+                        .foregroundStyle(.secondary)
+                }
+            }
+            .contentShape(Rectangle())
+            .padding(.vertical, 3)
+            .padding(.horizontal, 2)
+        }
+        .buttonStyle(.plain)
     }
 }
 

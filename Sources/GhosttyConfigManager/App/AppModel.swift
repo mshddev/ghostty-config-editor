@@ -261,12 +261,29 @@ public final class AppModel {
         browser?.merged.option(named: "theme").flatMap { $0.isSet ? $0.userValues.first : nil }
     }
 
-    /// Load the theme + font lists once, lazily (the Themes tab triggers this).
-    public func loadThemesIfNeeded() async {
-        guard themes.isEmpty, let environment else { return }
+    /// Lazily create (once) the shared theme/font provider for the current
+    /// environment. Themes, theme colors, and the font list all draw on the same
+    /// instance so its caches are shared no matter which surface loads first.
+    private func themeProviderIfAvailable() -> ThemeProvider? {
+        if let themeProvider { return themeProvider }
+        guard let environment else { return nil }
         let provider = ThemeProvider.live(environment)
         themeProvider = provider
+        return provider
+    }
+
+    /// Load the theme + font lists once, lazily (the Themes tab triggers this).
+    public func loadThemesIfNeeded() async {
+        guard themes.isEmpty, let provider = themeProviderIfAvailable() else { return }
         themes = (try? await provider.themes()) ?? []
+        if fonts.isEmpty { fonts = (try? await provider.fonts()) ?? [] }
+    }
+
+    /// Load the available font families once, lazily. The font-family picker in the
+    /// Font category triggers this, so the list is populated without first opening
+    /// the Themes tab (both share the provider's cache via `themeProviderIfAvailable`).
+    public func loadFontsIfNeeded() async {
+        guard fonts.isEmpty, let provider = themeProviderIfAvailable() else { return }
         fonts = (try? await provider.fonts()) ?? []
     }
 
