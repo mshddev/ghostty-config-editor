@@ -333,6 +333,12 @@ public final class AppModel {
     /// Ghostty's defaults merged with the user's bindings, marking overrides (RK1),
     /// then padded with an empty row per still-unbound action so the whole action set
     /// is listed and bindable inline (like a system shortcuts pane).
+    ///
+    /// "Disabled default" rows are hidden: they're noisy and usually duplicate an
+    /// action that's rebound elsewhere ("Restore default" on that action re-enables the
+    /// default instead). Dropping them *before* `withUnboundActions` means an action
+    /// whose only shortcut was disabled reappears as a bindable "no shortcut" row rather
+    /// than vanishing.
     public var mergedKeybinds: [MergedKeybind] {
         let user = KeybindMerge.userBindings(
             values: keybindOption?.userValues ?? [],
@@ -340,7 +346,46 @@ public final class AppModel {
             knownActions: keybindActionNames
         )
         let merged = KeybindMerge.merge(defaults: keybindDefaults, user: user)
+            .filter { $0.origin != .userDisablesDefault }
         return KeybindMerge.withUnboundActions(merged, allActions: keybindActions)
+    }
+
+    /// Canonical default trigger(s) grouped by *full* action (params included, so
+    /// `goto_split:previous` and `goto_split:next` stay distinct), from Ghostty's defaults.
+    private var defaultTriggersByAction: [String: Set<String>] {
+        Dictionary(grouping: keybindDefaults, by: \.action)
+            .mapValues { Set($0.map(\.canonicalTrigger)) }
+    }
+
+    /// Actions that have a Ghostty default *and* are currently customized — either the
+    /// user disabled one of the action's default triggers, or bound the action to some
+    /// trigger. These are the rows that should offer "Restore default".
+    public var restorableActions: Set<String> {
+        let byAction = defaultTriggersByAction
+        guard !byAction.isEmpty else { return [] }
+        let user = KeybindMerge.userBindings(
+            values: keybindOption?.userValues ?? [],
+            sources: keybindOption?.sources ?? [],
+            knownActions: keybindActionNames
+        )
+        var result = Set<String>()
+        for binding in user {
+            if binding.isUnbind {
+                for (action, triggers) in byAction where triggers.contains(binding.canonicalTrigger) {
+                    result.insert(action)
+                }
+            } else if byAction[binding.keybind.action] != nil {
+                result.insert(binding.keybind.action)
+            }
+        }
+        return result
+    }
+
+    /// Revert an action to Ghostty's default — drops the user's binding(s) for it and
+    /// re-enables any of its default triggers the user disabled (via the kit transform).
+    public func restoreActionToDefault(action: String) async {
+        let triggers = defaultTriggersByAction[action] ?? []
+        await writeKeybinds { $0.removingAction(action, defaultTriggers: triggers, knownActions: keybindActionNames) }
     }
 
     /// The single file the writer would target for `keybind` (R8). New/edited

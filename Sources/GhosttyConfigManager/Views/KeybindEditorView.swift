@@ -87,8 +87,10 @@ struct KeybindEditorView: View {
     }
 
     private func bindingList(_ rows: [MergedKeybind]) -> some View {
-        List(rows) { row in
-            KeybindRow(row: row, isReadOnly: model.isReadOnly(row))
+        // Computed once per render, not per row.
+        let restorable = model.restorableActions
+        return List(rows) { row in
+            KeybindRow(row: row, isReadOnly: model.isReadOnly(row), canRestoreDefault: restorable.contains(row.action))
         }
     }
 
@@ -155,6 +157,9 @@ private struct KeybindRow: View {
     @Environment(AppModel.self) private var model
     let row: MergedKeybind
     let isReadOnly: Bool
+    /// True when this row's action has a Ghostty default the user has changed, so a
+    /// "Restore default" item is offered (re-enables the default, drops the rebind).
+    let canRestoreDefault: Bool
 
     /// A soft, transient warning from the recorder (e.g. "add a modifier").
     @State private var warning: String?
@@ -307,23 +312,41 @@ private struct KeybindRow: View {
         .popover(isPresented: $showingAddAnother, arrowEdge: .bottom) { addAnotherEditor }
     }
 
+    /// True when this row's origin has its own removal/disable action in the menu.
+    private var hasOriginAction: Bool {
+        switch row.origin {
+        case .default, .userAdded, .userOverridesDefault: return true
+        case .userDisablesDefault, .unbound: return false
+        }
+    }
+
+    private var canRestore: Bool { canRestoreDefault && !isReadOnly }
+
     @ViewBuilder
     private var menuOriginActions: some View {
+        // One divider before the management section, only if it has any items.
+        if canRestore || hasOriginAction { Divider() }
+        if canRestore {
+            Button("Restore default") {
+                perform { await model.restoreActionToDefault(action: row.action) }
+            }
+        }
         switch row.origin {
         case .default:
-            Divider()
             Button("Disable this default") {
                 perform { await model.unbindDefaultKeybind(trigger: row.canonicalTrigger) }
             }
         case .userAdded:
-            Divider()
             Button("Remove binding", role: .destructive) {
                 perform { await model.removeKeybind(trigger: row.canonicalTrigger) }
             }
         case .userOverridesDefault:
-            Divider()
-            Button("Reset to default", role: .destructive) {
-                perform { await model.removeKeybind(trigger: row.canonicalTrigger) }
+            // The action-wide "Restore default" already covers reverting an override;
+            // only offer a separate reset when it isn't shown.
+            if !canRestore {
+                Button("Reset to default", role: .destructive) {
+                    perform { await model.removeKeybind(trigger: row.canonicalTrigger) }
+                }
             }
         case .userDisablesDefault, .unbound:
             EmptyView()
