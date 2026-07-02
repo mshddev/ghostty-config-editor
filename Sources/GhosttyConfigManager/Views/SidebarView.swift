@@ -23,7 +23,7 @@ struct SidebarView: View {
     static func icon(for category: String) -> String {
         switch category {
         case "Font": return "textformat"
-        case "Colors & Theme": return "paintpalette"
+        case "Colors": return "paintpalette"
         case "Cursor": return "cursorarrow"
         case "Mouse": return "computermouse"
         case "Window": return "macwindow"

@@ -483,7 +483,13 @@ public final class AppModel {
         }
         switch selection {
         case .category(let category):
-            return browser.options(in: category)
+            // `theme` has a dedicated visual home in the Themes browser, so it's
+            // dropped from the Colors category list — otherwise the sidebar shows
+            // two ways to set the same key ("Themes" + a raw `theme` field). It
+            // stays reachable via search and the Customized view, which is the only
+            // in-app path to values the picker can't express (a `light:…,dark:…`
+            // pair, or a theme name not in `+list-themes`).
+            return browser.options(in: category).filter { $0.option.name != "theme" }
         case .customized:
             return browser.customizedOptions
         case .problems:

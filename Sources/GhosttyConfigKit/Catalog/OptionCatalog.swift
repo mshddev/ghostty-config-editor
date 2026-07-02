@@ -119,7 +119,7 @@ public enum OptionCategorizer {
     /// Preferred display order for the sidebar.
     public static let displayOrder: [String] = [
         "Font",
-        "Colors & Theme",
+        "Colors",
         "Cursor",
         "Mouse",
         "Window",
@@ -143,13 +143,13 @@ public enum OptionCategorizer {
         "font": "Font",
         "adjust": "Font",
         "grapheme": "Font",
-        "palette": "Colors & Theme",
-        "theme": "Colors & Theme",
-        "background": "Colors & Theme",
-        "foreground": "Colors & Theme",
-        "selection": "Colors & Theme",
-        "bold": "Colors & Theme",
-        "minimum": "Colors & Theme",
+        "palette": "Colors",
+        "theme": "Colors",
+        "background": "Colors",
+        "foreground": "Colors",
+        "selection": "Colors",
+        "bold": "Colors",
+        "minimum": "Colors",
         "split": "Tabs & Splits",
         "unfocused": "Tabs & Splits",
         "cursor": "Cursor",
@@ -184,8 +184,8 @@ public enum OptionCategorizer {
 
     /// Exact-name overrides for options whose prefix would mis-categorize them.
     private static let nameOverrides: [String: String] = [
-        "theme": "Colors & Theme",
-        "bold-is-bright": "Colors & Theme",
+        "theme": "Colors",
+        "bold-is-bright": "Colors",
         "tab-bar": "Tabs & Splits",
         // Kept on macOS (OSC 9/777 escape-sequence notifications work here), so it
         // must not land in the otherwise-empty "Linux / GTK" group via its

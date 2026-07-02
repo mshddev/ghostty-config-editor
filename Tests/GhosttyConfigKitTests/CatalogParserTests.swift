@@ -333,7 +333,7 @@ final class CatalogParserTests: XCTestCase {
         let catalog = try realCatalog()
         XCTAssertEqual(catalog.option(named: "font-size")?.category, "Font")
         XCTAssertEqual(catalog.option(named: "keybind")?.category, "Keybindings")
-        XCTAssertEqual(catalog.option(named: "theme")?.category, "Colors & Theme")
+        XCTAssertEqual(catalog.option(named: "theme")?.category, "Colors")
         // Known categories sort ahead of "General".
         let cats = catalog.categories
         XCTAssertEqual(cats.first, "Font")
