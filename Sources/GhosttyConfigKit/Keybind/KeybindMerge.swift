@@ -275,4 +275,20 @@ public struct TargetScopedBindings: Sendable, Equatable {
     public func unbindingDefault(trigger: String) -> [String] {
         addingOrUpdating(trigger: trigger, action: "unbind")
     }
+
+    /// Revert an action to Ghostty's default by dropping every target-file line that
+    /// (a) binds this action, or (b) `=unbind`s one of the action's default triggers
+    /// (`defaultTriggers`, canonical) — so a rebind *and* the disable it wrote are both
+    /// removed and the default reactivates. Backs "Restore default". Unrelated lines
+    /// keep their verbatim raw text.
+    public func removingAction(_ action: String, defaultTriggers: Set<String>, knownActions: Set<String> = []) -> [String] {
+        // Match the *full* action (params included: `goto_split:previous`, not just
+        // `goto_split`) so restoring one param variant doesn't wipe its siblings.
+        zip(rawValues, canonicalTriggers).filter { value, canon in
+            guard let bind = Keybind.parse(value: value, knownActions: knownActions).binding else { return true }
+            if bind.action == action { return false }
+            if bind.actionName == "unbind", let canon, defaultTriggers.contains(canon) { return false }
+            return true
+        }.map(\.0)
+    }
 }

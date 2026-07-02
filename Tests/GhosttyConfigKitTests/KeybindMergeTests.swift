@@ -200,6 +200,30 @@ final class KeybindMergeTests: XCTestCase {
         XCTAssertTrue(result.contains("super+y=new_tab"))
     }
 
+    // MARK: - removingAction() — Restore default
+
+    func testRemovingActionDropsRebindAndReenablesDisabledDefault() {
+        // The goto_split case: the user disabled the ⌘[ default and rebound the action
+        // to ⌃[. Restoring drops BOTH, reverting to Ghostty's ⌘[ default.
+        // A sibling param variant (goto_split:next) must survive — restore is per full
+        // action, not per action name.
+        let s = scoped(["cmd+[=unbind", "ctrl+[=goto_split:previous", "ctrl+]=goto_split:next", "super+b=new_window"],
+                       ["unbind", "goto_split", "new_window"])
+        let result = s.removingAction("goto_split:previous",
+                                      defaultTriggers: ["super+["],
+                                      knownActions: ["unbind", "goto_split", "new_window"])
+        XCTAssertEqual(result, ["ctrl+]=goto_split:next", "super+b=new_window"],
+                       "the goto_split:previous rebind and its unbind go; goto_split:next and others stay")
+    }
+
+    func testRemovingActionLeavesUnrelatedUnbindsAndBindingsAlone() {
+        // An unbind of a trigger that is NOT this action's default must be kept.
+        let s = scoped(["cmd+q=unbind", "ctrl+x=new_tab"], ["unbind", "new_tab"])
+        let result = s.removingAction("new_tab", defaultTriggers: ["super+t"],
+                                      knownActions: ["unbind", "new_tab"])
+        XCTAssertEqual(result, ["cmd+q=unbind"], "only the new_tab binding is removed; the unrelated unbind stays")
+    }
+
     // MARK: - withUnboundActions() — list the whole action set
 
     func testWithUnboundActionsAppendsEmptyRowsForActionsWithNoBinding() {
