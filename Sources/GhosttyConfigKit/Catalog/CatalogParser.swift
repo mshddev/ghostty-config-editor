@@ -59,6 +59,30 @@ public enum CatalogParser {
         "window-decoration": ["client", "server"], // client/server-side decorations are GTK/X11/Wayland
     ]
 
+    /// Options that accept `true`/`false` *alongside* other values — boolean
+    /// impostors (`confirm-close-surface`) and open-valued booleans
+    /// (`background-blur`). The editor should present these toggle-first, exposing
+    /// the extra states secondarily (U10), rather than as a bare dropdown/field.
+    /// This is a *presentation hint only* — `valueType` is left untouched, so the
+    /// underlying `.enumeration`/`.string` typing (and its lossless editing) is
+    /// preserved. Curated + version-audited like `curatedEnumValues` /
+    /// `openValuedOptions`.
+    private static let booleanishOptions: Set<String> = [
+        "confirm-close-surface",
+        "custom-shader-animation",
+        "macos-option-as-alt",
+        "link-previews",
+        "window-decoration",
+        "background-blur",
+    ]
+
+    /// True when an option accepts `true`/`false` among other values, so the editor
+    /// renders toggle-first (U10). A plain `.boolean` option is *not* flagged — its
+    /// type already implies a toggle.
+    public static func isBooleanish(_ name: String) -> Bool {
+        booleanishOptions.contains(name)
+    }
+
     /// Options that document a finite value set but also accept values *beyond*
     /// it, so a closed dropdown would be wrong. They keep a free-text editor (the
     /// documented values still show as a read-only reference). Verified against

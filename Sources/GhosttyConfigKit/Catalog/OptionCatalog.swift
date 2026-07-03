@@ -12,6 +12,22 @@ public enum OptionValueType: String, Sendable, Hashable, Codable {
     case unknown
 }
 
+public extension OptionValueType {
+    /// A plain-language name for the kind of value (CONTENT-7), or `nil` for
+    /// `.unknown` — the catalog never invents a type when the docs give no signal,
+    /// so the UI shows nothing rather than guessing.
+    var displayName: String? {
+        switch self {
+        case .boolean: return "On/off"
+        case .number: return "Number"
+        case .color: return "Color"
+        case .enumeration: return "Choice"
+        case .string: return "Text"
+        case .unknown: return nil
+        }
+    }
+}
+
 /// One config option as described by the user's installed Ghostty (R1, R2).
 public struct CatalogOption: Sendable, Hashable, Identifiable, Codable {
     public var id: String { name }
@@ -94,6 +110,20 @@ public extension CatalogOption {
     /// A best-effort one-line description (curated summary → first doc sentence →
     /// empty). May be empty; the always-present `displayTitle` carries R1.
     var shortSummary: String { LabelCatalog.bundled.shortSummary(for: name, documentation: documentation) }
+
+    /// Curated range/step/unit/style for a numeric option, or `nil` when none is
+    /// specified (the editor then uses a plain number field). (A4, CONTROLS-1.)
+    var numericSpec: NumericSpec? { NumericSpecCatalog.bundled.spec(for: name) }
+
+    /// True when this option accepts `true`/`false` alongside other values, so the
+    /// editor renders toggle-first (A4, U10). `valueType` is unchanged.
+    var isBooleanish: Bool { CatalogParser.isBooleanish(name) }
+
+    /// A friendly label for one of this option's enum values (A4, CONTENT-8),
+    /// falling back to the raw value when none is curated.
+    func enumValueLabel(_ value: String) -> String {
+        EnumValueLabels.bundled.label(option: name, value: value)
+    }
 }
 
 /// The full set of options for a given Ghostty version (R1).

@@ -1,0 +1,9 @@
+{
+  "version": 1,
+  "labels": {
+    "link-previews": { "true": "Always", "false": "Never", "osc8": "Only OSC 8 hyperlinks" },
+    "confirm-close-surface": { "true": "Always ask", "false": "Never ask", "always": "Always, even when idle" },
+    "custom-shader-animation": { "true": "On", "false": "Off", "always": "Always, even when unfocused" },
+    "macos-option-as-alt": { "true": "Both Option keys", "false": "Off", "left": "Left Option only", "right": "Right Option only" }
+  }
+}
