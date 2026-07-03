@@ -22,7 +22,9 @@ struct SidebarView: View {
 
     static func icon(for category: String) -> String {
         switch category {
-        case "Appearance": return "paintpalette"
+        // Distinct from the Themes row's `paintpalette` above, so the two adjacent
+        // color-ish entries don't read as the same icon.
+        case "Appearance": return "paintbrush"
         case "Font & Text": return "textformat"
         case "Window": return "macwindow"
         case "Tabs & Splits": return "rectangle.split.2x1"
