@@ -16,11 +16,10 @@ struct KeybindEditorView: View {
     var body: some View {
         let all = model.mergedKeybinds
         let rows = filtered(all)
-        let boundCount = all.filter { $0.origin != .unbound }.count
         return VStack(spacing: 0) {
             SurfaceHeader(
                 title: OptionCategorizer.keybindingsCategory,
-                subtitle: didLoad ? "\(boundCount) shortcut\(boundCount == 1 ? "" : "s")" : nil,
+                subtitle: didLoad ? countSummary(all) : nil,
                 searchText: $filter,
                 searchPrompt: "Filter by action or shortcut"
             )
@@ -43,13 +42,24 @@ struct KeybindEditorView: View {
         }
     }
 
-    /// Filter by action name or shortcut text (case-insensitive), so ~140 rows stay
-    /// navigable.
+    /// The header count, matching the visible rows: every listed action, and how many
+    /// carry an active shortcut (F5 — the old "N shortcuts" undercounted against the
+    /// ~140 rows on screen). Disabled defaults aren't "with a shortcut".
+    private func countSummary(_ all: [MergedKeybind]) -> String {
+        let total = all.count
+        let withShortcut = all.filter { $0.origin != .unbound && $0.origin != .userDisablesDefault }.count
+        return "\(total) actions, \(withShortcut) with a shortcut"
+    }
+
+    /// Filter by friendly title, raw action name, or shortcut text (case-insensitive),
+    /// so ~140 rows stay navigable. Matches the raw id too (R8: a power user who knows
+    /// `copy_to_clipboard` still finds it even though the row now leads with a label).
     private func filtered(_ rows: [MergedKeybind]) -> [MergedKeybind] {
         let q = filter.trimmingCharacters(in: .whitespaces).lowercased()
         guard !q.isEmpty else { return rows }
         return rows.filter {
             $0.action.lowercased().contains(q)
+                || ActionLabelCatalog.bundled.displayTitle(for: $0.action).lowercased().contains(q)
                 || $0.trigger.lowercased().contains(q)
                 || KeybindTrigger.displaySymbol(for: $0.trigger).lowercased().contains(q)
         }
@@ -151,11 +161,23 @@ private struct KeybindRow: View {
         }
         .padding(.vertical, RowMetrics.rowVerticalPadding)
         .accessibilityElement(children: .combine)
-        .accessibilityLabel("\(row.action), \(triggerAccessibilityValue), \(badgeText)")
+        .accessibilityLabel("\(friendlyTitle), \(triggerAccessibilityValue), \(badgeText)")
     }
 
     private var isDisabled: Bool { row.origin == .userDisablesDefault }
     private var isUnbound: Bool { row.origin == .unbound }
+
+    /// The friendly action title (A2), including any humanized `:param` — the primary
+    /// line now, with the raw id demoted to a caption (F5, Open Question #4).
+    private var friendlyTitle: String { ActionLabelCatalog.bundled.displayTitle(for: row.action) }
+
+    /// A one-line description for the action, or empty when none is curated. Keyed by the
+    /// param-less action name (`goto_split:previous` → `goto_split`), so param variants
+    /// share the base action's summary.
+    private var actionSummary: String {
+        let base = row.action.split(separator: ":", maxSplits: 1).first.map(String.init) ?? row.action
+        return ActionLabelCatalog.bundled.shortSummary(forAction: base.trimmingCharacters(in: .whitespaces))
+    }
 
     private var triggerAccessibilityValue: String {
         isUnbound ? "no shortcut" : "bound to \(KeybindTrigger.displaySymbol(for: row.trigger))"
@@ -164,15 +186,31 @@ private struct KeybindRow: View {
     // MARK: Action (the config item)
 
     private var actionColumn: some View {
-        VStack(alignment: .leading, spacing: 3) {
-            Text(row.action)
-                .font(.body.monospaced())
+        VStack(alignment: .leading, spacing: 2) {
+            // Primary: the friendly title (system font, so it reads as a name, not code).
+            Text(friendlyTitle)
+                .font(.body)
                 .foregroundStyle(actionColor)
                 .strikethrough(isDisabled, color: .secondary)
                 .lineLimit(1)
-                .truncationMode(.middle)
+                .truncationMode(.tail)
+            // Secondary: a one-line summary when curated.
+            if !actionSummary.isEmpty {
+                Text(actionSummary)
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .lineLimit(1)
+                    .truncationMode(.tail)
+            }
             HStack(spacing: 6) {
                 badge
+                // The raw id + params, demoted to a caption (still visible for power
+                // users, and searchable — R8 / Open Question #4).
+                Text(row.action)
+                    .font(.caption2.monospaced())
+                    .foregroundStyle(.tertiary)
+                    .lineLimit(1)
+                    .truncationMode(.middle)
                 if let warning {
                     Label(warning, systemImage: "exclamationmark.triangle.fill")
                         .font(.caption2)
@@ -439,13 +477,16 @@ private struct KeybindRow: View {
             .foregroundStyle(badgeTint)
     }
 
+    /// Origin badge copy, standardized to the app's shared status vocabulary (F5,
+    /// CONTENT-9/10) — matching the option rows' "Default"/"Customized" language, and
+    /// dropping the embedded raw action id (it's now the caption below).
     private var badgeText: String {
         switch row.origin {
-        case .default: return "default"
-        case .userAdded: return "yours"
-        case .userOverridesDefault(let action): return "overrides \(action)"
-        case .userDisablesDefault: return "disabled"
-        case .unbound: return "no shortcut"
+        case .default: return "Default"
+        case .userAdded: return "Customized"
+        case .userOverridesDefault: return "Replaces a default"
+        case .userDisablesDefault: return "Turned off"
+        case .unbound: return "No shortcut"
         }
     }
 
