@@ -104,12 +104,47 @@ struct OptionListView: View {
             Form {
                 Section {
                     ForEach(model.visibleOptions) { option in
-                        OptionRow(option: option)
+                        customizedRow(option)
                     }
                 }
             }
             .formStyle(.grouped)
         }
+    }
+
+    /// A row on the Customized surface. The two flagship keys with a rich dedicated
+    /// editor deep-link to it instead of dead-ending on a raw token (F3): `theme` →
+    /// the Themes browser, `keybind` → the Keyboard Shortcuts surface. Everything else
+    /// edits inline as usual. Only applied on the Customized surface — the plain `.none`
+    /// fallback and search results still render ordinary rows.
+    @ViewBuilder
+    private func customizedRow(_ option: MergedOption) -> some View {
+        if model.selection == .customized, option.option.name == "theme" {
+            DeepLinkRow(
+                title: LabelCatalog.bundled.displayTitle(for: "theme"),
+                value: model.currentTheme ?? "",
+                linkLabel: "Edit in Themes",
+                systemImage: "paintpalette",
+                action: { model.focus(optionNamed: "theme") }
+            )
+        } else if model.selection == .customized, option.option.name == "keybind" {
+            DeepLinkRow(
+                title: OptionCategorizer.keybindingsCategory,
+                subtitle: customizedKeybindSummary(option),
+                linkLabel: "Edit in Keyboard Shortcuts",
+                systemImage: "keyboard",
+                action: { model.focus(optionNamed: "keybind") }
+            )
+        } else {
+            OptionRow(option: option)
+        }
+    }
+
+    /// "N shortcuts customized" for the keybind deep-link — the count of the user's own
+    /// `keybind` lines (each line is one customized trigger, including any `=unbind`).
+    private func customizedKeybindSummary(_ option: MergedOption) -> String {
+        let n = option.userValues.count
+        return "\(n) shortcut\(n == 1 ? "" : "s") customized"
     }
 
     /// True when a search query is active — the flat, ranked-results branch.
@@ -156,14 +191,54 @@ struct OptionListView: View {
         if !model.query.trimmingCharacters(in: .whitespaces).isEmpty {
             ContentUnavailableView.search(text: model.query)
         } else if model.selection == .customized {
-            ContentUnavailableView("Nothing customized yet",
-                                   systemImage: "pencil",
-                                   description: Text("Options you change will show up here."))
+            customizedSpringboard
         } else {
             ContentUnavailableView("No options",
                                    systemImage: "tray",
                                    description: Text("Nothing to show for this selection."))
         }
+    }
+
+    /// The empty-Customized state as a springboard (F3): instead of a dead-end "nothing
+    /// here", offer the three next steps a newcomer actually wants — reusing the same
+    /// jump-in destinations as the welcome pane so the vocabulary stays consistent.
+    private var customizedSpringboard: some View {
+        VStack(spacing: 18) {
+            Image(systemName: "slider.horizontal.3")
+                .font(.system(size: 42))
+                .foregroundStyle(.secondary)
+                .accessibilityHidden(true)
+            VStack(spacing: 4) {
+                Text("Nothing customized yet").font(.title3.weight(.semibold))
+                Text("Changes you make show up here. Start with one of these:")
+                    .font(.callout)
+                    .foregroundStyle(.secondary)
+                    .multilineTextAlignment(.center)
+            }
+            VStack(spacing: 8) {
+                springboardButton("Browse recommended", systemImage: "sparkles") { model.selection = .recommended }
+                springboardButton("Pick a theme", systemImage: "paintpalette") { model.selection = .themes }
+                springboardButton("Describe a change", systemImage: "magnifyingglass") { model.beginFind() }
+            }
+            .frame(maxWidth: 300)
+        }
+        .padding(40)
+    }
+
+    private func springboardButton(_ title: String, systemImage: String, action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            HStack(spacing: 8) {
+                Image(systemName: systemImage).frame(width: 20).accessibilityHidden(true)
+                Text(title)
+                Spacer(minLength: 4)
+                Image(systemName: "chevron.right").font(.caption).foregroundStyle(.tertiary)
+                    .accessibilityHidden(true)
+            }
+            .frame(maxWidth: .infinity)
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.bordered)
+        .controlSize(.large)
     }
 }
 
