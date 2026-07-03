@@ -2,6 +2,38 @@ import SwiftUI
 import AppKit
 import GhosttyConfigKit
 
+/// Window sizing + content-width metrics kept in one place so the WindowGroup
+/// frame, the status view, and the capped content column stay reconciled
+/// (LAYOUT-1, LAYOUT-4, LAYOUT-14). Previously the minimum lived in two frames
+/// and the default was a separate magic number.
+enum WindowMetrics {
+    /// Smallest the window may shrink to — the sidebar plus a still-usable detail column.
+    static let minWidth: CGFloat = 720
+    static let minHeight: CGFloat = 560
+    /// Comfortable first-launch size: room for grouped section cards without the
+    /// old cramped-compact open.
+    static let defaultWidth: CGFloat = 900
+    static let defaultHeight: CGFloat = 700
+    /// The detail column caps here and centers, so a wide window never strands a
+    /// gap between each option's label and its right-aligned control.
+    static let contentMaxWidth: CGFloat = 680
+}
+
+/// Centers a surface in a fixed-width column (the System Settings idiom). Applied
+/// once to `mainColumn` so every surface caps uniformly; below the cap the content
+/// fills the column normally.
+private struct CappedContentColumn: ViewModifier {
+    func body(content: Content) -> some View {
+        content
+            .frame(maxWidth: WindowMetrics.contentMaxWidth)
+            .frame(maxWidth: .infinity, alignment: .center)
+    }
+}
+
+private extension View {
+    func cappedContentColumn() -> some View { modifier(CappedContentColumn()) }
+}
+
 /// Without an `.app` bundle (e.g. when launched via `swift run`), macOS treats
 /// the process as a background agent and never shows a window. Promote it to a
 /// regular foreground app and bring it to the front. Inside a real bundle this
@@ -26,15 +58,17 @@ struct GhosttyConfigManagerApp: App {
         WindowGroup {
             RootView()
                 .environment(model)
-                .frame(minWidth: 720, minHeight: 560)
+                .frame(minWidth: WindowMetrics.minWidth, minHeight: WindowMetrics.minHeight)
                 .task { await model.bootstrap() }
         }
         .windowStyle(.titleBar)
         // Each option row right-aligns its value control (the standard settings
-        // idiom), so a wide window strands a big gap between every name and its
-        // field. Open compact — the value controls sit near the names — and let
-        // the lower `minWidth` shrink it further from there.
-        .defaultSize(width: 760, height: 620)
+        // idiom). A centered, width-capped content column (`CappedContentColumn`)
+        // keeps every label beside its control even when the window is wide, so the
+        // window opens at a comfortable size instead of the old cramped-compact
+        // workaround. First launch is centered on screen.
+        .defaultSize(width: WindowMetrics.defaultWidth, height: WindowMetrics.defaultHeight)
+        .defaultPosition(.center)
 
         // Standard ⌘, Preferences window for the auto-reload toggle (U3). The model
         // is injected explicitly — SwiftUI does not propagate `.environment` across
@@ -88,17 +122,24 @@ struct RootView: View {
     }
 
     private func statusView(_ content: some View) -> some View {
-        content.frame(minWidth: 720, minHeight: 560)
+        content.frame(minWidth: WindowMetrics.minWidth, minHeight: WindowMetrics.minHeight)
     }
 
+    /// The detail surface for the current selection, centered in a width-capped
+    /// column (LAYOUT-1). The cap is applied here — once — so every surface
+    /// (Options/Themes/Keybindings/Problems) caps uniformly rather than each view
+    /// re-solving its own width.
     @ViewBuilder
     private var mainColumn: some View {
-        switch model.selection {
-        case .problems: ProblemsView()
-        case .themes: ThemeBrowserView()
-        case .category(let name) where name == OptionCategorizer.keybindingsCategory: KeybindEditorView()
-        default: OptionListView()
+        Group {
+            switch model.selection {
+            case .problems: ProblemsView()
+            case .themes: ThemeBrowserView()
+            case .category(let name) where name == OptionCategorizer.keybindingsCategory: KeybindEditorView()
+            default: OptionListView()
+            }
         }
+        .cappedContentColumn()
     }
 
     /// Every surface is now a self-contained two-column pane (sidebar · content).
