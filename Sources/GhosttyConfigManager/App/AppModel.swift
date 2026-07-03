@@ -88,6 +88,20 @@ public final class AppModel {
         didSet { UserDefaults.standard.set(autoReloadEnabled, forKey: Self.autoReloadDefaultsKey) }
     }
 
+    /// `UserDefaults` key for the starred themes (E4).
+    static let favoriteThemesDefaultsKey = "favoriteThemes"
+
+    /// Themes the user has starred (E4), persisted across launches like
+    /// `autoReloadEnabled`. Stored as a `Set` for O(1) membership in `isFavorite`;
+    /// `didSet` mirrors it to `UserDefaults` as a string array (the value read back
+    /// in `init`). Assigning in `init` does not fire `didSet`, so the initial load
+    /// doesn't write straight back.
+    public private(set) var favoriteThemes: Set<String> = [] {
+        didSet {
+            UserDefaults.standard.set(Array(favoriteThemes), forKey: Self.favoriteThemesDefaultsKey)
+        }
+    }
+
     private var environment: GhosttyEnvironment?
     private var catalog: OptionCatalog?
     private var lastReceipt: WriteReceipt?
@@ -120,6 +134,8 @@ public final class AppModel {
         let defaults = UserDefaults.standard
         defaults.register(defaults: [Self.autoReloadDefaultsKey: true])
         autoReloadEnabled = defaults.bool(forKey: Self.autoReloadDefaultsKey)
+        // Favorites start empty (no key registered) and load from any prior session.
+        favoriteThemes = Set(defaults.stringArray(forKey: Self.favoriteThemesDefaultsKey) ?? [])
     }
 
     public var canUndo: Bool { lastReceipt?.previousText != nil }
@@ -339,14 +355,33 @@ public final class AppModel {
     /// the whole list when the query is empty. The Themes surface renders this instead
     /// of `themes` so its shared-header search field actually filters (C3). Colors still
     /// load lazily per visible row, so filtering never forces an eager color read.
+    /// The match itself is the kit's `ThemeParser.nameMatches` (unit-tested there, E1).
     public var filteredThemes: [ThemeRef] {
         let q = themeQuery.trimmingCharacters(in: .whitespaces)
         guard !q.isEmpty else { return themes }
-        let needle = q.folding(options: [.caseInsensitive, .diacriticInsensitive], locale: nil)
-        return themes.filter {
-            $0.name.folding(options: [.caseInsensitive, .diacriticInsensitive], locale: nil).contains(needle)
-        }
+        return themes.filter { ThemeParser.nameMatches($0.name, query: q) }
     }
+
+    /// The theme names the current `theme = …` value selects — one for a single
+    /// theme, both for a `light:…,dark:…` pair (E2). The Themes browser drives its
+    /// "Current" highlight from membership in this set rather than string equality,
+    /// so both rows of a pair read as current (`ThemeParser.selectedThemeNames`).
+    public var currentSelectedThemeNames: Set<String> {
+        guard let currentTheme else { return [] }
+        return ThemeParser.selectedThemeNames(currentTheme)
+    }
+
+    /// The current theme value parsed into a single/pair selection, for the pinned
+    /// "Current theme" section (E2/E4). `nil` when no theme is set.
+    public var currentThemeSelection: ThemeSelection? {
+        currentTheme.map { ThemeParser.parseThemeSetting($0) }
+    }
+
+    /// Whether a theme's color preview failed to load (E3). Reads the private
+    /// `failedThemes` set so the Themes browser can render a "Preview unavailable"
+    /// placeholder instead of an eternal spinner. Observation tracks the read, so a
+    /// row re-renders the moment its load fails.
+    public func previewFailed(_ name: String) -> Bool { failedThemes.contains(name) }
 
     /// Lazily create (once) the shared theme/font provider for the current
     /// environment. Themes, theme colors, and the font list all draw on the same
@@ -401,10 +436,31 @@ public final class AppModel {
         colorTasks.removeAll()
     }
 
-    /// Apply a theme by writing `theme = …` via the safe write path (F2).
+    /// Apply a theme by writing `theme = …` via the safe write path (F2). Also used
+    /// for a light/dark pair — pass the serialized `light:…,dark:…` string, which is a
+    /// single `theme` value (one line), so the pairing rides the same primitive (E4).
     public func applyTheme(_ name: String) async {
         guard let themeOption = browser?.merged.option(named: "theme") else { return }
         await applyEdit(option: themeOption, values: [name])
+    }
+
+    /// Whether a theme is starred (E4).
+    public func isFavorite(_ name: String) -> Bool { favoriteThemes.contains(name) }
+
+    /// Star / unstar a theme (E4). Persists via the property's `didSet`.
+    public func toggleFavorite(_ name: String) {
+        if favoriteThemes.contains(name) { favoriteThemes.remove(name) }
+        else { favoriteThemes.insert(name) }
+    }
+
+    /// Set `name` as the light or dark member of a `light:…,dark:…` pair, keeping the
+    /// other member from the current selection (E4). The pure composition (which side
+    /// to keep, how to seed from a single/none) is `ThemeParser.updatedPairing`, unit-
+    /// tested in the kit; this method just reads the current selection and writes the
+    /// serialized result through the same safe path as a single theme.
+    public func applyThemeInPair(_ name: String, as role: ThemeRole) async {
+        let selection = ThemeParser.updatedPairing(current: currentThemeSelection, setting: name, as: role)
+        await applyTheme(ThemeParser.serialize(selection))
     }
 
     /// The current theme's palette (index→hex) if its colors have loaded, used to seed
