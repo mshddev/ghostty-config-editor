@@ -111,14 +111,42 @@ private struct CategoryOptionList: View {
                     // Whole category is advanced — show it flat, never collapsed away.
                     Section { rows(advanced) }
                 } else {
-                    Section(isExpanded: $advancedExpanded) {
-                        rows(advanced)
-                    } header: {
-                        Text("Advanced (\(advanced.count))")
+                    // A custom collapsible header rather than `Section(isExpanded:)`:
+                    // the native collapsible section renders no disclosure control in
+                    // the main-column list style, so it silently trapped the Advanced
+                    // options with no way to reveal them (caught in live testing). This
+                    // tappable header + conditional rows is what the plan foresaw for C2.
+                    Section {
+                        advancedHeader(count: advanced.count)
+                        if advancedExpanded {
+                            rows(advanced)
+                        }
                     }
                 }
             }
         }
+    }
+
+    private func advancedHeader(count: Int) -> some View {
+        Button {
+            withAnimation(.easeInOut(duration: 0.15)) { advancedExpanded.toggle() }
+        } label: {
+            HStack(spacing: 6) {
+                Image(systemName: "chevron.right")
+                    .font(.caption.weight(.semibold))
+                    .foregroundStyle(.secondary)
+                    .rotationEffect(.degrees(advancedExpanded ? 90 : 0))
+                Text("Advanced (\(count))")
+                    .font(.subheadline.weight(.semibold))
+                    .foregroundStyle(.secondary)
+                Spacer(minLength: 0)
+            }
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel("Advanced, \(count) options")
+        .accessibilityValue(advancedExpanded ? "Expanded" : "Collapsed")
+        .accessibilityHint("Show or hide advanced options")
     }
 
     private func rows(_ options: [MergedOption]) -> some View {
