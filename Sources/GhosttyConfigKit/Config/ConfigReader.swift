@@ -11,6 +11,32 @@ public enum OptionState: Sendable, Equatable {
     case setNonDefault
 }
 
+public extension OptionState {
+    /// The single badge word every surface uses for this state (CONTENT-6, A5).
+    ///
+    /// One vocabulary for the dot tooltip, the popover badge, and any row subtitle,
+    /// replacing the three divergent phrasings that used to describe the same state
+    /// ("Set to a non-default value" / "customized" / "not set"). Color and icon may
+    /// still carry nuance, but the *words* are now consistent.
+    var displayName: String {
+        switch self {
+        case .setNonDefault: return "Customized"
+        case .setToDefault: return "Using default"
+        case .unset: return "Not set"
+        }
+    }
+
+    /// A short clarifying line for tooltips and subtitles, drawn from the same
+    /// vocabulary as `displayName`.
+    var displayHint: String {
+        switch self {
+        case .setNonDefault: return "Changed from the default."
+        case .setToDefault: return "Set, but to the default value."
+        case .unset: return "Using Ghostty's default."
+        }
+    }
+}
+
 /// A catalog option joined with the user's current value(s) and where they live.
 public struct MergedOption: Sendable, Identifiable {
     public var id: String { option.name }
