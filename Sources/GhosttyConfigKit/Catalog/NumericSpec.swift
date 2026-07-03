@@ -28,6 +28,43 @@ public struct NumericSpec: Sendable, Codable, Equatable {
     }
 }
 
+public extension NumericSpec {
+    /// Clamp a value into `[min, max]`; an absent bound leaves that side open. The
+    /// editor clamps every write so an out-of-range value never reaches disk (B3, R4).
+    func clamp(_ value: Double) -> Double {
+        var v = value
+        if let min, v < min { v = min }
+        if let max, v > max { v = max }
+        return v
+    }
+
+    /// Human-readable byte size for the `.size` style, in decimal (SI) units, e.g.
+    /// `320_000_000` → "320 MB". Deliberately locale-free and single-spaced so it's
+    /// deterministic to assert on and reads the way a storage limit is spoken (B3).
+    static func formatBytes(_ bytes: Double) -> String {
+        let units: [(name: String, factor: Double)] = [
+            ("GB", 1_000_000_000), ("MB", 1_000_000), ("KB", 1_000),
+        ]
+        let b = Swift.max(0, bytes)
+        for unit in units where b >= unit.factor {
+            let scaled = b / unit.factor
+            if scaled.rounded() == scaled { return "\(Int(scaled)) \(unit.name)" }
+            return String(format: "%.1f %@", scaled, unit.name)
+        }
+        return "\(Int(b)) bytes"
+    }
+
+    /// A sensible step for a *spec-less* numeric field, inferred from the option's
+    /// default: a fractional default (e.g. `0.5`) implies fine steps, an integer or
+    /// unparseable default implies whole steps. When this returns 1 the editor drops
+    /// the stepper entirely (a step-of-1 nudge on an unbounded field is noise); a
+    /// fractional step earns a stepper (B3).
+    static func inferredStep(forDefault defaultValue: String) -> Double {
+        guard let value = Double(defaultValue.trimmingCharacters(in: .whitespaces)) else { return 1 }
+        return value.rounded() == value ? 1 : 0.1
+    }
+}
+
 /// Bundled numeric presentation specs, keyed by option name (A4).
 public struct NumericSpecCatalog: Sendable {
     private let specs: [String: NumericSpec]

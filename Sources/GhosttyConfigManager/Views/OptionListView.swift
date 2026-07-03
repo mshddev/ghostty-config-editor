@@ -326,13 +326,13 @@ private struct InlineOptionEditor: View {
             .pickerStyle(.menu)
             .fixedSize()
         case .number:
-            HStack(spacing: 4) {
-                TextField("value", text: $draft)
-                    .textFieldStyle(.roundedBorder)
-                    .frame(width: 80)
-                    .onSubmit { commit() }
-                Stepper("", value: numberBinding, step: 1).labelsHidden()
-            }
+            NumericOptionEditor(
+                option: option,
+                draft: $draft,
+                savedValue: currentValue,
+                placeholder: fieldPlaceholder,
+                apply: { apply($0) }
+            )
         case .color:
             // The swatch opens our own color popover — anchored to the row, and with
             // a text input built in so any value Ghostty accepts (hex, an X11 name,
@@ -497,16 +497,224 @@ private struct InlineOptionEditor: View {
         apply(value)
         showingColorPopover = false
     }
+}
 
-    private var numberBinding: Binding<Double> {
-        Binding(
-            get: { Double(draft) ?? 0 },
-            set: { value in
-                let text = value.truncatingRemainder(dividingBy: 1) == 0 ? String(Int(value)) : String(value)
-                draft = text
-                apply(text)
+// MARK: - Numeric editor (U9)
+
+/// The numeric editing control, chosen by the option's `NumericSpec` (B3):
+///   - `.slider` → a Slider over [min,max] with a live read-out, committing once on
+///     release so the live terminal reloads per gesture, not per pixel
+///   - `.field`  → a clamped number field + debounced stepper, with an optional unit
+///   - `.size`   → a raw byte field with a human-readable size read-out
+///   - no spec   → a plain number field (a stepper appears only when a fractional
+///     default earns one; a step-of-1 nudge on an unbounded field is just noise)
+///
+/// Reads its value from the parent's `draft` (kept in sync with the saved value and
+/// snapped back on a failed write), and clamps every write so nothing out of range
+/// reaches disk. Continuous input is coalesced — the slider commits on release and
+/// the stepper on a short trailing debounce — so a drag or a key-repeat is one write.
+private struct NumericOptionEditor: View {
+    let option: MergedOption
+    @Binding var draft: String
+    let savedValue: String
+    let placeholder: String
+    let apply: (String) -> Void
+
+    /// Live slider position (a Double) distinct from the committed `draft`, so the
+    /// knob can move continuously while only the release writes.
+    @State private var live: Double = 0
+    /// The pending debounced stepper write, cancelled by the next tick so a burst of
+    /// increments collapses to a single write.
+    @State private var pendingStep: Task<Void, Never>?
+
+    private var spec: NumericSpec? { option.option.numericSpec }
+
+    var body: some View {
+        Group {
+            switch spec?.style {
+            case .slider where sliderRange != nil:
+                sliderEditor(spec!, range: sliderRange!)
+            case .field:
+                fieldEditor(spec!)
+            case .size:
+                sizeEditor
+            default:
+                plainField
             }
-        )
+        }
+        .accessibilityLabel(Text(option.option.displayTitle))
+    }
+
+    // MARK: Slider
+
+    private var sliderRange: ClosedRange<Double>? {
+        guard let spec, let lo = spec.min, let hi = spec.max, lo < hi else { return nil }
+        return lo...hi
+    }
+
+    private func sliderEditor(_ spec: NumericSpec, range: ClosedRange<Double>) -> some View {
+        HStack(spacing: 8) {
+            Slider(value: $live, in: range, step: spec.step ?? 0.05) { editing in
+                if !editing { commitSlider(spec) }
+            }
+            .frame(width: 120)
+            Text(numberString(spec.clamp(live), decimals: decimals(for: spec)))
+                .font(.caption.monospaced())
+                .foregroundStyle(.secondary)
+                .frame(width: 36, alignment: .trailing)
+                .accessibilityHidden(true)
+        }
+        .accessibilityValue(Text(numberString(spec.clamp(live), decimals: decimals(for: spec))))
+        .onAppear { live = seed(spec) }
+        .onChange(of: draft) { _, _ in live = seed(spec) }
+    }
+
+    private func commitSlider(_ spec: NumericSpec) {
+        let text = numberString(spec.clamp(live), decimals: decimals(for: spec))
+        // `draft` holds the saved baseline until commit, so this both de-dupes an
+        // unchanged release and avoids a redundant write.
+        guard text != draft else { return }
+        draft = text
+        apply(text)
+    }
+
+    /// The slider's starting position: the saved value parsed and clamped into range.
+    private func seed(_ spec: NumericSpec) -> Double {
+        let raw = Double(draft.trimmingCharacters(in: .whitespaces))
+            ?? Double(savedValue.trimmingCharacters(in: .whitespaces))
+            ?? spec.min ?? 0
+        return spec.clamp(raw)
+    }
+
+    // MARK: Field + stepper
+
+    private func fieldEditor(_ spec: NumericSpec) -> some View {
+        HStack(spacing: 4) {
+            TextField(placeholder, text: $draft)
+                .textFieldStyle(.roundedBorder)
+                .frame(width: 60)
+                .onSubmit { commitField(spec) }
+            if let unit = spec.unit {
+                Text(unit).font(.caption).foregroundStyle(.secondary)
+            }
+            Stepper("",
+                    onIncrement: { stepField(spec, by: 1) },
+                    onDecrement: { stepField(spec, by: -1) })
+                .labelsHidden()
+        }
+    }
+
+    private func commitField(_ spec: NumericSpec) {
+        pendingStep?.cancel()
+        let trimmed = draft.trimmingCharacters(in: .whitespaces)
+        guard let value = Double(trimmed) else {
+            draft = savedValue          // non-numeric input reverts to the saved value
+            return
+        }
+        let text = numberString(spec.clamp(value), decimals: decimals(for: spec))
+        if text != draft { draft = text }   // reflect the clamp back into the field
+        guard text != savedValue else { return }
+        apply(text)
+    }
+
+    private func stepField(_ spec: NumericSpec, by direction: Double) {
+        let base = Double(draft.trimmingCharacters(in: .whitespaces))
+            ?? Double(savedValue.trimmingCharacters(in: .whitespaces))
+            ?? spec.min ?? 0
+        let text = numberString(spec.clamp(base + (spec.step ?? 1) * direction), decimals: decimals(for: spec))
+        draft = text
+        scheduleStepCommit(text)
+    }
+
+    // MARK: Size
+
+    private var sizeEditor: some View {
+        VStack(alignment: .trailing, spacing: 2) {
+            TextField(placeholder, text: $draft)
+                .textFieldStyle(.roundedBorder)
+                .frame(width: 120)
+                .onSubmit { commitUnclamped() }
+            if let bytes = Double(draft.trimmingCharacters(in: .whitespaces)), bytes > 0 {
+                Text(NumericSpec.formatBytes(bytes))
+                    .font(.caption2.monospaced())
+                    .foregroundStyle(.secondary)
+                    .accessibilityHidden(true)
+            }
+        }
+    }
+
+    // MARK: Plain (no spec)
+
+    @ViewBuilder
+    private var plainField: some View {
+        let inferredStep = NumericSpec.inferredStep(forDefault: option.option.defaultValue)
+        HStack(spacing: 4) {
+            TextField(placeholder, text: $draft)
+                .textFieldStyle(.roundedBorder)
+                .frame(width: 80)
+                .onSubmit { commitUnclamped() }
+            if inferredStep != 1 {
+                // A fractional default earns a fine stepper; an integer default drops
+                // it, since a whole-number nudge on an unbounded field is noise.
+                Stepper("",
+                        onIncrement: { stepUnclamped(by: inferredStep) },
+                        onDecrement: { stepUnclamped(by: -inferredStep) })
+                    .labelsHidden()
+            }
+        }
+    }
+
+    private func stepUnclamped(by delta: Double) {
+        let base = Double(draft.trimmingCharacters(in: .whitespaces))
+            ?? Double(savedValue.trimmingCharacters(in: .whitespaces)) ?? 0
+        let value = base + delta
+        let text = value.rounded() == value ? String(Int(value)) : numberString(value, decimals: 1)
+        draft = text
+        scheduleStepCommit(text)
+    }
+
+    // MARK: Commit helpers
+
+    private func commitUnclamped() {
+        pendingStep?.cancel()
+        let text = draft.trimmingCharacters(in: .whitespaces)
+        if text != draft { draft = text }
+        guard text != savedValue else { return }
+        apply(text)
+    }
+
+    /// Debounce a stepper burst into one write ~400ms after the last tick — SwiftUI's
+    /// Stepper fires per increment with no editing-ended callback, so a real trailing
+    /// debounce (not a nonexistent "mouse-up") is what keeps a key-repeat from
+    /// spamming validate+write+reload.
+    private func scheduleStepCommit(_ text: String) {
+        pendingStep?.cancel()
+        pendingStep = Task {
+            try? await Task.sleep(for: .milliseconds(400))
+            guard !Task.isCancelled, text != savedValue else { return }
+            apply(text)
+        }
+    }
+
+    // MARK: Formatting
+
+    /// Decimal places implied by the step: whole numbers for step ≥ 1, otherwise
+    /// enough places to render the step (capped at 3).
+    private func decimals(for spec: NumericSpec) -> Int {
+        let step = spec.step ?? 1
+        if step >= 1 { return 0 }
+        return Swift.min(3, Int(ceil(-log10(step))))
+    }
+
+    /// Minimal valid string for a value: an integer when it divides evenly (so
+    /// `1.0` writes as `1`, matching the default and reading clean), else a trimmed
+    /// fixed-point form (`0.50` → `0.5`).
+    private func numberString(_ value: Double, decimals: Int) -> String {
+        if value.rounded() == value { return String(Int(value.rounded())) }
+        var s = String(format: "%.\(Swift.max(1, decimals))f", value)
+        while s.hasSuffix("0") { s.removeLast() }
+        if s.hasSuffix(".") { s.removeLast() }
+        return s
     }
 }
 
