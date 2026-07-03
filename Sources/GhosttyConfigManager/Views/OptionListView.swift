@@ -298,6 +298,9 @@ private struct InlineOptionEditor: View {
     @State private var draft: String = ""
     /// Drives the color-editing popover anchored to the row's swatch.
     @State private var showingColorPopover = false
+    /// The color value already written in this popover session, so committing on
+    /// close doesn't re-write a value a preset/Set/wheel already saved (B6).
+    @State private var committedColor: String = ""
 
     var body: some View {
         control
@@ -370,11 +373,17 @@ private struct InlineOptionEditor: View {
                 .popover(isPresented: $showingColorPopover, arrowEdge: .bottom) {
                     colorEditor
                 }
-                // Seed the draft from the saved value each time the popover opens,
-                // so it never shows a stale (or first-open empty) value and any
-                // uncommitted edit from a previous open is discarded.
+                // Seed the draft from the saved value each time the popover opens, so
+                // it never shows a stale (or first-open empty) value. On close, commit
+                // whatever the wheel/hex field left in the draft (B6: commit-on-blur),
+                // deduped against what a preset/Set already wrote this session.
                 .onChange(of: showingColorPopover) { _, isOpen in
-                    if isOpen { draft = currentValue }
+                    if isOpen {
+                        draft = currentValue
+                        committedColor = currentValue
+                    } else {
+                        requestColorApply(draft)
+                    }
                 }
         default:
             TextField(fieldPlaceholder, text: $draft)
@@ -445,14 +454,38 @@ private struct InlineOptionEditor: View {
 
     // MARK: Color editing
 
-    /// The row's color chip: the saved color, or a neutral fill for values a swatch
-    /// can't render (a named color or `cell-foreground` / `cell-background`).
+    /// The row's color chip: the saved color as a fill, a *labeled* chip for values a
+    /// swatch can't render (an X11 name, `cell-foreground` / `cell-background`), or a
+    /// neutral fill only when truly unset — so a named value never reads as empty (B6).
     private var swatch: some View {
-        RoundedRectangle(cornerRadius: 5)
-            .fill(Color(hex: currentValue) ?? Color(nsColor: .quaternaryLabelColor))
+        colorFill(currentValue)
             .frame(width: 44, height: 22)
+            .clipShape(RoundedRectangle(cornerRadius: 5))
             .overlay(RoundedRectangle(cornerRadius: 5).strokeBorder(.separator, lineWidth: 1))
             .contentShape(RoundedRectangle(cornerRadius: 5))
+    }
+
+    /// A fill for a color value: the resolved color when it's a hex the swatch can
+    /// render; otherwise a labeled chip showing the token (X11 name / `cell-*`) so it
+    /// reads as *set to something*; and only a neutral gray when the value is empty.
+    @ViewBuilder
+    private func colorFill(_ value: String) -> some View {
+        let trimmed = value.trimmingCharacters(in: .whitespaces)
+        if let color = Color(hex: value) {
+            color
+        } else if !trimmed.isEmpty {
+            ZStack {
+                Color(nsColor: .controlBackgroundColor)
+                Text(trimmed)
+                    .font(.caption2)
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.6)
+                    .padding(.horizontal, 3)
+                    .foregroundStyle(.secondary)
+            }
+        } else {
+            Color(nsColor: .quaternaryLabelColor)
+        }
     }
 
     /// A curated spread of neutrals and hues for one-click picking. The text field
@@ -465,28 +498,35 @@ private struct InlineOptionEditor: View {
     private var colorEditor: some View {
         VStack(alignment: .leading, spacing: 10) {
             HStack(spacing: 10) {
-                RoundedRectangle(cornerRadius: 6)
-                    .fill(Color(hex: draft) ?? Color(nsColor: .quaternaryLabelColor))
+                colorFill(draft)
                     .frame(width: 36, height: 36)
+                    .clipShape(RoundedRectangle(cornerRadius: 6))
                     .overlay(RoundedRectangle(cornerRadius: 6).strokeBorder(.separator, lineWidth: 1))
                 VStack(alignment: .leading, spacing: 2) {
-                    Text(option.option.name).font(.callout.weight(.semibold)).lineLimit(1)
+                    Text(option.option.displayTitle).font(.callout.weight(.semibold)).lineLimit(1)
                     Text(draft.isEmpty ? "no value" : draft)
                         .font(.caption.monospaced()).foregroundStyle(.secondary).lineLimit(1)
                 }
+                Spacer(minLength: 4)
+                // The native color wheel + eyedropper. Opacity is off so we never emit
+                // an `#rrggbbaa` that a non-background color option would reject; the
+                // wheel edits the draft live and commits when the popover closes.
+                ColorPicker("", selection: colorWellBinding, supportsOpacity: false)
+                    .labelsHidden()
+                    .help("Pick with the color wheel or eyedropper")
             }
             HStack(spacing: 6) {
                 TextField("#1e1e2e, tomato, cell-foreground", text: $draft)
                     .textFieldStyle(.roundedBorder)
-                    .onSubmit { commitColor() }
-                Button("Set") { commitColor() }
+                    .onSubmit { requestColorApply(draft); showingColorPopover = false }
+                Button("Set") { requestColorApply(draft); showingColorPopover = false }
                     .disabled(!canApplyColorDraft)
             }
             LazyVGrid(columns: Array(repeating: GridItem(.fixed(22), spacing: 5), count: 8), spacing: 5) {
                 ForEach(Self.colorPresets, id: \.self) { hex in
                     Button {
                         draft = hex
-                        apply(hex)
+                        requestColorApply(hex)
                     } label: {
                         RoundedRectangle(cornerRadius: 4)
                             .fill(Color(hex: hex) ?? .gray)
@@ -501,12 +541,23 @@ private struct InlineOptionEditor: View {
                     .help(hex)
                 }
             }
-            Text("Type a hex code, an X11 color name, or cell-foreground / cell-background.")
+            Text("Type a hex code, an X11 color name, or cell-foreground / cell-background. Changes save when you close this.")
                 .font(.caption2).foregroundStyle(.secondary)
                 .fixedSize(horizontal: false, vertical: true)
         }
         .padding(12)
         .frame(width: 250)
+    }
+
+    /// Two-way bridge to the native picker: read the draft as a Color, and write a
+    /// wheel/eyedropper pick back as a `#rrggbb` draft (live preview; commit on close).
+    private var colorWellBinding: Binding<Color> {
+        Binding(
+            get: { Color(hex: draft) ?? Color(nsColor: .textColor) },
+            set: { newColor in
+                if let hex = newColor.ghosttyHex { draft = hex }
+            }
+        )
     }
 
     private func isSelectedPreset(_ hex: String) -> Bool {
@@ -519,12 +570,15 @@ private struct InlineOptionEditor: View {
         return !trimmed.isEmpty && trimmed != currentValue
     }
 
-    private func commitColor() {
-        let value = draft.trimmingCharacters(in: .whitespaces)
-        guard !value.isEmpty, value != currentValue else { return }
-        if value != draft { draft = value }
-        apply(value)
-        showingColorPopover = false
+    /// Apply a color value at most once per distinct value in a popover session, so
+    /// the wheel's live edits, a preset, "Set", and the on-close commit never stack
+    /// into repeated writes (and reloads) of the same value (B6).
+    private func requestColorApply(_ value: String) {
+        let v = value.trimmingCharacters(in: .whitespaces)
+        guard !v.isEmpty, v != currentValue, v != committedColor else { return }
+        committedColor = v
+        if v != draft { draft = v }
+        apply(v)
     }
 }
 
@@ -1291,6 +1345,24 @@ extension String {
             return String(trimmed.dropFirst().dropLast())
         }
         return trimmed
+    }
+}
+
+extension Color {
+    /// `#rrggbb` for this color in sRGB, for writing a wheel/eyedropper pick back as
+    /// a Ghostty hex value (B6). Nil if it can't be represented in RGB.
+    var ghosttyHex: String? { NSColor(self).ghosttyHex }
+}
+
+extension NSColor {
+    /// `#rrggbb` in sRGB (opacity dropped — Ghostty color options take an RGB triple),
+    /// or nil when the color can't convert to sRGB.
+    var ghosttyHex: String? {
+        guard let c = usingColorSpace(.sRGB) else { return nil }
+        let r = Int((c.redComponent * 255).rounded())
+        let g = Int((c.greenComponent * 255).rounded())
+        let b = Int((c.blueComponent * 255).rounded())
+        return String(format: "#%02x%02x%02x", r, g, b)
     }
 }
 
