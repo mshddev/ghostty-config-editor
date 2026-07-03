@@ -61,6 +61,51 @@ private struct WindowConfigurator: NSViewRepresentable {
     func updateNSView(_ nsView: NSView, context: Context) {}
 }
 
+/// One top-bar chip, so identity/health/Customized share a single shape (LAYOUT-6).
+/// With an `action` it renders as a bordered, hover-highlighting button (so an
+/// actionable chip *looks* actionable) with an optional trailing chevron; without
+/// one it's a plain label (identity). The `tint` colors only the leading glyph, so a
+/// health chip can carry a red/orange status icon without dyeing its whole label.
+private struct ToolbarChip: View {
+    var systemImage: String? = nil
+    var tint: Color = .secondary
+    let title: String
+    var isActive: Bool = false
+    var showsChevron: Bool = false
+    var action: (() -> Void)? = nil
+
+    var body: some View {
+        if let action {
+            Button(action: action) {
+                content.foregroundStyle(isActive ? AnyShapeStyle(Color.accentColor) : AnyShapeStyle(.primary))
+            }
+            .buttonStyle(.bordered)
+            .controlSize(.small)
+            .accessibilityAddTraits(isActive ? .isSelected : [])
+        } else {
+            content.foregroundStyle(.secondary)
+        }
+    }
+
+    private var content: some View {
+        HStack(spacing: 5) {
+            if let systemImage {
+                Image(systemName: systemImage)
+                    .foregroundStyle(tint)
+                    .accessibilityHidden(true)
+            }
+            Text(title)
+            if showsChevron {
+                Image(systemName: "chevron.right")
+                    .font(.caption2)
+                    .foregroundStyle(.tertiary)
+                    .accessibilityHidden(true)
+            }
+        }
+        .font(.caption)
+    }
+}
+
 /// Without an `.app` bundle (e.g. when launched via `swift run`), macOS treats
 /// the process as a background agent and never shows a window. Promote it to a
 /// regular foreground app and bring it to the front. Inside a real bundle this
@@ -180,11 +225,14 @@ struct RootView: View {
             mainColumn
         }
         .toolbar {
+            // Identity and health share one group but are split by a divider, so the
+            // version label (identity) stops reading as a health status (LAYOUT-5/7).
             ToolbarItem(placement: .status) {
-                statusChip(environment)
-            }
-            ToolbarItem(placement: .status) {
-                healthChip()
+                HStack(spacing: 10) {
+                    identityChip(environment)
+                    Divider().frame(height: 14)
+                    healthChip()
+                }
             }
             ToolbarItem(placement: .primaryAction) {
                 customizedChip()
@@ -192,79 +240,49 @@ struct RootView: View {
         }
     }
 
-    /// The "Customized" entry point, promoted from the sidebar into the window
-    /// chrome (mirrors `healthChip`'s button-sets-selection pattern). Tapping it
-    /// shows the user's customized options; it tints accent while that view is
-    /// active so the current surface is legible from the top bar. The sliders
-    /// glyph plus its visible title read as "your adjusted settings" — the bare
-    /// pencil it replaced was ambiguous with "edit".
-    ///
-    /// Built from the same `HStack(spacing: 6)` of icon + text as `statusChip`
-    /// and `healthChip` (rather than a `Label`, whose wider icon-title gap and
-    /// tighter metrics looked cramped under the Liquid Glass capsule). The
-    /// horizontal padding widens the glass capsule so the icon and title clear
-    /// its rounded ends — giving the action chip more presence than the adjacent
-    /// status chips.
-    @ViewBuilder
+    /// The "Customized" entry point in the window chrome (mirrors the health chip's
+    /// button-sets-selection pattern). Tints accent while that surface is active so
+    /// the current selection is legible from the top bar.
     private func customizedChip() -> some View {
         let isActive = model.selection == .customized
-        Button {
-            model.selection = .customized
-        } label: {
-            HStack(spacing: 6) {
-                Image(systemName: "slider.horizontal.3")
-                    .accessibilityHidden(true)
-                Text("Customized")
-            }
-            .font(.caption)
-            .foregroundStyle(isActive ? Color.accentColor : Color.primary)
-            .padding(.horizontal, 12)
-        }
-        .buttonStyle(.plain)
+        return ToolbarChip(
+            systemImage: "slider.horizontal.3",
+            tint: isActive ? .accentColor : .secondary,
+            title: "Customized",
+            isActive: isActive,
+            action: { model.selection = .customized }
+        )
         .help("Show customized options")
         .accessibilityLabel("Customized options")
-        .accessibilityAddTraits(isActive ? .isSelected : [])
     }
 
-    @ViewBuilder
-    private func statusChip(_ environment: GhosttyEnvironment) -> some View {
-        HStack(spacing: 6) {
-            Image(systemName: "checkmark.seal.fill").foregroundStyle(.green)
-            Text("Ghostty \(environment.version)")
-            if model.configMissing {
-                Text("· no config file yet").foregroundStyle(.secondary)
-            }
-        }
-        .font(.caption)
+    /// Identity: which Ghostty this is managing. A plain label — the version is
+    /// information, not a status — so the old green seal (which falsely read as a
+    /// health check) is gone; the health chip beside it owns the only status glyph.
+    private func identityChip(_ environment: GhosttyEnvironment) -> some View {
+        ToolbarChip(title: "Ghostty \(environment.version)")
+            .help("The Ghostty this app is configuring")
     }
 
-    /// Config-health indicator in the window chrome (moved out of the sidebar).
-    /// Tapping it opens the Problems surface (KTD4); icon and tint mirror
-    /// `ProblemsView` so the severity language stays consistent (KTD5).
+    /// The sole config-health status in the window chrome. Tappable (bordered chrome
+    /// + chevron, so it reads as a button) and opens the Problems surface (KTD4); its
+    /// icon/tint mirror `ProblemsView` (KTD5). Quiet when clean, tinted with a count
+    /// when not. The first-launch "no config file yet" state folds in here rather than
+    /// hanging off the identity label.
     @ViewBuilder
     private func healthChip() -> some View {
-        if let report = model.lintReport {
-            Button {
-                model.selection = .problems
-            } label: {
-                HStack(spacing: 6) {
-                    Image(systemName: Self.healthIcon(report.health))
-                        .foregroundStyle(Self.healthTint(report.health))
-                        .accessibilityHidden(true)
-                    Text(report.badgeText)
-                }
-                .font(.caption)
-            }
-            .buttonStyle(.plain)
-            .help("Show config health")
-            .accessibilityLabel(report.badgeText)
+        if model.configMissing {
+            ToolbarChip(systemImage: "doc.badge.plus", tint: .blue, title: "No config yet",
+                        showsChevron: true, action: { model.selection = .problems })
+                .help("No Ghostty config yet — your first change creates ~/.config/ghostty/config")
+                .accessibilityLabel("No config file yet")
+        } else if let report = model.lintReport {
+            ToolbarChip(systemImage: Self.healthIcon(report.health), tint: Self.healthTint(report.health),
+                        title: report.badgeText, showsChevron: true, action: { model.selection = .problems })
+                .help("Show config health")
+                .accessibilityLabel(report.badgeText)
         } else {
-            HStack(spacing: 6) {
-                Image(systemName: "stethoscope")
-                Text("Checking…")
-            }
-            .font(.caption)
-            .foregroundStyle(.secondary)
+            ToolbarChip(systemImage: "stethoscope", tint: .secondary, title: "Checking…")
         }
     }
 
