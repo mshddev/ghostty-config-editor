@@ -141,17 +141,15 @@ struct OptionRow: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 4) {
             HStack(spacing: 8) {
-                Circle()
-                    .fill(stateColor)
-                    .frame(width: 7, height: 7)
-                    .help(stateHelp)
-                    .accessibilityHidden(true)
                 VStack(alignment: .leading, spacing: 1) {
                     Text(option.option.displayTitle)
                         .font(.body)
                         // The raw key is demoted to the popover (and search, R8); a
                         // hover tooltip keeps it a keystroke away for power users.
                         .help(option.option.name)
+                        // Speak the merged state (A5's one vocabulary) alongside the
+                        // name, so VoiceOver conveys what the pill shows sighted users.
+                        .accessibilityValue(Text(option.state.displayName))
                     if !subtitle.isEmpty {
                         Text(subtitle)
                             .font(.caption)
@@ -160,6 +158,9 @@ struct OptionRow: View {
                             .help(subtitle)
                     }
                 }
+                if option.state == .setNonDefault {
+                    customizedAffordance
+                }
                 Spacer(minLength: 12)
                 editor
                 infoButton
@@ -167,6 +168,32 @@ struct OptionRow: View {
             feedback
         }
         .padding(.vertical, 2)
+    }
+
+    /// The redesigned state affordance (B5): a legible accent "Customized" pill —
+    /// replacing the illegible 7pt tri-state dot — paired with an inline reset glyph,
+    /// shown only on customized rows. A default/unset row shows nothing here.
+    private var customizedAffordance: some View {
+        HStack(spacing: 4) {
+            Text(option.state.displayName)   // "Customized"
+                .font(.caption2)
+                .padding(.horizontal, 7)
+                .padding(.vertical, 2)
+                .background(Color.accentColor.opacity(0.15), in: Capsule())
+                .foregroundStyle(Color.accentColor)
+                .accessibilityHidden(true)   // the title already announces the state
+            Button {
+                Task { await model.applyEdit(option: option, values: []) }
+            } label: {
+                Image(systemName: "arrow.uturn.backward.circle")
+                    .imageScale(.medium)
+                    .foregroundStyle(.secondary)
+                    .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+            .help("Reset to default")
+            .accessibilityLabel("Reset \(option.option.displayTitle) to default")
+        }
     }
 
     /// Repeatable keys (keybind, palette, …) can't be edited from a single inline
@@ -256,22 +283,6 @@ struct OptionRow: View {
     /// hidden rather than showing filler.
     private var subtitle: String {
         option.option.shortSummary
-    }
-
-    private var stateColor: Color {
-        switch option.state {
-        case .setNonDefault: return .accentColor
-        case .setToDefault: return .secondary
-        case .unset: return Color.secondary.opacity(0.25)
-        }
-    }
-
-    private var stateHelp: String {
-        switch option.state {
-        case .setNonDefault: return "Set to a non-default value"
-        case .setToDefault: return "Set to the default value"
-        case .unset: return "Not set — using the default"
-        }
     }
 }
 
@@ -1235,6 +1246,16 @@ private struct OptionInfoPopover: View {
                     NSWorkspace.shared.open(URL(fileURLWithPath: source.file))
                 } label: {
                     Label("Reveal in editor", systemImage: "arrow.up.forward.app")
+                }
+            }
+            // Only offer a reset when there's a user value to clear (B5). Writing an
+            // empty value list is the existing "unset" path — the writer removes the
+            // option's line(s) — so no kit change is needed.
+            if option.isSet {
+                Button(role: .destructive) {
+                    Task { await model.applyEdit(option: option, values: []) }
+                } label: {
+                    Label("Reset to default", systemImage: "arrow.uturn.backward")
                 }
             }
         }
