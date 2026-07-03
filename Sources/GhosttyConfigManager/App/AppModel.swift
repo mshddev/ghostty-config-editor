@@ -520,6 +520,33 @@ public final class AppModel {
         }
     }
 
+    /// The category currently browsed as a plain list, or `nil` when searching or on
+    /// a non-category surface (customized/problems/themes) — those never split into
+    /// Common/Advanced sections (B1). A search always shows all ranked hits flat.
+    private var browsedCategory: String? {
+        guard query.trimmingCharacters(in: .whitespaces).isEmpty else { return nil }
+        if case .category(let category) = selection { return category }
+        return nil
+    }
+
+    /// True when the current surface should render Common + collapsible Advanced
+    /// sections rather than one flat list (B1).
+    public var showsSplitSections: Bool { browsedCategory != nil }
+
+    /// The Common options for the browsed category (curated common tier + promoted
+    /// customized options), with `theme` dropped for the same reason `visibleOptions`
+    /// drops it — the Themes browser owns it.
+    public var commonOptions: [MergedOption] {
+        guard let browser, let category = browsedCategory else { return [] }
+        return browser.commonOptions(in: category).filter { $0.option.name != "theme" }
+    }
+
+    /// The Advanced options for the browsed category, tucked behind the disclosure.
+    public var advancedOptions: [MergedOption] {
+        guard let browser, let category = browsedCategory else { return [] }
+        return browser.advancedOptions(in: category).filter { $0.option.name != "theme" }
+    }
+
     public func selectedOption() -> MergedOption? {
         guard let name = selectedOptionName else { return nil }
         return browser?.merged.option(named: name)

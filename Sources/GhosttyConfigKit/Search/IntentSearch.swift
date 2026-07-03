@@ -125,6 +125,29 @@ public struct CatalogBrowser: Sendable {
         merged.options(in: category).sorted { OptionOrdering.compare($0.option, $1.option) }
     }
 
+    /// The category's **Common** options — the curated common tier, plus any
+    /// *customized* advanced option auto-promoted so a changed setting is never
+    /// hidden behind the Advanced disclosure (IA-2, R2). Preserves the shared
+    /// `OptionOrdering` sort, so curated commons lead in their curated order and
+    /// promoted options trail alphabetically.
+    public func commonOptions(in category: String) -> [MergedOption] {
+        options(in: category).filter(Self.isCommon)
+    }
+
+    /// The category's **Advanced** options — everything not shown in Common, i.e.
+    /// advanced-tier options still at (or unset from) their default. A customized
+    /// advanced option moves up to Common and so is absent here.
+    public func advancedOptions(in category: String) -> [MergedOption] {
+        options(in: category).filter { !Self.isCommon($0) }
+    }
+
+    /// Common ⟺ curated-common by name **or** customized (changed from default).
+    /// The promotion keys on `.setNonDefault` (not merely `isSet`) so an advanced
+    /// option explicitly written to its default stays advanced.
+    private static func isCommon(_ option: MergedOption) -> Bool {
+        OptionTierCatalog.bundled.isCommon(option.option.name) || option.state == .setNonDefault
+    }
+
     /// Search results as merged options, in ranked order.
     public func searchResults(_ query: String) -> [MergedOption] {
         search.search(query).compactMap { hit in merged.option(named: hit.optionName) }

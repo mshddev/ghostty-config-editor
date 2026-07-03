@@ -17,7 +17,14 @@ struct OptionListView: View {
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
             } else if model.visibleOptions.isEmpty {
                 emptyState
+            } else if model.showsSplitSections {
+                // A browsed category splits into a Common section and a collapsible
+                // Advanced section (B1); the subview owns the per-category
+                // expand/collapse state, keyed so each category remembers its own.
+                CategoryOptionList(category: categoryName)
             } else {
+                // Search and the Customized surface show one flat, ranked list —
+                // the Common/Advanced split is a browse-only affordance.
                 List(model.visibleOptions, selection: $model.selectedOptionName) { option in
                     OptionRow(option: option)
                         .tag(option.option.name)
@@ -44,6 +51,13 @@ struct OptionListView: View {
         }
     }
 
+    /// The category name for the split-section list; only read when
+    /// `showsSplitSections` is true (a category is selected with no active search).
+    private var categoryName: String {
+        if case .category(let c) = model.selection { return c }
+        return ""
+    }
+
     @ViewBuilder
     private var emptyState: some View {
         if !model.query.trimmingCharacters(in: .whitespaces).isEmpty {
@@ -56,6 +70,61 @@ struct OptionListView: View {
             ContentUnavailableView("No options",
                                    systemImage: "tray",
                                    description: Text("Nothing to show for this selection."))
+        }
+    }
+}
+
+/// A browsed category rendered as a **Common** section over a collapsible
+/// **Advanced (N)** section (B1, IA-2). Newcomer-frequent options sit up top; the
+/// long tail is tucked behind a disclosure that's collapsed by default, with its
+/// expanded state persisted per category so each one remembers how you left it.
+///
+/// When a category is *entirely* advanced (e.g. the "Advanced" category itself),
+/// there's nothing to tuck behind, so its options render as a plain list rather
+/// than hiding everything under a collapsed disclosure.
+private struct CategoryOptionList: View {
+    @Environment(AppModel.self) private var model
+    let category: String
+    @AppStorage private var advancedExpanded: Bool
+
+    init(category: String) {
+        self.category = category
+        _advancedExpanded = AppStorage(wrappedValue: false, "advancedExpanded.\(category)")
+    }
+
+    var body: some View {
+        @Bindable var model = model
+        List(selection: $model.selectedOptionName) {
+            let common = model.commonOptions
+            let advanced = model.advancedOptions
+            if !common.isEmpty {
+                Section {
+                    rows(common)
+                } header: {
+                    // Only label it "Common" when there's an Advanced section to
+                    // contrast with; a lone section needs no header.
+                    if !advanced.isEmpty { Text("Common") }
+                }
+            }
+            if !advanced.isEmpty {
+                if common.isEmpty {
+                    // Whole category is advanced — show it flat, never collapsed away.
+                    Section { rows(advanced) }
+                } else {
+                    Section(isExpanded: $advancedExpanded) {
+                        rows(advanced)
+                    } header: {
+                        Text("Advanced (\(advanced.count))")
+                    }
+                }
+            }
+        }
+    }
+
+    private func rows(_ options: [MergedOption]) -> some View {
+        ForEach(options) { option in
+            OptionRow(option: option)
+                .tag(option.option.name)
         }
     }
 }
