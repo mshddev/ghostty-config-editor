@@ -153,6 +153,57 @@ final class IntentSearchTests: XCTestCase {
         XCTAssertTrue(browser().searchResults("font size").map(\.option.name).contains("font-size"))
     }
 
+    // MARK: - Global Find provenance (D2 / U20)
+
+    func testSearchHitsPreserveMatchKindAndResolveOption() {
+        // A name match resolves to the merged option and carries `.name` provenance.
+        let pairs = browser().searchHits("background-opacity")
+        let first = pairs.first
+        XCTAssertEqual(first?.option.option.name, "background-opacity")
+        XCTAssertEqual(first?.hit.matchKind, .name)
+        // Every returned hit resolves to a real merged option (no dangling pairs).
+        XCTAssertEqual(pairs.map(\.hit.optionName), pairs.map(\.option.option.name))
+    }
+
+    func testSearchHitsCarryCategoryForResultPills() {
+        // The Find surface renders a per-row category pill from the resolved option.
+        let pairs = browser().searchHits("background-opacity")
+        let opacity = pairs.first { $0.option.option.name == "background-opacity" }
+        XCTAssertEqual(opacity?.option.option.category, OptionCategorizer.appearanceCategory)
+    }
+
+    func testIntentHitCarriesMatchedPhraseForBadge() {
+        // An intent match surfaces the phrase that matched, for the "matches: …" badge.
+        let pairs = browser().searchHits("transparent background")
+        let opacity = pairs.first { $0.option.option.name == "background-opacity" }
+        XCTAssertEqual(opacity?.hit.matchKind, .intent)
+        XCTAssertNotNil(opacity?.hit.intentPhrase, "intent hits carry the matched phrase")
+        // The phrase is the curated one that overlaps the query, not the raw query.
+        let phrase = opacity?.hit.intentPhrase?.lowercased() ?? ""
+        XCTAssertTrue(phrase.contains("transparent") || phrase.contains("opacity"),
+                      "phrase '\(phrase)' should be the matched intent phrase")
+    }
+
+    func testNameAndDocHitsHaveNoIntentPhrase() {
+        // Only intent hits carry a phrase; a plain name match leaves it nil.
+        let hit = browser().search.search("background-opacity").first { $0.optionName == "background-opacity" }
+        XCTAssertEqual(hit?.matchKind, .name)
+        XCTAssertNil(hit?.intentPhrase)
+    }
+
+    func testMatchesForReturnsSameOptionsAsOptionsMatching() {
+        // options(matching:) now delegates to matches(for:); guard they stay in sync.
+        for q in ["hide title bar", "opacity", "bell sound", "emoji"] {
+            XCTAssertEqual(IntentMap.bundled.options(matching: q),
+                           IntentMap.bundled.matches(for: q).map(\.option),
+                           "options(matching:) and matches(for:) diverged for '\(q)'")
+        }
+    }
+
+    func testEmptyQueryReturnsNoSearchHits() {
+        XCTAssertTrue(browser().searchHits("   ").isEmpty)
+    }
+
     func testEveryIntentMapOptionExistsInCatalog() {
         // KTD1-style guard: no phrase may map to an option absent from the catalog.
         let names = Set(catalog.options.map(\.name))

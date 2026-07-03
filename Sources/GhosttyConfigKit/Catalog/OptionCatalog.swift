@@ -165,6 +165,10 @@ public enum OptionCategorizer {
     /// phantom "General" bucket.
     public static let advancedCategory = "Advanced"
 
+    /// The colors category. Shared so the Appearance→Themes cross-link (D1) tests for
+    /// "am I on Appearance" against this constant rather than a bare string literal.
+    public static let appearanceCategory = "Appearance"
+
     /// Preferred display order for the sidebar (newcomer-frequency order). "Themes"
     /// and the keyboard editor are dedicated surfaces routed separately; every other
     /// entry is an option-list category.

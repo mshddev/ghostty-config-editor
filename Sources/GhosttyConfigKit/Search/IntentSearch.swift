@@ -35,17 +35,26 @@ public struct IntentMap: Sendable {
     /// when it contains the query or the query contains it, so "title bar" hits
     /// the "hide title bar" entry and vice versa.
     public func options(matching query: String) -> [String] {
+        matches(for: query).map(\.option)
+    }
+
+    /// Like `options(matching:)` but also returns *which* curated phrase matched, so
+    /// callers can explain why an option surfaced (the intent-provenance "matches: …"
+    /// badge — D2). The first matching phrase of an entry wins; options are
+    /// de-duplicated in first-seen order, exactly like `options(matching:)`.
+    public func matches(for query: String) -> [(option: String, phrase: String)] {
         let q = query.lowercased().trimmingCharacters(in: .whitespaces)
         guard !q.isEmpty else { return [] }
-        var result: [String] = []
+        var result: [(option: String, phrase: String)] = []
         var seen = Set<String>()
-        for entry in entries where entry.phrases.contains(where: { phrase in
-            let p = phrase.lowercased().trimmingCharacters(in: .whitespaces)
-            guard !p.isEmpty else { return false } // an empty phrase must not match everything
-            return p.contains(q) || q.contains(p)
-        }) {
+        for entry in entries {
+            guard let phrase = entry.phrases.first(where: { phrase in
+                let p = phrase.lowercased().trimmingCharacters(in: .whitespaces)
+                guard !p.isEmpty else { return false } // an empty phrase must not match everything
+                return p.contains(q) || q.contains(p)
+            }) else { continue }
             for option in entry.options where seen.insert(option).inserted {
-                result.append(option)
+                result.append((option, phrase))
             }
         }
         return result
@@ -62,6 +71,17 @@ public struct SearchHit: Sendable, Equatable {
     public let optionName: String
     public let matchKind: MatchKind
     public let score: Int
+    /// For `.intent` matches, the curated phrase that surfaced this option — so a
+    /// global-search result can show "matches: transparent background" and explain
+    /// why a name-mismatched option appeared (D2). `nil` for name/doc matches.
+    public let intentPhrase: String?
+
+    public init(optionName: String, matchKind: MatchKind, score: Int, intentPhrase: String? = nil) {
+        self.optionName = optionName
+        self.matchKind = matchKind
+        self.score = score
+        self.intentPhrase = intentPhrase
+    }
 }
 
 /// Layered option search: curated intent map → option-name match → doc full-text
@@ -80,15 +100,15 @@ public struct CatalogSearch: Sendable {
         guard !q.isEmpty else { return [] }
 
         var best: [String: SearchHit] = [:]
-        func consider(_ name: String, _ kind: SearchHit.MatchKind, _ score: Int) {
+        func consider(_ name: String, _ kind: SearchHit.MatchKind, _ score: Int, phrase: String? = nil) {
             guard catalog.option(named: name) != nil else { return } // ignore stale map entries
             if let existing = best[name], existing.score >= score { return }
-            best[name] = SearchHit(optionName: name, matchKind: kind, score: score)
+            best[name] = SearchHit(optionName: name, matchKind: kind, score: score, intentPhrase: phrase)
         }
 
-        // 1. Intent map (highest priority).
-        for name in intentMap.options(matching: q) {
-            consider(name, .intent, 300)
+        // 1. Intent map (highest priority) — keep the matched phrase for provenance.
+        for match in intentMap.matches(for: q) {
+            consider(match.option, .intent, 300, phrase: match.phrase)
         }
         // 2. Option-name match (prefix ranks above substring).
         for option in catalog.options where option.name.lowercased().contains(q) {
@@ -151,6 +171,16 @@ public struct CatalogBrowser: Sendable {
     /// Search results as merged options, in ranked order.
     public func searchResults(_ query: String) -> [MergedOption] {
         search.search(query).compactMap { hit in merged.option(named: hit.optionName) }
+    }
+
+    /// Search results paired with their `SearchHit` provenance, in ranked order — so
+    /// the global Find surface can show, per row, the option's category pill and (for
+    /// intent matches) the phrase that surfaced it (D2). A hit whose option is absent
+    /// from the merged config is dropped, mirroring `searchResults`.
+    public func searchHits(_ query: String) -> [(hit: SearchHit, option: MergedOption)] {
+        search.search(query).compactMap { hit in
+            merged.option(named: hit.optionName).map { (hit, $0) }
+        }
     }
 
     /// The "you're not using this" discovery surface (R6).
