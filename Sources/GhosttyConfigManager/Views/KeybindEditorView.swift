@@ -143,6 +143,9 @@ private struct KeybindRow: View {
 
     /// A soft, transient warning from the recorder (e.g. "add a modifier").
     @State private var warning: String?
+    /// A pending conflict-at-capture prompt (F4): the chord the user just recorded and
+    /// the action it already collides with, awaiting Replace / Cancel.
+    @State private var pendingConflict: PendingConflict?
     /// "Edit as text" popover (advanced trigger grammar for this row's binding).
     @State private var showingText = false
     @State private var textDraft = ""
@@ -154,14 +157,45 @@ private struct KeybindRow: View {
     private static let triggerWidth: CGFloat = 190
 
     var body: some View {
-        HStack(spacing: 12) {
-            actionColumn
-            Spacer(minLength: 12)
-            trigger
+        VStack(alignment: .leading, spacing: 6) {
+            HStack(spacing: 12) {
+                actionColumn
+                Spacer(minLength: 12)
+                trigger
+            }
+            // Combine only the main row (the recorder is an NSView); keep the conflict
+            // prompt's buttons as their own accessible elements below.
+            .accessibilityElement(children: .combine)
+            .accessibilityLabel("\(friendlyTitle), \(triggerAccessibilityValue), \(badgeText)")
+            if let pendingConflict {
+                conflictPrompt(pendingConflict)
+            }
         }
         .padding(.vertical, RowMetrics.rowVerticalPadding)
-        .accessibilityElement(children: .combine)
-        .accessibilityLabel("\(friendlyTitle), \(triggerAccessibilityValue), \(badgeText)")
+    }
+
+    /// The conflict-at-capture prompt (F4, CONTROLS-10/11): a rebind onto a chord that
+    /// already drives a different action asks before stealing it — surfaced *at capture*,
+    /// ahead of the after-the-fact lint bar. Two choices: Replace (bind here, overriding
+    /// the other) or Cancel. There's no "keep both" — one chord maps to one action, so a
+    /// second binding would just be a shadowed duplicate the linter then flags.
+    private func conflictPrompt(_ conflict: PendingConflict) -> some View {
+        HStack(spacing: 8) {
+            Image(systemName: "exclamationmark.triangle.fill")
+                .foregroundStyle(.orange)
+                .accessibilityHidden(true)
+            Text("\(KeybindTrigger.displaySymbol(for: conflict.token)) is already used by \(ActionLabelCatalog.bundled.displayTitle(for: conflict.action)).")
+                .font(.caption)
+                .fixedSize(horizontal: false, vertical: true)
+            Spacer(minLength: 8)
+            Button("Replace") { performTrigger(conflict.token) }
+                .buttonStyle(.borderedProminent)
+            Button("Cancel") { pendingConflict = nil }
+                .buttonStyle(.bordered)
+        }
+        .controlSize(.small)
+        .padding(8)
+        .background(Color.orange.opacity(0.12), in: RoundedRectangle(cornerRadius: 6))
     }
 
     private var isDisabled: Bool { row.origin == .userDisablesDefault }
@@ -428,15 +462,38 @@ private struct KeybindRow: View {
 
     // MARK: Write actions
 
+    /// A recorded chord and the action it collides with, held while the user chooses
+    /// Replace or Cancel (F4).
+    private struct PendingConflict: Equatable {
+        let token: String
+        let action: String
+    }
+
     /// Set (or move) *this row's* trigger to `token`. Pressing the keys already bound
-    /// is a no-op. A default moves to the new keys and disables its old default; an
-    /// unbound action gains its first binding; a user binding moves in place.
+    /// is a no-op. If the chord already drives a *different* action, hold a conflict
+    /// prompt instead of writing (F4). Otherwise commit straight away.
     private func setTrigger(_ token: String) {
         warning = nil
         let token = token.trimmingCharacters(in: .whitespaces)
         guard !token.isEmpty else { return }
         if !row.canonicalTrigger.isEmpty,
            KeybindTrigger.parse(token).canonical() == row.canonicalTrigger { return }
+        if let colliding = KeybindMerge.conflictingAction(forTrigger: token,
+                                                          excludingAction: row.action,
+                                                          in: model.mergedKeybinds) {
+            pendingConflict = PendingConflict(token: token, action: colliding)
+            return
+        }
+        performTrigger(token)
+    }
+
+    /// Commit a captured trigger for this row — the write path behind both a clean
+    /// capture and a "Replace" on a conflict. A default moves to the new keys and
+    /// disables its old default; an unbound action gains its first binding; a user
+    /// binding moves in place. Any binding already on `token` is overridden (the write
+    /// transforms collapse by canonical trigger), which is exactly what "Replace" means.
+    private func performTrigger(_ token: String) {
+        pendingConflict = nil
         perform {
             switch row.origin {
             case .default:

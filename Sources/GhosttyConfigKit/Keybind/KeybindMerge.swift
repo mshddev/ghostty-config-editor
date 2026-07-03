@@ -128,6 +128,25 @@ public enum KeybindMerge {
         return rows
     }
 
+    /// The action a chord would collide with: the action a *different* live binding
+    /// already uses for `trigger`, or nil when the chord is free (or only used by
+    /// `action` itself). Powers the conflict-at-capture prompt (F4, CONTROLS-10/11) — a
+    /// rebind onto ⌘C should warn that Copy already uses it, before the after-the-fact
+    /// lint bar. Skips unbound rows (no shortcut) and disabled defaults (whose trigger is
+    /// actually free), and ignores `action` (recording a second trigger for the same
+    /// action is not a conflict). Trigger matching is canonical, so `Super+C` collides
+    /// with `super+c`.
+    public static func conflictingAction(forTrigger trigger: String, excludingAction action: String, in merged: [MergedKeybind]) -> String? {
+        let canonical = KeybindTrigger.parse(trigger).canonical()
+        guard !canonical.isEmpty else { return nil }
+        for row in merged where row.canonicalTrigger == canonical {
+            if row.origin == .unbound || row.origin == .userDisablesDefault { continue }
+            if row.action == action { continue }
+            return row.action
+        }
+        return nil
+    }
+
     /// Actions that can't be bound with just a chord: `unbind` is the disable
     /// mechanism (not an action), and `text`/`csi`/`esc`/`cursor_key` are meaningless
     /// without a `:parameter` this editor has no inline picker for — so they are never

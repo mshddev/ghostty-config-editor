@@ -49,6 +49,9 @@ final class KeyRecorderNSView: NSView {
     private var isRecording = false {
         didSet {
             needsDisplay = true
+            // The focus ring is suppressed while recording (the accent border stands in),
+            // so re-note the mask when recording toggles.
+            noteFocusRingMaskChanged()
             updateAccessibilityValue()
             NSAccessibility.post(element: self, notification: .valueChanged)
         }
@@ -59,6 +62,9 @@ final class KeyRecorderNSView: NSView {
 
     override init(frame frameRect: NSRect) {
         super.init(frame: frameRect)
+        // A real keyboard-focus ring (A11Y-9): focus no longer auto-starts recording, so
+        // the focused-but-idle state needs its own visible affordance.
+        focusRingType = .exterior
         setAccessibilityRole(.button)
         setAccessibilityLabel("Keyboard shortcut recorder")
         updateAccessibilityValue()
@@ -70,27 +76,57 @@ final class KeyRecorderNSView: NSView {
     /// otherwise reads only the static label.
     private func updateAccessibilityValue() {
         if isRecording {
-            setAccessibilityValue("Recording — press the shortcut")
+            setAccessibilityValue("Recording — press the shortcut. Delete to clear, Escape to cancel.")
+        } else if displayToken.isEmpty {
+            setAccessibilityValue("No shortcut. Press Return to record.")
         } else {
-            setAccessibilityValue(displayToken.isEmpty ? "No shortcut set" : KeybindTrigger.displaySymbol(for: displayToken))
+            setAccessibilityValue(KeybindTrigger.displaySymbol(for: displayToken))
         }
+    }
+
+    // MARK: - Focus ring (A11Y-9: focus is a state distinct from recording)
+
+    override var focusRingMaskBounds: NSRect { bounds }
+
+    override func drawFocusRingMask() {
+        // Recording draws its own accent border, so only ring the focused-idle state.
+        guard !isRecording else { return }
+        NSBezierPath(roundedRect: bounds.insetBy(dx: 1, dy: 1), xRadius: 6, yRadius: 6).fill()
     }
 
     // MARK: - Focus / lifecycle
 
     override func mouseDown(with event: NSEvent) {
+        // A click both focuses and starts recording (the discoverable, pointer-first path).
         window?.makeFirstResponder(self)
+        startRecording()
     }
 
     override func becomeFirstResponder() -> Bool {
         let became = super.becomeFirstResponder()
-        if became { startRecording() }
+        // Focus only — recording begins on a click or on Return/Space (see keyDown), so
+        // Tab-traversing the ~140-row list no longer hijacks the keyboard per row (A11Y-9).
+        if became { needsDisplay = true }
         return became
     }
 
     override func resignFirstResponder() -> Bool {
         stopRecording()
+        needsDisplay = true
         return super.resignFirstResponder()
+    }
+
+    /// While focused but idle, Return/Space begins recording; every other key passes
+    /// through so keyboard focus can keep traversing the list (A11Y-9). While recording,
+    /// the local monitor handles keys, so this rarely fires.
+    override func keyDown(with event: NSEvent) {
+        guard !isRecording else { super.keyDown(with: event); return }
+        switch Int(event.keyCode) {
+        case kVK_Return, kVK_ANSI_KeypadEnter, kVK_Space:
+            startRecording()
+        default:
+            super.keyDown(with: event)
+        }
     }
 
     override func viewWillMove(toWindow newWindow: NSWindow?) {
@@ -223,7 +259,8 @@ final class KeyRecorderNSView: NSView {
             text = displayToken.isEmpty ? "Press the keys…" : "Press the keys…  (\(shown))"
             color = .secondaryLabelColor
         } else if displayToken.isEmpty {
-            text = "Click to record"
+            // Names both affordances now that focus and recording are decoupled (A11Y-9).
+            text = "Click or press ⏎ to record"
             color = .tertiaryLabelColor
         } else {
             text = shown
@@ -238,8 +275,18 @@ final class KeyRecorderNSView: NSView {
         ]
         let attributed = NSAttributedString(string: text, attributes: attributes)
         let size = attributed.size()
-        let origin = NSPoint(x: bounds.minX + 10, y: bounds.midY - size.height / 2)
-        attributed.draw(at: origin)
+        // While recording, lift the main line to make room for the hint beneath it;
+        // otherwise center it vertically (isFlipped, so y grows downward from the top).
+        let mainY = isRecording ? bounds.minY + 3 : bounds.midY - size.height / 2
+        attributed.draw(at: NSPoint(x: bounds.minX + 10, y: mainY))
+
+        if isRecording {
+            let hint = NSAttributedString(string: "⌫ clear · esc cancel", attributes: [
+                .font: NSFont.systemFont(ofSize: 9),
+                .foregroundColor: NSColor.tertiaryLabelColor,
+            ])
+            hint.draw(at: NSPoint(x: bounds.minX + 10, y: bounds.minY + 3 + size.height))
+        }
     }
 
     override var intrinsicContentSize: NSSize {

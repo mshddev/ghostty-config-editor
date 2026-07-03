@@ -14,6 +14,38 @@ final class KeybindMergeTests: XCTestCase {
         rows.first { $0.canonicalTrigger == canonical }
     }
 
+    // MARK: - Conflict lookup (F4, CONTROLS-10/11)
+
+    private func merged(_ trigger: String, _ action: String, _ origin: KeybindOrigin) -> MergedKeybind {
+        MergedKeybind(trigger: trigger, action: action,
+                      canonicalTrigger: KeybindTrigger.parse(trigger).canonical(),
+                      origin: origin, source: nil)
+    }
+
+    func testConflictingActionFindsTheActionAlreadyBoundToTheChord() {
+        let rows = [
+            merged("super+c", "copy_to_clipboard", .default),
+            merged("", "new_split", .unbound),
+        ]
+        // Recording ⌘C for a different action collides with Copy — matched canonically.
+        XCTAssertEqual(
+            KeybindMerge.conflictingAction(forTrigger: "Super+C", excludingAction: "new_split", in: rows),
+            "copy_to_clipboard"
+        )
+        // A free chord doesn't collide.
+        XCTAssertNil(KeybindMerge.conflictingAction(forTrigger: "super+ctrl+k", excludingAction: "new_split", in: rows))
+        // Recording the same chord for the SAME action is a second trigger, not a conflict.
+        XCTAssertNil(KeybindMerge.conflictingAction(forTrigger: "super+c", excludingAction: "copy_to_clipboard", in: rows))
+    }
+
+    func testConflictingActionIgnoresDisabledDefaultsAndUnboundRows() {
+        // ⌘C's default is turned off, so the chord is actually free.
+        let disabled = [merged("super+c", "copy_to_clipboard", .userDisablesDefault)]
+        XCTAssertNil(KeybindMerge.conflictingAction(forTrigger: "super+c", excludingAction: "new_split", in: disabled))
+        // An empty trigger never collides.
+        XCTAssertNil(KeybindMerge.conflictingAction(forTrigger: "", excludingAction: "x", in: disabled))
+    }
+
     // MARK: - Merge (RK1)
 
     func testMergeMarksDefaultsAddedAndOverrides() {
