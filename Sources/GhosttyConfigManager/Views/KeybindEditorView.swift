@@ -477,7 +477,12 @@ private struct KeybindRow: View {
         let token = token.trimmingCharacters(in: .whitespaces)
         guard !token.isEmpty else { return }
         if !row.canonicalTrigger.isEmpty,
-           KeybindTrigger.parse(token).canonical() == row.canonicalTrigger { return }
+           KeybindTrigger.parse(token).canonical() == row.canonicalTrigger {
+            // Re-recording the row's own current keys is a no-op — but still clear any
+            // lingering conflict prompt from a prior capture (review F #2).
+            pendingConflict = nil
+            return
+        }
         if let colliding = KeybindMerge.conflictingAction(forTrigger: token,
                                                           excludingAction: row.action,
                                                           in: model.mergedKeybinds) {

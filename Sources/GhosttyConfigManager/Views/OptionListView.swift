@@ -141,9 +141,11 @@ struct OptionListView: View {
     }
 
     /// "N shortcuts customized" for the keybind deep-link — the count of the user's own
-    /// `keybind` lines (each line is one customized trigger, including any `=unbind`).
+    /// per-trigger `keybind` lines (each binding, including a disabled default). Uses the
+    /// kit parser so whole-value specials like `clear` — which aren't per-trigger bindings
+    /// and never appear as editor rows — don't inflate the count (review F #3).
     private func customizedKeybindSummary(_ option: MergedOption) -> String {
-        let n = option.userValues.count
+        let n = KeybindMerge.userBindings(values: option.userValues, sources: option.sources).count
         return "\(n) shortcut\(n == 1 ? "" : "s") customized"
     }
 

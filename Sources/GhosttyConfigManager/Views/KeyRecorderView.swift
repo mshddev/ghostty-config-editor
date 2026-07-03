@@ -97,9 +97,12 @@ final class KeyRecorderNSView: NSView {
     // MARK: - Focus / lifecycle
 
     override func mouseDown(with event: NSEvent) {
-        // A click both focuses and starts recording (the discoverable, pointer-first path).
-        window?.makeFirstResponder(self)
-        startRecording()
+        // A click both focuses and starts recording (the discoverable, pointer-first path)
+        // — but only if focus was actually granted. Recording on a *failed* makeFirstResponder
+        // would install the app-wide key monitor on a non-first-responder view that never gets
+        // `resignFirstResponder`, stranding it (a runaway capture + keystroke swallow). This
+        // keeps "monitor installed" ⇒ "is first responder" (review F #1).
+        if window?.makeFirstResponder(self) == true { startRecording() }
     }
 
     override func becomeFirstResponder() -> Bool {
