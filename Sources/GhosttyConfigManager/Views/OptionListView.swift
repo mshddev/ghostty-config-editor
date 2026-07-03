@@ -203,10 +203,20 @@ struct OptionRow: View {
     /// `font-family` and its bold/italic variants are the exception: they're
     /// repeatable (primary + fallbacks, e.g. a Nerd Font for icons), but a font is
     /// something you pick from a list, so they get a dedicated font picker instead.
+    /// Repeatable keys that get a dedicated multi-value editor (B8). `config-file`
+    /// stays plain advanced text — a generic list editor would invite arbitrary
+    /// includes the reader follows (out of scope). `keybind` is edited on its own
+    /// surface, not here.
+    private static let listEditorOptions: Set<String> = ["env", "font-feature"]
+
     @ViewBuilder
     private var editor: some View {
         if option.option.name.hasPrefix("font-family") {
             FontFamilyEditor(option: option)
+        } else if option.option.name == "palette" {
+            PaletteEditor(option: option)
+        } else if Self.listEditorOptions.contains(option.option.name) {
+            ListValueEditor(option: option)
         } else if !option.option.isRepeatable {
             InlineOptionEditor(option: option)
         }
@@ -1280,6 +1290,213 @@ private struct FontRow: View {
             .padding(.horizontal, 2)
         }
         .buttonStyle(.plain)
+    }
+}
+
+// MARK: - Palette editor (U14)
+
+/// A 16-swatch grid for the `palette` repeatable option — each ANSI slot picked with
+/// the native color well, rebuilding the `index=#hex` value list through the safe
+/// repeatable write path (B8, R5). Unset slots are seeded from the current theme's
+/// palette so the grid shows the colors actually in effect; only slots the user edits
+/// are written, leaving the rest to follow the theme. When the theme's colors haven't
+/// loaded yet the untouched slots simply render blank with a hint — a graceful
+/// fallback, since `themeColors` is populated lazily.
+private struct PaletteEditor: View {
+    @Environment(AppModel.self) private var model
+    let option: MergedOption
+    @State private var showing = false
+
+    private static let ansiNames = [
+        "Black", "Red", "Green", "Yellow", "Blue", "Magenta", "Cyan", "White",
+        "Bright Black", "Bright Red", "Bright Green", "Bright Yellow",
+        "Bright Blue", "Bright Magenta", "Bright Cyan", "Bright White",
+    ]
+
+    /// The live `palette` option, so the grid re-renders after an in-place write
+    /// (the captured `option` prop goes stale inside a popover, like FontFamilyEditor).
+    private var liveOption: MergedOption {
+        model.browser?.merged.option(named: "palette") ?? option
+    }
+
+    private var userSlots: [Int: String] { GhosttyPalette.parse(liveOption.userValues) }
+    private var themeSlots: [Int: String] { model.currentThemePalette() }
+
+    /// The color in force for a slot: the user's value if set, else the theme's.
+    private func color(at index: Int) -> String? {
+        userSlots[index] ?? themeSlots[index]
+    }
+
+    var body: some View {
+        Button { showing.toggle() } label: {
+            HStack(spacing: 5) {
+                miniPreview
+                Text(userSlots.isEmpty ? "Edit…" : "\(userSlots.count) set")
+            }
+        }
+        .buttonStyle(.bordered)
+        .controlSize(.small)
+        .help("Edit the 16 ANSI terminal colors")
+        .popover(isPresented: $showing, arrowEdge: .bottom) { grid }
+        // Seed unset slots from the current theme; harmless (cached) if already loaded.
+        .task { await model.loadCurrentThemeColorsIfNeeded() }
+    }
+
+    private var miniPreview: some View {
+        HStack(spacing: 1) {
+            ForEach(0..<8, id: \.self) { index in
+                Rectangle()
+                    .fill(Color(hex: color(at: index)) ?? Color(nsColor: .quaternaryLabelColor))
+                    .frame(width: 5, height: 12)
+            }
+        }
+        .clipShape(RoundedRectangle(cornerRadius: 2))
+    }
+
+    private var grid: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            Text("Palette").font(.callout.weight(.semibold))
+            if userSlots.isEmpty && themeSlots.isEmpty {
+                Text("Open Themes once to load this theme's colors, or set slots directly below.")
+                    .font(.caption).foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+            LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 10), count: 2), spacing: 8) {
+                ForEach(0..<GhosttyPalette.slotCount, id: \.self) { index in
+                    slotRow(index)
+                }
+            }
+            Divider()
+            HStack {
+                Text("Unset slots follow the current theme.")
+                    .font(.caption2).foregroundStyle(.secondary)
+                Spacer(minLength: 4)
+                if !userSlots.isEmpty {
+                    Button("Reset all") { apply([]) }
+                        .controlSize(.small)
+                        .help("Clear every custom slot and follow the theme")
+                }
+            }
+        }
+        .padding(12)
+        .frame(width: 380)
+    }
+
+    private func slotRow(_ index: Int) -> some View {
+        HStack(spacing: 6) {
+            ColorPicker("", selection: binding(for: index), supportsOpacity: false)
+                .labelsHidden()
+                .accessibilityLabel(Text("ANSI \(index), \(Self.ansiNames[index])"))
+            VStack(alignment: .leading, spacing: 0) {
+                Text("\(index)  \(Self.ansiNames[index])").font(.caption).lineLimit(1)
+                Text(color(at: index) ?? "—")
+                    .font(.caption2.monospaced()).foregroundStyle(.secondary).lineLimit(1)
+            }
+            Spacer(minLength: 0)
+        }
+    }
+
+    /// A native-picker binding for one slot: read the color in force, and on pick
+    /// rebuild the value list with just that slot changed.
+    private func binding(for index: Int) -> Binding<Color> {
+        Binding(
+            get: { Color(hex: color(at: index)) ?? Color(nsColor: .quaternaryLabelColor) },
+            set: { newColor in
+                if let hex = newColor.ghosttyHex {
+                    apply(GhosttyPalette.setting(index: index, to: hex, in: liveOption.userValues))
+                }
+            }
+        )
+    }
+
+    private func apply(_ values: [String]) {
+        Task { await model.applyEdit(option: liveOption, values: values) }
+    }
+}
+
+// MARK: - Repeatable list editor (U14)
+
+/// An add/remove list for repeatable text options (`env`, `font-feature`) — the
+/// proven "Edit…" popover pattern over a list of value rows, each write routed
+/// through the safe repeatable path (B8).
+private struct ListValueEditor: View {
+    @Environment(AppModel.self) private var model
+    let option: MergedOption
+    @State private var showing = false
+    @State private var newEntry = ""
+
+    private var liveOption: MergedOption {
+        model.browser?.merged.option(named: option.option.name) ?? option
+    }
+    private var entries: [String] { liveOption.isSet ? liveOption.userValues : [] }
+
+    var body: some View {
+        Button { showing.toggle() } label: {
+            Text(entries.isEmpty ? "Add…" : "\(entries.count) set")
+        }
+        .buttonStyle(.bordered)
+        .controlSize(.small)
+        .help("Edit \(option.option.displayTitle)")
+        .popover(isPresented: $showing, arrowEdge: .bottom) { editor }
+    }
+
+    private var editor: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Text(option.option.displayTitle).font(.callout.weight(.semibold)).lineLimit(1)
+            if entries.isEmpty {
+                Text("No entries yet.").font(.caption).foregroundStyle(.secondary)
+            } else {
+                ForEach(Array(entries.enumerated()), id: \.offset) { index, entry in
+                    HStack(spacing: 6) {
+                        Text(entry)
+                            .font(.callout.monospaced())
+                            .lineLimit(1).truncationMode(.middle)
+                        Spacer(minLength: 4)
+                        Button { remove(at: index) } label: {
+                            Image(systemName: "minus.circle")
+                        }
+                        .buttonStyle(.plain)
+                        .foregroundStyle(.secondary)
+                        .help("Remove")
+                        .accessibilityLabel("Remove \(entry)")
+                    }
+                }
+            }
+            Divider()
+            HStack(spacing: 6) {
+                TextField(placeholder, text: $newEntry)
+                    .textFieldStyle(.roundedBorder)
+                    .onSubmit { add() }
+                Button("Add") { add() }
+                    .disabled(newEntry.trimmingCharacters(in: .whitespaces).isEmpty)
+            }
+        }
+        .padding(12)
+        .frame(width: 320)
+    }
+
+    private var placeholder: String {
+        if option.option.name == "env" { return "KEY=VALUE" }
+        let example = LabelCatalog.exampleValue(from: option.option.documentation, excluding: option.option.name)
+        return example.isEmpty ? "value" : example
+    }
+
+    private func add() {
+        let entry = newEntry.trimmingCharacters(in: .whitespaces)
+        guard !entry.isEmpty else { return }
+        apply(entries + [entry])
+        newEntry = ""
+    }
+
+    private func remove(at index: Int) {
+        var next = entries
+        guard next.indices.contains(index) else { return }
+        next.remove(at: index)
+        apply(next)
+    }
+
+    private func apply(_ values: [String]) {
+        Task { await model.applyEdit(option: liveOption, values: values) }
     }
 }
 

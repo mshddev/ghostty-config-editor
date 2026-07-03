@@ -320,6 +320,24 @@ public final class AppModel {
         await applyEdit(option: themeOption, values: [name])
     }
 
+    /// The current theme's palette (index→hex) if its colors have loaded, used to seed
+    /// unset slots in the palette editor (B8). Empty until loaded, or when no theme is set.
+    public func currentThemePalette() -> [Int: String] {
+        guard let name = currentTheme, let colors = themeColors[name] else { return [:] }
+        return colors.palette
+    }
+
+    /// Kick off loading the current theme's colors so the palette editor can seed unset
+    /// slots from it: load the theme list (to resolve the `ThemeRef`), then trigger the
+    /// lazy per-theme color load. A no-op when no theme is set. Falls back gracefully —
+    /// the editor shows blank slots + a hint if the colors never arrive (B8).
+    public func loadCurrentThemeColorsIfNeeded() async {
+        guard currentTheme != nil else { return }
+        await loadThemesIfNeeded()
+        guard let name = currentTheme, let ref = themes.first(where: { $0.name == name }) else { return }
+        ensureColors(for: ref)
+    }
+
     // MARK: - Keybindings (U5)
 
     /// The `keybind` repeatable option, joined with the user's bindings. Present
