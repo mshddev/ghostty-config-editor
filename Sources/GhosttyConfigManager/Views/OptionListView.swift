@@ -147,12 +147,18 @@ struct OptionRow: View {
                     .help(stateHelp)
                     .accessibilityHidden(true)
                 VStack(alignment: .leading, spacing: 1) {
-                    Text(option.option.name)
+                    Text(option.option.displayTitle)
                         .font(.body)
-                    Text(subtitle)
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                        .lineLimit(1)
+                        // The raw key is demoted to the popover (and search, R8); a
+                        // hover tooltip keeps it a keystroke away for power users.
+                        .help(option.option.name)
+                    if !subtitle.isEmpty {
+                        Text(subtitle)
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                            .lineLimit(1)
+                            .help(subtitle)
+                    }
                 }
                 Spacer(minLength: 12)
                 editor
@@ -243,15 +249,13 @@ struct OptionRow: View {
         return doc.isEmpty ? "No documentation available." : doc
     }
 
-    /// The default (or, for repeatable keys, the current values) — the inline
-    /// control already shows the *current* scalar value, so the subtitle carries
-    /// the complementary context instead of repeating it.
+    /// A plain-language one-line description of what the option does (A1). The
+    /// default/value context that used to live here ("default: X" / "no default" /
+    /// "default: default") now lives in the info popover, so the row reads as
+    /// name + purpose. Empty when the catalog has no summary, and the line is then
+    /// hidden rather than showing filler.
     private var subtitle: String {
-        if option.option.isRepeatable {
-            return option.isSet ? option.userValues.joined(separator: ", ") : "not set"
-        }
-        let def = option.option.defaultValue
-        return def.isEmpty ? "no default" : "default: \(def)"
+        option.option.shortSummary
     }
 
     private var stateColor: Color {
@@ -349,7 +353,7 @@ private struct InlineOptionEditor: View {
                     if isOpen { draft = currentValue }
                 }
         default:
-            TextField("value", text: $draft)
+            TextField(fieldPlaceholder, text: $draft)
                 .textFieldStyle(.roundedBorder)
                 .frame(width: 160)
                 .onSubmit { commit() }
@@ -358,6 +362,14 @@ private struct InlineOptionEditor: View {
 
     private var currentValue: String {
         option.isSet ? (option.userValues.first ?? "") : option.option.defaultValue
+    }
+
+    /// A hint for an empty free-text field: the option's default value if it has one
+    /// (so the field shows what Ghostty would fall back to), else a neutral "value".
+    /// Replaces the old generic "value" placeholder on every field (CONTENT/CONTROLS-15).
+    private var fieldPlaceholder: String {
+        let def = option.option.defaultValue.strippingConfigQuotes
+        return def.isEmpty ? "value" : def
     }
 
     private var isApplyingThis: Bool {
@@ -729,14 +741,9 @@ private struct FontFamilyEditor: View {
 
     /// Ghostty accepts quoted font names (`font-family = "MesloLGS NF"`); the quotes
     /// are just a quoting mechanism, so strip one surrounding pair for display and
-    /// for the custom-font preview (a quoted name won't resolve).
-    private func displayName(_ font: String) -> String {
-        let trimmed = font.trimmingCharacters(in: .whitespaces)
-        if trimmed.count >= 2, trimmed.hasPrefix("\""), trimmed.hasSuffix("\"") {
-            return String(trimmed.dropFirst().dropLast())
-        }
-        return trimmed
-    }
+    /// for the custom-font preview (a quoted name won't resolve). Uses the shared
+    /// helper so the quote-stripping rule is defined once.
+    private func displayName(_ font: String) -> String { font.strippingConfigQuotes }
 
     /// The comparison key for a font: de-quoted and case-folded, so a quoted saved
     /// value (`"MesloLGS NF"`) matches the unquoted name from `+list-fonts`
@@ -830,8 +837,14 @@ private struct OptionInfoPopover: View {
 
     private var header: some View {
         VStack(alignment: .leading, spacing: 6) {
-            Text(option.option.name)
+            Text(option.option.displayTitle)
                 .font(.headline)
+                .textSelection(.enabled)
+            // The raw config key, demoted beneath the friendly title but selectable
+            // so a power user can copy the exact key to paste into a config (R8).
+            Text(option.option.name)
+                .font(.caption.monospaced())
+                .foregroundStyle(.secondary)
                 .textSelection(.enabled)
             HStack(spacing: 8) {
                 Badge(text: option.option.category, systemImage: "folder")
@@ -868,13 +881,13 @@ private struct OptionInfoPopover: View {
         VStack(alignment: .leading, spacing: 8) {
             if option.isSet {
                 LabeledRow("Your value") {
-                    Text(option.userValues.joined(separator: "\n"))
+                    Text(option.userValues.map(\.strippingConfigQuotes).joined(separator: "\n"))
                         .font(.callout.monospaced())
                         .textSelection(.enabled)
                 }
             }
             LabeledRow("Default") {
-                Text(option.option.defaultValue.isEmpty ? "—" : option.option.defaultValue)
+                Text(option.option.defaultValue.isEmpty ? "—" : option.option.defaultValue.strippingConfigQuotes)
                     .font(.callout.monospaced())
                     .foregroundStyle(.secondary)
                     .textSelection(.enabled)
@@ -923,6 +936,21 @@ private struct OptionInfoPopover: View {
 }
 
 // MARK: - Small reusable bits
+
+extension String {
+    /// Strip one surrounding pair of double quotes — Ghostty's quoting for values
+    /// with spaces (`font-family = "MesloLGS NF"`). The quotes are a config-syntax
+    /// artifact, not part of the value the user thinks in, so display strips them
+    /// (CONTENT-16). Trims surrounding whitespace first. Promoted from
+    /// `FontFamilyEditor.displayName` so every place a value renders as text can reuse it.
+    var strippingConfigQuotes: String {
+        let trimmed = trimmingCharacters(in: .whitespaces)
+        if trimmed.count >= 2, trimmed.hasPrefix("\""), trimmed.hasSuffix("\"") {
+            return String(trimmed.dropFirst().dropLast())
+        }
+        return trimmed
+    }
+}
 
 private struct Badge: View {
     let text: String
