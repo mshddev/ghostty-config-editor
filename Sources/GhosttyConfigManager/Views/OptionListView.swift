@@ -21,7 +21,11 @@ struct OptionListView: View {
                 // A browsed category splits into a Common section and a collapsible
                 // Advanced section (B1); the subview owns the per-category
                 // expand/collapse state, keyed so each category remembers its own.
+                // `.id(categoryName)` gives each category a distinct view identity, so
+                // its `@AppStorage("advancedExpanded.<category>")` is re-initialized per
+                // category instead of staying pinned to the first one shown.
                 CategoryOptionList(category: categoryName)
+                    .id(categoryName)
             } else {
                 // Search and the Customized surface show one flat, ranked list —
                 // the Common/Advanced split is a browse-only affordance.
@@ -745,6 +749,8 @@ private struct NumericOptionEditor: View {
         .onChange(of: fieldFocused) { _, focused in
             if !focused { commitOnBlur() }   // commit-on-blur (B7)
         }
+        // Don't let a queued debounce write for a row that's been scrolled/filtered away.
+        .onDisappear { pendingStep?.cancel() }
     }
 
     /// Commit whatever's in the field when it loses focus, clamping via the spec for a
@@ -1334,6 +1340,14 @@ private struct PaletteEditor: View {
     @Environment(AppModel.self) private var model
     let option: MergedOption
     @State private var showing = false
+    /// The user's slots being edited, seeded from the saved value when the popover
+    /// opens. Edits mutate this locally (live preview) and are committed through a
+    /// trailing debounce — the native ColorPicker fires its setter continuously while
+    /// the wheel drags, so committing per tick would storm the writer with a
+    /// validate+write+reload each and race into stale-on-disk failures.
+    @State private var working: [Int: String] = [:]
+    @State private var isEditing = false
+    @State private var pendingCommit: Task<Void, Never>?
 
     private static let ansiNames = [
         "Black", "Red", "Green", "Yellow", "Blue", "Magenta", "Cyan", "White",
@@ -1350,9 +1364,10 @@ private struct PaletteEditor: View {
     private var userSlots: [Int: String] { GhosttyPalette.parse(liveOption.userValues) }
     private var themeSlots: [Int: String] { model.currentThemePalette() }
 
-    /// The color in force for a slot: the user's value if set, else the theme's.
+    /// The color in force for a slot: the local edit while the popover is open, else
+    /// the user's saved value, else the theme's.
     private func color(at index: Int) -> String? {
-        userSlots[index] ?? themeSlots[index]
+        (isEditing ? working[index] : userSlots[index]) ?? themeSlots[index]
     }
 
     var body: some View {
@@ -1368,6 +1383,17 @@ private struct PaletteEditor: View {
         .popover(isPresented: $showing, arrowEdge: .bottom) { grid }
         // Seed unset slots from the current theme; harmless (cached) if already loaded.
         .task { await model.loadCurrentThemeColorsIfNeeded() }
+        // Seed the working copy on open; flush any pending edit on close.
+        .onChange(of: showing) { _, open in
+            if open {
+                working = userSlots
+                isEditing = true
+            } else {
+                pendingCommit?.cancel()
+                flushCommit()
+                isEditing = false
+            }
+        }
     }
 
     private var miniPreview: some View {
@@ -1399,10 +1425,14 @@ private struct PaletteEditor: View {
                 Text("Unset slots follow the current theme.")
                     .font(.caption2).foregroundStyle(.secondary)
                 Spacer(minLength: 4)
-                if !userSlots.isEmpty {
-                    Button("Reset all") { apply([]) }
-                        .controlSize(.small)
-                        .help("Clear every custom slot and follow the theme")
+                if !working.isEmpty {
+                    Button("Reset all") {
+                        pendingCommit?.cancel()
+                        working = [:]
+                        applyNow([])
+                    }
+                    .controlSize(.small)
+                    .help("Clear every custom slot and follow the theme")
                 }
             }
         }
@@ -1425,19 +1455,41 @@ private struct PaletteEditor: View {
     }
 
     /// A native-picker binding for one slot: read the color in force, and on pick
-    /// rebuild the value list with just that slot changed.
+    /// stage the change in the local working copy (live preview) with a debounced
+    /// commit — never a write per wheel tick.
     private func binding(for index: Int) -> Binding<Color> {
         Binding(
             get: { Color(hex: color(at: index)) ?? Color(nsColor: .quaternaryLabelColor) },
             set: { newColor in
-                if let hex = newColor.ghosttyHex {
-                    apply(GhosttyPalette.setting(index: index, to: hex, in: liveOption.userValues))
-                }
+                guard let hex = newColor.ghosttyHex else { return }
+                // Ignore a no-op callback (e.g. the panel echoing the current color on
+                // open) so an unset slot isn't silently pinned to its placeholder gray.
+                guard hex.caseInsensitiveCompare(color(at: index) ?? "") != .orderedSame else { return }
+                working[index] = hex
+                scheduleCommit()
             }
         )
     }
 
-    private func apply(_ values: [String]) {
+    /// Coalesce a burst of wheel ticks into a single write ~350ms after the last one.
+    private func scheduleCommit() {
+        pendingCommit?.cancel()
+        pendingCommit = Task {
+            try? await Task.sleep(for: .milliseconds(350))
+            guard !Task.isCancelled else { return }
+            flushCommit()
+        }
+    }
+
+    /// Write the working copy through the safe repeatable path, but only when it
+    /// differs from what's already saved.
+    private func flushCommit() {
+        let values = GhosttyPalette.valueList(working)
+        guard values != liveOption.userValues else { return }
+        applyNow(values)
+    }
+
+    private func applyNow(_ values: [String]) {
         Task { await model.applyEdit(option: liveOption, values: values) }
     }
 }

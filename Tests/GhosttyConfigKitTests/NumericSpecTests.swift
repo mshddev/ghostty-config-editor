@@ -65,6 +65,13 @@ final class NumericSpecTests: XCTestCase {
         XCTAssertEqual(NumericSpec.formatBytes(0), "0 bytes")
     }
 
+    func testFormatBytesUnitBoundaries() {
+        XCTAssertEqual(NumericSpec.formatBytes(999), "999 bytes")        // just under 1 KB
+        XCTAssertEqual(NumericSpec.formatBytes(1_000), "1 KB")          // exactly 1 KB
+        XCTAssertEqual(NumericSpec.formatBytes(1_000_000), "1 MB")      // exactly 1 MB
+        XCTAssertEqual(NumericSpec.formatBytes(1_000_000_000), "1 GB")  // exactly 1 GB
+    }
+
     func testInferredStepFromDefault() {
         XCTAssertEqual(NumericSpec.inferredStep(forDefault: "0.5"), 0.1)   // fractional → fine
         XCTAssertEqual(NumericSpec.inferredStep(forDefault: "16"), 1)      // integer → whole

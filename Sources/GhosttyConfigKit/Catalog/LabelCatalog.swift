@@ -125,7 +125,10 @@ public struct LabelCatalog: Sendable {
     /// this surfaces the shape of a valid value without curating one per option.
     public static func exampleValue(from documentation: String, excluding name: String = "") -> String {
         let parts = documentation.components(separatedBy: "`")
-        guard parts.count >= 3 else { return "" }   // need at least one `…` pair
+        // Need at least one *balanced* `…` pair. An even part-count means an odd number
+        // of backticks (an unclosed one), where an odd index isn't reliably inside a
+        // pair — bail rather than mine a token from unpaired prose.
+        guard parts.count >= 3, parts.count % 2 == 1 else { return "" }
         // Odd indices sit inside a backtick pair.
         for index in stride(from: 1, to: parts.count, by: 2) {
             let token = parts[index].trimmingCharacters(in: .whitespacesAndNewlines)

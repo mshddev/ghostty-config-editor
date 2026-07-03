@@ -82,6 +82,11 @@ final class LabelCatalogTests: XCTestCase {
         XCTAssertEqual(LabelCatalog.exampleValue(from: "", excluding: ""), "")
     }
 
+    func testExampleValueBailsOnUnbalancedBacktick() {
+        // An unclosed backtick must not let unpaired prose be mined as an example.
+        XCTAssertEqual(LabelCatalog.exampleValue(from: "Use `xterm here without closing", excluding: ""), "")
+    }
+
     // MARK: - parity + orphan guards (against the real captured catalog)
 
     func testRawKeySearchStillMatchesAfterRelabeling() throws {
