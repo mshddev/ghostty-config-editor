@@ -7,13 +7,23 @@ struct ThemeBrowserView: View {
     @Environment(AppModel.self) private var model
 
     var body: some View {
+        @Bindable var model = model
         VStack(spacing: 0) {
+            SurfaceHeader(
+                title: "Themes",
+                subtitle: themesSubtitle,
+                searchText: $model.themeQuery,
+                searchPrompt: "Search themes"
+            )
             disclaimerBar
+            Divider()
             if model.themes.isEmpty {
                 ProgressView("Loading themes…")
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
+            } else if model.filteredThemes.isEmpty {
+                ContentUnavailableView.search(text: model.themeQuery)
             } else {
-                List(model.themes) { theme in
+                List(model.filteredThemes) { theme in
                     Button {
                         Task { await model.applyTheme(theme.name) }
                     } label: {
@@ -28,30 +38,20 @@ struct ThemeBrowserView: View {
                     .accessibilityHint("Apply this theme")
                 }
             }
-            applyFeedback
+            // The shared save-state bar (C3) — replaces this surface's hand-rolled
+            // feedback; it carries the failure banner and the auto-reload caption (R6)
+            // plus Undo, consistent with every other surface.
+            SurfaceFeedbackBar(applyState: model.applyState)
         }
-        .navigationTitle("Themes")
         .task { await model.loadThemesIfNeeded() }
     }
 
-    /// Apply feedback for the Themes surface. Today the option editor owns the rich
-    /// success card; here we surface the failure banner *and* — added in U2 — the
-    /// auto-reload caption, which would otherwise be invisible when a theme is applied
-    /// from this surface (R6). The reload copy is kit-derived (`ReloadOutcome.message`).
-    @ViewBuilder
-    private var applyFeedback: some View {
-        switch model.applyState {
-        case .failed(let message):
-            Label(message, systemImage: "xmark.octagon.fill")
-                .foregroundStyle(.red).font(.caption).padding(8)
-        case .succeeded(_, _, let reload):
-            if let reloadMessage = reload.message {
-                Label(reloadMessage, systemImage: "checkmark.circle.fill")
-                    .foregroundStyle(.secondary).font(.caption).padding(8)
-            }
-        case .idle, .applying:
-            EmptyView()
-        }
+    /// A theme count for the header — the filtered count while searching. Nil while
+    /// the list is still loading.
+    private var themesSubtitle: String? {
+        guard !model.themes.isEmpty else { return nil }
+        let n = model.filteredThemes.count
+        return "\(n) theme\(n == 1 ? "" : "s")"
     }
 
     private var disclaimerBar: some View {

@@ -54,6 +54,10 @@ private struct WindowConfigurator: NSViewRepresentable {
             window.collectionBehavior.insert(.fullScreenNone)
             window.standardWindowButton(.zoomButton)?.isEnabled = false
             window.maxSize = NSSize(width: WindowMetrics.maxWidth, height: WindowMetrics.maxHeight)
+            // Each surface titles itself in its in-content SurfaceHeader (C3), so the
+            // title-bar text is redundant — and with the per-surface navigationTitle
+            // gone it would otherwise fall back to the truncated app name.
+            window.titleVisibility = .hidden
         }
         return view
     }
@@ -212,6 +216,9 @@ struct RootView: View {
             }
         }
         .cappedContentColumn()
+        // Each surface titles itself in its in-content SurfaceHeader (C3); an explicit
+        // empty title keeps the toolbar from falling back to the truncated app name.
+        .navigationTitle("")
     }
 
     /// Every surface is now a self-contained two-column pane (sidebar · content).
@@ -224,6 +231,11 @@ struct RootView: View {
         } detail: {
             mainColumn
         }
+        // Changing surface clears any lingering apply feedback so the next surface
+        // (which may now show its own SurfaceFeedbackBar) doesn't inherit a stale
+        // "Saved" from the previous one. Centralized here since every surface can
+        // surface feedback now, not just the option list (C3).
+        .onChange(of: model.selection) { _, _ in model.resetApplyState() }
         .toolbar {
             // Identity and health share one group but are split by a divider, so the
             // version label (identity) stops reading as a health status (LAYOUT-5/7).

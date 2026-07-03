@@ -68,6 +68,10 @@ public final class AppModel {
     public var binaryOverride: String?
     public var selection: SidebarSelection? = .themes
     public var query: String = ""
+    /// The Themes surface's own search text (name filter), bound to the shared
+    /// `SurfaceHeader` field. Distinct from `query` so each surface filters itself
+    /// and never means two things at once (C3). E1 layers light/dark grouping on top.
+    public var themeQuery: String = ""
     public var selectedOptionName: String?
 
     /// `UserDefaults` key for the auto-reload toggle (KTD7).
@@ -259,6 +263,19 @@ public final class AppModel {
     /// The currently-applied theme value, if set.
     public var currentTheme: String? {
         browser?.merged.option(named: "theme").flatMap { $0.isSet ? $0.userValues.first : nil }
+    }
+
+    /// The themes matching `themeQuery` by name (case- and diacritic-insensitive);
+    /// the whole list when the query is empty. The Themes surface renders this instead
+    /// of `themes` so its shared-header search field actually filters (C3). Colors still
+    /// load lazily per visible row, so filtering never forces an eager color read.
+    public var filteredThemes: [ThemeRef] {
+        let q = themeQuery.trimmingCharacters(in: .whitespaces)
+        guard !q.isEmpty else { return themes }
+        let needle = q.folding(options: [.caseInsensitive, .diacriticInsensitive], locale: nil)
+        return themes.filter {
+            $0.name.folding(options: [.caseInsensitive, .diacriticInsensitive], locale: nil).contains(needle)
+        }
     }
 
     /// Lazily create (once) the shared theme/font provider for the current

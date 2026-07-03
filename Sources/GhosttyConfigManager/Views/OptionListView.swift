@@ -11,42 +11,66 @@ struct OptionListView: View {
 
     var body: some View {
         @Bindable var model = model
-        Group {
-            if model.browser == nil {
-                ProgressView("Loading catalog…")
-                    .frame(maxWidth: .infinity, maxHeight: .infinity)
-            } else if model.visibleOptions.isEmpty {
-                emptyState
-            } else if model.showsSplitSections {
-                // A browsed category splits into a Common section and a collapsible
-                // Advanced section (B1); the subview owns the per-category
-                // expand/collapse state, keyed so each category remembers its own.
-                // `.id(categoryName)` gives each category a distinct view identity, so
-                // its `@AppStorage("advancedExpanded.<category>")` is re-initialized per
-                // category instead of staying pinned to the first one shown.
-                CategoryOptionList(category: categoryName)
-                    .id(categoryName)
-            } else {
-                // Search and the Customized surface show one flat, ranked list —
-                // the Common/Advanced split is a browse-only affordance. Rendered as
-                // a single grouped-Form section so its rows match the browsed cards.
-                Form {
-                    Section {
-                        ForEach(model.visibleOptions) { option in
-                            OptionRow(option: option)
-                        }
+        VStack(spacing: 0) {
+            // The shared header owns the search field now (moved off the toolbar's
+            // `.searchable`), so search sits in the same place on every surface (C3).
+            SurfaceHeader(
+                title: title,
+                subtitle: headerSubtitle,
+                searchText: $model.query,
+                searchPrompt: "Search options or describe a behavior"
+            )
+            Divider()
+            content
+        }
+        .navigationSplitViewColumnWidth(min: 360, ideal: 460)
+    }
+
+    @ViewBuilder
+    private var content: some View {
+        if model.browser == nil {
+            ProgressView("Loading catalog…")
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+        } else if model.visibleOptions.isEmpty {
+            emptyState
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+        } else if model.showsSplitSections {
+            // A browsed category splits into a Common section and a collapsible
+            // Advanced section (B1); the subview owns the per-category
+            // expand/collapse state, keyed so each category remembers its own.
+            // `.id(categoryName)` gives each category a distinct view identity, so
+            // its `@AppStorage("advancedExpanded.<category>")` is re-initialized per
+            // category instead of staying pinned to the first one shown.
+            CategoryOptionList(category: categoryName)
+                .id(categoryName)
+        } else {
+            // Search and the Customized surface show one flat, ranked list —
+            // the Common/Advanced split is a browse-only affordance. Rendered as
+            // a single grouped-Form section so its rows match the browsed cards.
+            Form {
+                Section {
+                    ForEach(model.visibleOptions) { option in
+                        OptionRow(option: option)
                     }
                 }
-                .formStyle(.grouped)
             }
+            .formStyle(.grouped)
         }
-        .searchable(text: $model.query, placement: .toolbar,
-                    prompt: "Search options or describe a behavior")
-        .navigationTitle(title)
-        .navigationSplitViewColumnWidth(min: 360, ideal: 460)
-        // Leaving a surface clears any lingering per-row apply feedback so the
-        // next surface doesn't show a stale "Saved" on some unrelated row.
-        .onChange(of: model.selection) { _, _ in model.resetApplyState() }
+    }
+
+    /// A secondary count line for the header — the result count while searching, or the
+    /// number of customized options on the Customized surface. Nil (hidden) otherwise.
+    private var headerSubtitle: String? {
+        guard model.browser != nil else { return nil }
+        if !model.query.trimmingCharacters(in: .whitespaces).isEmpty {
+            let n = model.visibleOptions.count
+            return "\(n) result\(n == 1 ? "" : "s")"
+        }
+        if model.selection == .customized {
+            let n = model.visibleOptions.count
+            return n == 0 ? nil : "\(n) customized"
+        }
+        return nil
     }
 
     private var title: String {
@@ -178,7 +202,7 @@ struct OptionRow: View {
             HStack(spacing: 8) {
                 VStack(alignment: .leading, spacing: 1) {
                     Text(option.option.displayTitle)
-                        .font(.body)
+                        .font(RowMetrics.titleFont)
                         // The raw key is demoted to the popover (and search, R8); a
                         // hover tooltip keeps it a keystroke away for power users.
                         .help(option.option.name)
@@ -187,7 +211,7 @@ struct OptionRow: View {
                         .accessibilityValue(Text(option.state.displayName))
                     if !subtitle.isEmpty {
                         Text(subtitle)
-                            .font(.caption)
+                            .font(RowMetrics.subtitleFont)
                             .foregroundStyle(.secondary)
                             .lineLimit(1)
                             .help(subtitle)
@@ -202,7 +226,7 @@ struct OptionRow: View {
             }
             feedback
         }
-        .padding(.vertical, 2)
+        .padding(.vertical, RowMetrics.rowVerticalPadding)
     }
 
     /// The redesigned state affordance (B5): a legible accent "Customized" pill —

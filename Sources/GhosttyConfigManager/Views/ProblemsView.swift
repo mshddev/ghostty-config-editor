@@ -8,6 +8,15 @@ struct ProblemsView: View {
     @Environment(AppModel.self) private var model
 
     var body: some View {
+        VStack(spacing: 0) {
+            SurfaceHeader(title: "Problems")
+            Divider()
+            content
+        }
+    }
+
+    @ViewBuilder
+    private var content: some View {
         Group {
             if let report = model.lintReport {
                 if isClean(report) {
@@ -45,9 +54,13 @@ struct ProblemsView: View {
                 }
             } else {
                 ProgressView("Checking config…")
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
             }
         }
-        .navigationTitle("Problems")
+        // Fill the remaining height so the shared header stays pinned to the top;
+        // the clean-state ContentUnavailableView otherwise sizes to its content and
+        // lets the whole surface drift to vertical center.
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
 
     private func isClean(_ report: LintReport) -> Bool {
@@ -71,7 +84,7 @@ struct ProblemsView: View {
                     .fixedSize(horizontal: false, vertical: true)
             }
         }
-        .padding(.vertical, 2)
+        .padding(.vertical, RowMetrics.rowVerticalPadding)
     }
 
     private func genericValidationFailureRow() -> some View {
@@ -84,7 +97,7 @@ struct ProblemsView: View {
                     .fixedSize(horizontal: false, vertical: true)
             }
         }
-        .padding(.vertical, 2)
+        .padding(.vertical, RowMetrics.rowVerticalPadding)
     }
 
     private func validationRow(_ message: ValidationMessage) -> some View {
@@ -98,7 +111,7 @@ struct ProblemsView: View {
                 }
             }
         }
-        .padding(.vertical, 2)
+        .padding(.vertical, RowMetrics.rowVerticalPadding)
     }
 
     private func findingRow(_ finding: LintFinding) -> some View {
@@ -120,7 +133,7 @@ struct ProblemsView: View {
                 }
             }
         }
-        .padding(.vertical, 2)
+        .padding(.vertical, RowMetrics.rowVerticalPadding)
     }
 
     private func icon(for severity: LintFinding.Severity) -> String {

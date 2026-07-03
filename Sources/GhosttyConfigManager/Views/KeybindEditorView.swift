@@ -16,8 +16,15 @@ struct KeybindEditorView: View {
     var body: some View {
         let all = model.mergedKeybinds
         let rows = filtered(all)
+        let boundCount = all.filter { $0.origin != .unbound }.count
         return VStack(spacing: 0) {
-            headerBar(all: all)
+            SurfaceHeader(
+                title: OptionCategorizer.keybindingsCategory,
+                subtitle: didLoad ? "\(boundCount) shortcut\(boundCount == 1 ? "" : "s")" : nil,
+                searchText: $filter,
+                searchPrompt: "Filter by action or shortcut"
+            )
+            keybindHint
             Divider()
             if !didLoad {
                 ProgressView("Loading keybindings…")
@@ -28,9 +35,8 @@ struct KeybindEditorView: View {
                 bindingList(rows)
             }
             lintBar
-            feedbackBar
+            SurfaceFeedbackBar(applyState: model.applyState)
         }
-        .navigationTitle(OptionCategorizer.keybindingsCategory)
         .task {
             await model.loadKeybindReferenceIfNeeded()
             didLoad = true
@@ -49,41 +55,15 @@ struct KeybindEditorView: View {
         }
     }
 
-    private func headerBar(all: [MergedKeybind]) -> some View {
-        let boundCount = all.filter { $0.origin != .unbound }.count
-        return VStack(alignment: .leading, spacing: 8) {
-            HStack(spacing: 8) {
-                Text("\(boundCount) shortcuts")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-                if model.applyState == .applying {
-                    ProgressView().controlSize(.small)
-                }
-                Spacer()
-            }
-            searchField
-            Text("Click a shortcut and press the new keys to rebind. Actions with no shortcut are listed too.")
-                .font(.caption2)
-                .foregroundStyle(.tertiary)
-        }
-        .padding(8)
-    }
-
-    private var searchField: some View {
-        HStack(spacing: 6) {
-            Image(systemName: "magnifyingglass").foregroundStyle(.secondary).font(.caption)
-            TextField("Filter by action or shortcut", text: $filter)
-                .textFieldStyle(.plain)
-            if !filter.isEmpty {
-                Button { filter = "" } label: {
-                    Image(systemName: "xmark.circle.fill").foregroundStyle(.secondary)
-                }
-                .buttonStyle(.plain)
-                .accessibilityLabel("Clear filter")
-            }
-        }
-        .padding(.horizontal, 8).padding(.vertical, 5)
-        .background(Color.secondary.opacity(0.10), in: RoundedRectangle(cornerRadius: 7))
+    /// The inline instruction, kept under the shared header (it's specific to this
+    /// surface's inline-recorder interaction, so it doesn't belong in SurfaceHeader).
+    private var keybindHint: some View {
+        Text("Click a shortcut and press the new keys to rebind. Actions with no shortcut are listed too.")
+            .font(.caption2)
+            .foregroundStyle(.tertiary)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .padding(.horizontal, 20)
+            .padding(.bottom, 8)
     }
 
     private func bindingList(_ rows: [MergedKeybind]) -> some View {
@@ -118,16 +98,6 @@ struct KeybindEditorView: View {
             .frame(maxWidth: .infinity, alignment: .leading)
             .padding(8)
             .background(.quaternary.opacity(0.4))
-        }
-    }
-
-    @ViewBuilder
-    private var feedbackBar: some View {
-        if case .failed(let message) = model.applyState {
-            Label(message, systemImage: "xmark.octagon.fill")
-                .foregroundStyle(.red).font(.caption)
-                .frame(maxWidth: .infinity, alignment: .leading)
-                .padding(8)
         }
     }
 
@@ -179,7 +149,7 @@ private struct KeybindRow: View {
             Spacer(minLength: 12)
             trigger
         }
-        .padding(.vertical, 3)
+        .padding(.vertical, RowMetrics.rowVerticalPadding)
         .accessibilityElement(children: .combine)
         .accessibilityLabel("\(row.action), \(triggerAccessibilityValue), \(badgeText)")
     }
