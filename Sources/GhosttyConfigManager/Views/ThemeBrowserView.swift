@@ -8,10 +8,14 @@ struct ThemeBrowserView: View {
 
     var body: some View {
         @Bindable var model = model
-        VStack(spacing: 0) {
+        // Compute the filtered list once per render — it folds every theme name
+        // (case + diacritic), so reading it three times (subtitle, empty-check, list)
+        // would triple that work on each keystroke.
+        let filtered = model.filteredThemes
+        return VStack(spacing: 0) {
             SurfaceHeader(
                 title: "Themes",
-                subtitle: themesSubtitle,
+                subtitle: model.themes.isEmpty ? nil : "\(filtered.count) theme\(filtered.count == 1 ? "" : "s")",
                 searchText: $model.themeQuery,
                 searchPrompt: "Search themes"
             )
@@ -20,10 +24,10 @@ struct ThemeBrowserView: View {
             if model.themes.isEmpty {
                 ProgressView("Loading themes…")
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
-            } else if model.filteredThemes.isEmpty {
+            } else if filtered.isEmpty {
                 ContentUnavailableView.search(text: model.themeQuery)
             } else {
-                List(model.filteredThemes) { theme in
+                List(filtered) { theme in
                     Button {
                         Task { await model.applyTheme(theme.name) }
                     } label: {
@@ -44,14 +48,6 @@ struct ThemeBrowserView: View {
             SurfaceFeedbackBar(applyState: model.applyState)
         }
         .task { await model.loadThemesIfNeeded() }
-    }
-
-    /// A theme count for the header — the filtered count while searching. Nil while
-    /// the list is still loading.
-    private var themesSubtitle: String? {
-        guard !model.themes.isEmpty else { return nil }
-        let n = model.filteredThemes.count
-        return "\(n) theme\(n == 1 ? "" : "s")"
     }
 
     private var disclaimerBar: some View {

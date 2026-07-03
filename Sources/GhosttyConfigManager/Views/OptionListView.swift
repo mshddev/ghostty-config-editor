@@ -43,10 +43,16 @@ struct OptionListView: View {
             // category instead of staying pinned to the first one shown.
             CategoryOptionList(category: categoryName)
                 .id(categoryName)
+        } else if isSearching {
+            // Search can return hundreds of ranked hits (name + intent + full-text
+            // documentation match), so it uses a **virtualized List** — a grouped Form
+            // builds every row eagerly and would jank the main thread on a broad query.
+            List(model.visibleOptions) { option in
+                OptionRow(option: option)
+            }
         } else {
-            // Search and the Customized surface show one flat, ranked list —
-            // the Common/Advanced split is a browse-only affordance. Rendered as
-            // a single grouped-Form section so its rows match the browsed cards.
+            // The Customized surface is bounded (only options the user changed), so it
+            // keeps the grouped-Form cards to match the browsed categories.
             Form {
                 Section {
                     ForEach(model.visibleOptions) { option in
@@ -56,6 +62,11 @@ struct OptionListView: View {
             }
             .formStyle(.grouped)
         }
+    }
+
+    /// True when a search query is active — the flat, ranked-results branch.
+    private var isSearching: Bool {
+        !model.query.trimmingCharacters(in: .whitespaces).isEmpty
     }
 
     /// A secondary count line for the header — the result count while searching, or the

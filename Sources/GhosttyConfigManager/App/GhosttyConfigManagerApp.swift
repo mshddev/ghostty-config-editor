@@ -49,20 +49,32 @@ private struct WindowConfigurator: NSViewRepresentable {
     func makeNSView(context: Context) -> NSView {
         let view = NSView()
         // The window isn't attached during makeNSView; defer to the next runloop turn.
-        DispatchQueue.main.async { [weak view] in
-            guard let window = view?.window else { return }
-            window.collectionBehavior.insert(.fullScreenNone)
-            window.standardWindowButton(.zoomButton)?.isEnabled = false
-            window.maxSize = NSSize(width: WindowMetrics.maxWidth, height: WindowMetrics.maxHeight)
-            // Each surface titles itself in its in-content SurfaceHeader (C3), so the
-            // title-bar text is redundant — and with the per-surface navigationTitle
-            // gone it would otherwise fall back to the truncated app name.
-            window.titleVisibility = .hidden
-        }
+        DispatchQueue.main.async { [weak view] in configure(view?.window) }
         return view
     }
 
-    func updateNSView(_ nsView: NSView, context: Context) {}
+    // Re-assert on updates too: the window may not be attached on the first runloop
+    // turn, and AppKit re-validates the standard title-bar buttons on later layout
+    // passes, so a one-shot in makeNSView could silently miss or be undone.
+    func updateNSView(_ nsView: NSView, context: Context) {
+        configure(nsView.window)
+    }
+
+    private func configure(_ window: NSWindow?) {
+        guard let window else { return }
+        // `.fullScreenNone` is mutually exclusive with the `.fullScreenPrimary` flag a
+        // titleBar window carries by default; without removing that first, AppKit keeps
+        // the combined set contradictory and ⌃⌘F / the Window menu can still fullscreen
+        // the window — defeating the whole point of the change.
+        window.collectionBehavior.remove([.fullScreenPrimary, .fullScreenAuxiliary])
+        window.collectionBehavior.insert(.fullScreenNone)
+        window.standardWindowButton(.zoomButton)?.isEnabled = false
+        window.maxSize = NSSize(width: WindowMetrics.maxWidth, height: WindowMetrics.maxHeight)
+        // Each surface titles itself in its in-content SurfaceHeader (C3), so the
+        // title-bar text is redundant — and with the per-surface navigationTitle gone
+        // it would otherwise fall back to the truncated app name.
+        window.titleVisibility = .hidden
+    }
 }
 
 /// One top-bar chip, so identity/health/Customized share a single shape (LAYOUT-6).
@@ -118,10 +130,30 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     func applicationDidFinishLaunching(_ notification: Notification) {
         NSApp.setActivationPolicy(.regular)
         NSApp.activate()
+        // A config utility has no use for fullscreen — maximizing just floats a
+        // centered column in a void (see WindowConfigurator). Disabling it via
+        // `NSWindow.collectionBehavior` doesn't stick under SwiftUI's window
+        // management, so remove the "Enter Full Screen" menu command itself (which
+        // also strips its ⌃⌘F key equivalent). Found by its action selector so it's
+        // robust to localization. SwiftUI can rebuild the menu, so re-strip it every
+        // time any menu begins tracking — that's the moment before it becomes clickable.
+        Self.removeFullScreenMenuItem()
+        NotificationCenter.default.addObserver(
+            forName: NSMenu.didBeginTrackingNotification, object: nil, queue: .main
+        ) { _ in Self.removeFullScreenMenuItem() }
     }
 
     func applicationShouldTerminateAfterLastWindowClosed(_ sender: NSApplication) -> Bool {
         true
+    }
+
+    private static func removeFullScreenMenuItem() {
+        let selector = #selector(NSWindow.toggleFullScreen(_:))
+        for submenu in NSApp.mainMenu?.items.compactMap(\.submenu) ?? [] {
+            for item in submenu.items where item.action == selector {
+                submenu.removeItem(item)
+            }
+        }
     }
 }
 

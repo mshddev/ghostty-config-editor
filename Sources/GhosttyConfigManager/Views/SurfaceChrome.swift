@@ -65,6 +65,7 @@ struct SurfaceHeader: View {
             Image(systemName: "magnifyingglass")
                 .foregroundStyle(.secondary)
                 .font(.callout)
+                .accessibilityHidden(true)
             TextField(searchPrompt, text: text)
                 .textFieldStyle(.plain)
             if !text.wrappedValue.isEmpty {
