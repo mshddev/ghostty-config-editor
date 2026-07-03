@@ -13,8 +13,12 @@ enum WindowMetrics {
     /// First-launch size: deliberately snug (like System Settings) so label and value
     /// stay close. A wider window only inflates the gap between them, so we don't open big
     /// — just wide enough that the toolbar chips don't collapse into an overflow menu.
+    /// Height only affects how much of the (scrollable) content shows, never the
+    /// label↔value gap, so it's tall enough to fit the whole sidebar — Get started +
+    /// Settings + Status — without Problems (which carries the health badge) landing
+    /// under the fold at launch (D1).
     static let defaultWidth: CGFloat = 780
-    static let defaultHeight: CGFloat = 600
+    static let defaultHeight: CGFloat = 660
     /// Hard ceiling on how wide the window may get (drag-resize; zoom is disabled).
     /// A settings utility has no use for a sprawling width — past here it's just void
     /// beside a centered column. Height is generous for long option forms.
@@ -240,11 +244,18 @@ struct RootView: View {
     @ViewBuilder
     private var mainColumn: some View {
         Group {
-            switch model.selection {
-            case .problems: ProblemsView()
-            case .themes: ThemeBrowserView()
-            case .category(let name) where name == OptionCategorizer.keybindingsCategory: KeybindEditorView()
-            default: OptionListView()
+            if model.isFinding {
+                // Global Find (⌘F) overlays option results *regardless* of the current
+                // surface (D2), so it replaces the detail column while active rather
+                // than filtering whatever surface happens to be selected.
+                GlobalFindView()
+            } else {
+                switch model.selection {
+                case .problems: ProblemsView()
+                case .themes: ThemeBrowserView()
+                case .category(let name) where name == OptionCategorizer.keybindingsCategory: KeybindEditorView()
+                default: OptionListView()
+                }
             }
         }
         .cappedContentColumn()
@@ -265,85 +276,42 @@ struct RootView: View {
         }
         // Changing surface clears any lingering apply feedback so the next surface
         // (which may now show its own SurfaceFeedbackBar) doesn't inherit a stale
-        // "Saved" from the previous one. Centralized here since every surface can
-        // surface feedback now, not just the option list (C3).
-        .onChange(of: model.selection) { _, _ in model.resetApplyState() }
+        // "Saved" from the previous one (C3), and dismisses the global Find overlay so
+        // picking a sidebar row leaves Find (D2). Centralized here since every surface
+        // can surface feedback now, not just the option list.
+        .onChange(of: model.selection) { _, _ in
+            model.resetApplyState()
+            model.endFind()
+        }
         .toolbar {
-            // Identity and health share one group but are split by a divider, so the
-            // version label (identity) stops reading as a health status (LAYOUT-5/7).
+            // Identity only now — health and Customized moved into the sidebar's
+            // Status section (D1), so the top bar carries just "which Ghostty" plus Find.
             ToolbarItem(placement: .status) {
-                HStack(spacing: 10) {
-                    identityChip(environment)
-                    Divider().frame(height: 14)
-                    healthChip()
-                }
+                identityChip(environment)
             }
             ToolbarItem(placement: .primaryAction) {
-                customizedChip()
+                findButton()
             }
         }
     }
 
-    /// The "Customized" entry point in the window chrome (mirrors the health chip's
-    /// button-sets-selection pattern). Tints accent while that surface is active so
-    /// the current selection is legible from the top bar.
-    private func customizedChip() -> some View {
-        let isActive = model.selection == .customized
-        return ToolbarChip(
-            systemImage: "slider.horizontal.3",
-            tint: isActive ? .accentColor : .secondary,
-            title: "Customized",
-            isActive: isActive,
-            action: { model.selection = .customized }
-        )
-        .help("Show customized options")
-        .accessibilityLabel("Customized options")
+    /// Global Find (⌘F): the second search tier (U20). Distinct from each surface's
+    /// own local filter — it searches *all* options regardless of the current surface
+    /// and opens a results overlay. Clickable (for pointer users) with a ⌘F equivalent.
+    private func findButton() -> some View {
+        Button { model.beginFind() } label: {
+            Label("Find", systemImage: "magnifyingglass")
+        }
+        .keyboardShortcut("f", modifiers: .command)
+        .help("Find any setting (⌘F)")
+        .accessibilityLabel("Find settings")
     }
 
     /// Identity: which Ghostty this is managing. A plain label — the version is
     /// information, not a status — so the old green seal (which falsely read as a
-    /// health check) is gone; the health chip beside it owns the only status glyph.
+    /// health check) is gone; config health now lives on the Problems sidebar row (D1).
     private func identityChip(_ environment: GhosttyEnvironment) -> some View {
         ToolbarChip(title: "Ghostty \(environment.version)")
             .help("The Ghostty this app is configuring")
-    }
-
-    /// The sole config-health status in the window chrome. Tappable (bordered chrome
-    /// + chevron, so it reads as a button) and opens the Problems surface (KTD4); its
-    /// icon/tint mirror `ProblemsView` (KTD5). Quiet when clean, tinted with a count
-    /// when not. The first-launch "no config file yet" state folds in here rather than
-    /// hanging off the identity label.
-    @ViewBuilder
-    private func healthChip() -> some View {
-        if model.configMissing {
-            ToolbarChip(systemImage: "doc.badge.plus", tint: .blue, title: "No config yet",
-                        showsChevron: true, action: { model.selection = .problems })
-                .help("No Ghostty config yet — your first change creates ~/.config/ghostty/config")
-                .accessibilityLabel("No config file yet")
-        } else if let report = model.lintReport {
-            ToolbarChip(systemImage: Self.healthIcon(report.health), tint: Self.healthTint(report.health),
-                        title: report.badgeText, showsChevron: true, action: { model.selection = .problems })
-                .help("Show config health")
-                .accessibilityLabel(report.badgeText)
-        } else {
-            ToolbarChip(systemImage: "stethoscope", tint: .secondary, title: "Checking…")
-        }
-    }
-
-    private static func healthIcon(_ health: LintReport.Health) -> String {
-        switch health {
-        case .clean: return "checkmark.seal.fill"
-        case .warning: return "exclamationmark.triangle.fill"
-        case .error: return "xmark.octagon.fill"
-        case .unknown: return "questionmark.diamond.fill"
-        }
-    }
-
-    private static func healthTint(_ health: LintReport.Health) -> Color {
-        switch health {
-        case .clean: return .green
-        case .warning, .unknown: return .orange
-        case .error: return .red
-        }
     }
 }

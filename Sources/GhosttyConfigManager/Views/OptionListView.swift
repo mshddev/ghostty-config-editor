@@ -21,9 +21,57 @@ struct OptionListView: View {
                 searchPrompt: "Search options or describe a behavior"
             )
             Divider()
-            content
+            appearanceCrossLink
+            // A ScrollViewReader lets a `focus(optionNamed:)` deep-link (from a global
+            // Find result, and later Customized/Problems) scroll its target into view.
+            // Gated on `pendingFocusScroll` so it fires only for an explicit focus — via
+            // `onChange` when the list is already mounted (a Customized deep-link), and
+            // via `onAppear` when the list remounts (a Find result swaps Find out and the
+            // list in, so `onChange` never sees the change) (D1/D2).
+            ScrollViewReader { proxy in
+                content
+                    .onAppear { scrollToFocusTarget(proxy) }
+                    .onChange(of: model.focusRequestID) { _, _ in scrollToFocusTarget(proxy) }
+            }
         }
         .navigationSplitViewColumnWidth(min: 360, ideal: 460)
+    }
+
+    /// On the Appearance surface, a one-line cross-link clarifying that colors come from
+    /// the active theme, with a jump to the Themes browser (D1). Hidden elsewhere and
+    /// while searching (the note is category context, not a search result).
+    @ViewBuilder
+    private var appearanceCrossLink: some View {
+        if case .category(OptionCategorizer.appearanceCategory) = model.selection,
+           model.query.trimmingCharacters(in: .whitespaces).isEmpty {
+            HStack(spacing: 6) {
+                Image(systemName: "paintpalette")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .accessibilityHidden(true)
+                Text("Colors come from your theme — override individual colors here.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                Button("Set one in Themes →") { model.selection = .themes }
+                    .buttonStyle(.link)
+                    .font(.caption)
+                Spacer(minLength: 0)
+            }
+            .padding(.horizontal, 20)
+            .padding(.vertical, 8)
+            .background(.quaternary.opacity(0.5))
+        }
+    }
+
+    /// Scroll a pending `focus(optionNamed:)` target into view, then clear the flag so
+    /// it fires exactly once per focus and never on ordinary navigation. Deferred one
+    /// runloop so a freshly-navigated category has laid out its rows first.
+    private func scrollToFocusTarget(_ proxy: ScrollViewProxy) {
+        guard model.pendingFocusScroll, let name = model.selectedOptionName else { return }
+        DispatchQueue.main.async {
+            withAnimation { proxy.scrollTo(name, anchor: .center) }
+            model.pendingFocusScroll = false
+        }
     }
 
     @ViewBuilder
@@ -168,6 +216,19 @@ private struct CategoryOptionList: View {
             }
         }
         .formStyle(.grouped)
+        // A `focus(optionNamed:)` deep-link to an *advanced* option would land behind a
+        // collapsed disclosure and never scroll into view — so expand Advanced when the
+        // focus target lives there (D1). On appear too, so a focus that navigates into
+        // this category (mounting a fresh list) still reveals the target.
+        .onAppear { expandAdvancedIfFocusTargetIsAdvanced() }
+        .onChange(of: model.focusRequestID) { _, _ in expandAdvancedIfFocusTargetIsAdvanced() }
+    }
+
+    private func expandAdvancedIfFocusTargetIsAdvanced() {
+        guard let name = model.selectedOptionName else { return }
+        if model.advancedOptions.contains(where: { $0.option.name == name }) {
+            advancedExpanded = true
+        }
     }
 
     private func advancedHeader(count: Int) -> some View {

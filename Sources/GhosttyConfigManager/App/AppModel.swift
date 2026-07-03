@@ -258,6 +258,58 @@ public final class AppModel {
         applyingOptionName = nil
     }
 
+    // MARK: - Navigation & global Find (D)
+
+    /// Bumped on each `focus(optionNamed:)` so a *mounted* option list can react to an
+    /// explicit focus — never to ordinary sidebar navigation (which would otherwise
+    /// chase a stale `selectedOptionName`).
+    public private(set) var focusRequestID: Int = 0
+
+    /// Set by `focus(optionNamed:)`, cleared once the option list scrolls the target
+    /// into view. Unlike `focusRequestID`'s `onChange`, this flag survives the option
+    /// list *remounting* — the common case, since a focus from a global Find result
+    /// swaps the Find overlay out and the option list in, so `onChange` never fires and
+    /// only an `onAppear` that consults this flag will scroll (D1/D2).
+    public var pendingFocusScroll = false
+
+    /// Whether the global ⌘F Find overlay is showing. Distinct from a surface's own
+    /// local filter (`query`/`themeQuery`): Find searches *all* options regardless of
+    /// the current surface, so the two search tiers never mean the same thing (U20).
+    public var isFinding = false
+
+    /// The global Find query (all-option search), kept separate from the per-surface
+    /// `query` so the two-tier search model has no shared, double-meaning field (U20).
+    public var findQuery: String = ""
+
+    /// Navigate to a specific option: clear any local filter and the global Find,
+    /// select the option's category, and mark it as the focus target so the list
+    /// scrolls it into view (D1). The shared navigation primitive behind a global
+    /// Find result tap (D2), Customized deep-links (F3), and the Problems deep-link
+    /// (G5) — introduced here so those units share one behavior.
+    public func focus(optionNamed name: String) {
+        query = ""
+        endFind()
+        selection = .category(OptionCategorizer.category(for: name))
+        selectedOptionName = name
+        pendingFocusScroll = true
+        focusRequestID &+= 1
+    }
+
+    /// Ranked global-search results paired with their provenance (category pill +
+    /// intent phrase), for the Find surface (D2).
+    public func globalFindHits() -> [(hit: SearchHit, option: MergedOption)] {
+        browser?.searchHits(findQuery) ?? []
+    }
+
+    /// Open the global Find overlay (⌘F / the toolbar Find button).
+    public func beginFind() { isFinding = true }
+
+    /// Dismiss the global Find overlay and clear its query.
+    public func endFind() {
+        isFinding = false
+        findQuery = ""
+    }
+
     // MARK: - Themes (U8)
 
     /// The currently-applied theme value, if set.

@@ -1,23 +1,55 @@
 import SwiftUI
 import GhosttyConfigKit
 
-/// The leading column: a flat list of Themes plus the option categories (R3, R6).
-/// The "Customized" discovery shortcut now lives in the top bar, not here.
+/// The leading column: three labeled sections — **Get started**, **Settings**, and
+/// **Status** — so every destination lives in the sidebar with a coherent "you are
+/// here" (R6, D1). Customized and Problems are real tagged rows now (they used to be
+/// top-bar buttons that left the sidebar with nothing selected — the lost-selection
+/// bug); the config-health badge that lived in the toolbar moves onto the Problems row.
 struct SidebarView: View {
     @Environment(AppModel.self) private var model
 
     var body: some View {
         @Bindable var model = model
         List(selection: $model.selection) {
-            Label("Themes", systemImage: "paintpalette")
-                .tag(SidebarSelection.themes)
-            ForEach(model.categories, id: \.self) { category in
-                Label(category, systemImage: Self.icon(for: category))
-                    .tag(SidebarSelection.category(category))
+            // Get started — the exploratory surfaces a newcomer opens first. The
+            // Recommended row joins this section in F1; the app still launches on Themes.
+            Section("Get started") {
+                Label("Themes", systemImage: "paintpalette")
+                    .tag(SidebarSelection.themes)
+            }
+            // Settings — the renamed option categories, in newcomer-frequency order (A3).
+            Section("Settings") {
+                ForEach(model.categories, id: \.self) { category in
+                    Label(category, systemImage: Self.icon(for: category))
+                        .tag(SidebarSelection.category(category))
+                }
+            }
+            // Status — what you changed, and what's wrong. Tagged rows, so the sidebar
+            // stays highlighted on these surfaces instead of clearing its selection.
+            Section("Status") {
+                Label("Customized", systemImage: "slider.horizontal.3")
+                    .tag(SidebarSelection.customized)
+                // `.tag` must be the outermost modifier for List selection to pick it
+                // up — with `.badge` applied *after* the tag, clicking this row silently
+                // failed to select it (caught in live testing). Badge first, tag last.
+                Label("Problems", systemImage: "checklist")
+                    .badge(problemsBadge)
+                    .tag(SidebarSelection.problems)
             }
         }
         .navigationTitle("Ghostty")
         .navigationSplitViewColumnWidth(min: 200, ideal: 230)
+    }
+
+    /// The config-health badge on the Problems row — the status the toolbar's health
+    /// chip used to carry (C4), now folded into the sidebar (D1). Shows the actionable
+    /// problem count when there are any, the first-launch "No config" cue when no file
+    /// exists yet, and nothing when the config is clean.
+    private var problemsBadge: Text? {
+        if model.configMissing { return Text("No config") }
+        let count = model.problemCount
+        return count > 0 ? Text("\(count)") : nil
     }
 
     static func icon(for category: String) -> String {
