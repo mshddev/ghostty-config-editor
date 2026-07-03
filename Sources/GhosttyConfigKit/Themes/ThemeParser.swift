@@ -46,12 +46,35 @@ public struct ThemeColors: Sendable, Equatable {
     public var orderedPalette: [String] {
         (0...15).compactMap { palette[$0] }
     }
+
+    /// The theme's overall appearance — light or dark — from its background color's
+    /// perceived luminance (E1). `nil` when there's no background or it can't be
+    /// parsed (X11 names, `cell-background`, …), so an unclassifiable theme is left
+    /// unlabeled rather than guessed. Computed per-theme only once its colors have
+    /// loaded, so it never forces an eager read (KTD: lazy per-row color loading).
+    public var appearance: ThemeAppearance? {
+        guard let background,
+              let luminance = ThemeParser.relativeLuminance(ofHex: background) else { return nil }
+        return luminance >= 0.5 ? .light : .dark
+    }
+}
+
+/// Whether a theme reads as light or dark (E1), from its background luminance.
+public enum ThemeAppearance: Sendable, Equatable {
+    case light
+    case dark
 }
 
 /// How a `theme = …` value selects a theme (R12 supports light/dark).
 public enum ThemeSelection: Sendable, Equatable {
     case single(String)
     case lightDark(light: String, dark: String)
+}
+
+/// Which half of a `light:…,dark:…` theme pairing a chosen theme fills (E4).
+public enum ThemeRole: Sendable {
+    case light
+    case dark
 }
 
 public enum ThemeError: Error, Equatable, Sendable {
@@ -138,6 +161,74 @@ public enum ThemeParser {
         case .single(let name): return name
         case .lightDark(let light, let dark): return "light:\(light),dark:\(dark)"
         }
+    }
+
+    /// Compose the light/dark pairing that results from assigning `name` to one role,
+    /// keeping the other member from the `current` selection (E4). An existing pair
+    /// keeps its untouched member; a current single seeds both sides (so the untouched
+    /// role inherits it rather than going blank); no current selection seeds both with
+    /// `name` — a lone `light:`/`dark:` isn't valid Ghostty light/dark syntax, and
+    /// `light:X,dark:X` is equivalent to a single `X`, so it's a safe, round-tripping
+    /// result until the user sets the other half. Pure, so it's unit-tested here and
+    /// the app's `applyThemeInPair` is a thin read-current + serialize + write wrapper.
+    public static func updatedPairing(current: ThemeSelection?, setting name: String, as role: ThemeRole) -> ThemeSelection {
+        var light: String
+        var dark: String
+        switch current {
+        case .lightDark(let l, let d): light = l; dark = d
+        case .single(let s): light = s; dark = s
+        case nil: light = name; dark = name
+        }
+        switch role {
+        case .light: light = name
+        case .dark: dark = name
+        }
+        return .lightDark(light: light, dark: dark)
+    }
+
+    /// The set of theme names a `theme = …` value selects — one for a single theme,
+    /// both members for a `light:…,dark:…` pair (E2). The current-theme highlight
+    /// reads from this set, not string equality, so **both** rows of a light/dark
+    /// pair correctly read as "Current" (a naive `currentTheme == theme.name` would
+    /// match neither, since `currentTheme` is the whole `light:…,dark:…` string).
+    public static func selectedThemeNames(_ value: String) -> Set<String> {
+        switch parseThemeSetting(value) {
+        case .single(let name): return [name]
+        case .lightDark(let light, let dark): return [light, dark]
+        }
+    }
+
+    /// Perceived luminance (0…1) of a hex color, for light/dark classification (E1).
+    /// Accepts an optional `#`/`0x` prefix and 3- (rgb), 6- (rrggbb), or 8-digit
+    /// (rrggbbaa) forms; alpha is ignored. Returns `nil` for anything unparseable —
+    /// X11 names, `cell-foreground`, empty — so the caller leaves it unlabeled.
+    /// (Kit-side twin of the app's `Color(hex:)`, which can't cross into the kit.)
+    public static func relativeLuminance(ofHex hex: String) -> Double? {
+        var s = hex.trimmingCharacters(in: .whitespaces).lowercased()
+        if s.hasPrefix("#") { s.removeFirst() }
+        else if s.hasPrefix("0x") { s.removeFirst(2) }
+        let expanded = s.count == 3 ? s.map { "\($0)\($0)" }.joined() : s
+        guard expanded.count == 6 || expanded.count == 8,
+              let value = UInt64(expanded, radix: 16) else { return nil }
+        let hasAlpha = expanded.count == 8
+        let r = Double((value >> (hasAlpha ? 24 : 16)) & 0xFF) / 255
+        let g = Double((value >> (hasAlpha ? 16 : 8)) & 0xFF) / 255
+        let b = Double((value >> (hasAlpha ? 8 : 0)) & 0xFF) / 255
+        // Rec. 601 perceptual luma — enough to separate a dark background (#1a1b26)
+        // from a light one (#faf4ed); the 0.5 midpoint splits them.
+        return 0.299 * r + 0.587 * g + 0.114 * b
+    }
+
+    /// Case- and diacritic-insensitive substring match of a theme name against a
+    /// search query (E1). An empty/whitespace query matches everything, so the
+    /// browser shows the whole list. Extracted here so it's unit-tested, with the
+    /// app's `filteredThemes` delegating to it.
+    public static func nameMatches(_ name: String, query: String) -> Bool {
+        let q = query.trimmingCharacters(in: .whitespaces)
+        guard !q.isEmpty else { return true }
+        let opts: String.CompareOptions = [.caseInsensitive, .diacriticInsensitive]
+        return name.folding(options: opts, locale: nil)
+            .contains(q.folding(options: opts, locale: nil))
     }
 
     /// Parse `+list-fonts` into family names (non-indented, non-blank lines).

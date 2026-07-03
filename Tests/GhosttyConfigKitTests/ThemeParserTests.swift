@@ -68,6 +68,104 @@ final class ThemeParserTests: XCTestCase {
         )
     }
 
+    // MARK: - Light/dark classification (E1)
+
+    func testLuminanceOfBlackIsZeroAndWhiteIsOne() {
+        XCTAssertEqual(ThemeParser.relativeLuminance(ofHex: "#000000")!, 0, accuracy: 0.001)
+        XCTAssertEqual(ThemeParser.relativeLuminance(ofHex: "#ffffff")!, 1, accuracy: 0.001)
+    }
+
+    func testLuminanceAcceptsPrefixesAndShortAndAlphaForms() {
+        XCTAssertEqual(ThemeParser.relativeLuminance(ofHex: "000")!, 0, accuracy: 0.001)
+        XCTAssertEqual(ThemeParser.relativeLuminance(ofHex: "0xffffff")!, 1, accuracy: 0.001)
+        // 8-digit rrggbbaa: alpha is ignored, still classifies on rgb.
+        XCTAssertNotNil(ThemeParser.relativeLuminance(ofHex: "#ff880080"))
+    }
+
+    func testLuminanceReturnsNilForUnparseableColor() {
+        XCTAssertNil(ThemeParser.relativeLuminance(ofHex: "cell-foreground"))
+        XCTAssertNil(ThemeParser.relativeLuminance(ofHex: ""))
+        XCTAssertNil(ThemeParser.relativeLuminance(ofHex: "#12"))
+    }
+
+    func testThemeAppearanceClassifiesDarkAndLightBackgrounds() {
+        XCTAssertEqual(ThemeColors(background: "#1a1b26").appearance, .dark, "Tokyo Night is dark")
+        XCTAssertEqual(ThemeColors(background: "#faf4ed").appearance, .light, "Rosé Pine Dawn is light")
+    }
+
+    func testThemeAppearanceIsNilWithoutParseableBackground() {
+        XCTAssertNil(ThemeColors(background: nil).appearance)
+        XCTAssertNil(ThemeColors(background: "not-a-color").appearance)
+    }
+
+    // MARK: - Name filter (E1)
+
+    func testNameMatchesIsCaseAndDiacriticInsensitive() {
+        XCTAssertTrue(ThemeParser.nameMatches("Tokyo Night", query: "tokyo"))
+        XCTAssertTrue(ThemeParser.nameMatches("Rosé Pine", query: "rose"))
+        XCTAssertTrue(ThemeParser.nameMatches("Rosé Pine", query: "ROSÉ"))
+        XCTAssertFalse(ThemeParser.nameMatches("Tokyo Night", query: "dracula"))
+    }
+
+    func testNameMatchesEmptyOrWhitespaceQueryMatchesEverything() {
+        XCTAssertTrue(ThemeParser.nameMatches("Anything", query: ""))
+        XCTAssertTrue(ThemeParser.nameMatches("Anything", query: "   "))
+    }
+
+    // MARK: - Current selection membership (E2)
+
+    func testSelectedThemeNamesSingle() {
+        XCTAssertEqual(ThemeParser.selectedThemeNames("Aardvark Blue"), ["Aardvark Blue"])
+    }
+
+    func testSelectedThemeNamesPairIncludesBothMembers() {
+        XCTAssertEqual(
+            ThemeParser.selectedThemeNames("light:Rose Pine Dawn,dark:Rose Pine"),
+            ["Rose Pine Dawn", "Rose Pine"]
+        )
+    }
+
+    // MARK: - Light/dark pairing composition (E4)
+
+    func testUpdatedPairingFromSingleSeedsTheUntouchedRole() {
+        XCTAssertEqual(
+            ThemeParser.updatedPairing(current: .single("0x96f"), setting: "Rosé Pine Dawn", as: .light),
+            .lightDark(light: "Rosé Pine Dawn", dark: "0x96f"),
+            "setting light keeps the current single as the dark member"
+        )
+        XCTAssertEqual(
+            ThemeParser.updatedPairing(current: .single("0x96f"), setting: "Rosé Pine", as: .dark),
+            .lightDark(light: "0x96f", dark: "Rosé Pine")
+        )
+    }
+
+    func testUpdatedPairingPreservesTheOtherMemberOfAnExistingPair() {
+        let current = ThemeSelection.lightDark(light: "L", dark: "D")
+        XCTAssertEqual(
+            ThemeParser.updatedPairing(current: current, setting: "Z", as: .dark),
+            .lightDark(light: "L", dark: "Z"),
+            "setting dark must not drop the existing light member"
+        )
+        XCTAssertEqual(
+            ThemeParser.updatedPairing(current: current, setting: "Z", as: .light),
+            .lightDark(light: "Z", dark: "D")
+        )
+    }
+
+    func testUpdatedPairingWithNoCurrentThemeFillsBothSlots() {
+        // A lone `dark:` isn't valid Ghostty light/dark syntax; `light:X,dark:X` ≡ X.
+        XCTAssertEqual(
+            ThemeParser.updatedPairing(current: nil, setting: "X", as: .dark),
+            .lightDark(light: "X", dark: "X")
+        )
+    }
+
+    func testUpdatedPairingRoundTripsThroughSerialize() {
+        let selection = ThemeParser.updatedPairing(current: .single("A"), setting: "B", as: .light)
+        XCTAssertEqual(ThemeParser.serialize(selection), "light:B,dark:A")
+        XCTAssertEqual(ThemeParser.parseThemeSetting("light:B,dark:A"), selection)
+    }
+
     // MARK: - Applying a theme writes the theme line (via U6)
 
     func testApplyingThemeWritesThemeLine() {
