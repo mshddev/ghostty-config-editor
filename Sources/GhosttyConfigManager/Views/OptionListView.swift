@@ -301,6 +301,18 @@ private struct InlineOptionEditor: View {
     /// The color value already written in this popover session, so committing on
     /// close doesn't re-write a value a preset/Set/wheel already saved (B6).
     @State private var committedColor: String = ""
+    /// Drives the wide multi-line editor for long scalar values (B7).
+    @State private var showingLongEditor = false
+    /// Tracks the inline free-text field's focus so a blurred, dirty field commits
+    /// instead of silently reverting (B7).
+    @FocusState private var textFieldFocused: Bool
+
+    /// Long scalar options whose value is awkward in a 160pt field — edited in a wide
+    /// multi-line popover instead (B7). `config-file` / `font-feature` are *repeatable*
+    /// and handled by their own editors (B8), so they're deliberately absent here.
+    private static let longValueOptions: Set<String> = [
+        "command", "initial-command", "working-directory", "custom-shader",
+    ]
 
     var body: some View {
         control
@@ -386,12 +398,76 @@ private struct InlineOptionEditor: View {
                     }
                 }
         default:
+            if Self.longValueOptions.contains(option.option.name) {
+                longValueButton
+            } else {
+                freeTextField
+            }
+        }
+    }
+
+    /// The inline free-text field for ordinary scalar values. Commits on Return *and*
+    /// on focus-loss (a blurred, dirty field saves rather than silently reverting),
+    /// with a subtle "Return to save" hint while dirty (B7). A full-value tooltip
+    /// covers the truncation at 160pt.
+    private var freeTextField: some View {
+        VStack(alignment: .trailing, spacing: 1) {
             TextField(fieldPlaceholder, text: $draft)
                 .textFieldStyle(.roundedBorder)
                 .frame(width: 160)
+                .focused($textFieldFocused)
                 .onSubmit { commit() }
+                .help(currentValue.isEmpty ? "" : currentValue)
+                .accessibilityLabel(Text(option.option.displayTitle))
+            if isDirty {
+                Text("Return to save").font(.caption2).foregroundStyle(.secondary)
+            }
+        }
+        .onChange(of: textFieldFocused) { _, focused in
+            if !focused { commit() }   // commit-on-blur
         }
     }
+
+    /// For long scalar values, an "Edit…" button opening a wide, monospaced,
+    /// multi-line-tolerant editor showing the whole value — no more squinting at a
+    /// truncated 160pt field (B7).
+    private var longValueButton: some View {
+        Button { showingLongEditor.toggle() } label: {
+            HStack(spacing: 4) {
+                Image(systemName: "pencil").imageScale(.small)
+                Text(currentValue.isEmpty ? "Set…" : "Edit…")
+            }
+        }
+        .buttonStyle(.bordered)
+        .controlSize(.small)
+        .help(currentValue.isEmpty ? "Set a value" : currentValue)
+        .accessibilityLabel(Text("Edit \(option.option.displayTitle)"))
+        .popover(isPresented: $showingLongEditor, arrowEdge: .bottom) { longValueEditor }
+        .onChange(of: showingLongEditor) { _, open in
+            if open { draft = currentValue } else { commit() }   // commit on close
+        }
+    }
+
+    private var longValueEditor: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Text(option.option.displayTitle).font(.callout.weight(.semibold)).lineLimit(1)
+            TextField(fieldPlaceholder, text: $draft, axis: .vertical)
+                .textFieldStyle(.roundedBorder)
+                .font(.callout.monospaced())
+                .lineLimit(3...10)
+                .frame(width: 360)
+            HStack {
+                Spacer()
+                Button("Done") { showingLongEditor = false }
+                    .keyboardShortcut(.defaultAction)
+            }
+        }
+        .padding(12)
+        .frame(width: 384)
+    }
+
+    /// True when the field holds an unsaved edit — drives the "Return to save" hint.
+    private var isDirty: Bool { draft != currentValue }
 
     private var currentValue: String {
         option.isSet ? (option.userValues.first ?? "") : option.option.defaultValue
@@ -609,6 +685,8 @@ private struct NumericOptionEditor: View {
     /// The pending debounced stepper write, cancelled by the next tick so a burst of
     /// increments collapses to a single write.
     @State private var pendingStep: Task<Void, Never>?
+    /// Field focus, so a blurred numeric field commits like the free-text fields (B7).
+    @FocusState private var fieldFocused: Bool
 
     private var spec: NumericSpec? { option.option.numericSpec }
 
@@ -626,6 +704,15 @@ private struct NumericOptionEditor: View {
             }
         }
         .accessibilityLabel(Text(option.option.displayTitle))
+        .onChange(of: fieldFocused) { _, focused in
+            if !focused { commitOnBlur() }   // commit-on-blur (B7)
+        }
+    }
+
+    /// Commit whatever's in the field when it loses focus, clamping via the spec for a
+    /// bounded field and passing raw for size/plain fields.
+    private func commitOnBlur() {
+        if let spec, spec.style == .field { commitField(spec) } else { commitUnclamped() }
     }
 
     // MARK: Slider
@@ -676,6 +763,7 @@ private struct NumericOptionEditor: View {
             TextField(placeholder, text: $draft)
                 .textFieldStyle(.roundedBorder)
                 .frame(width: 60)
+                .focused($fieldFocused)
                 .onSubmit { commitField(spec) }
             if let unit = spec.unit {
                 Text(unit).font(.caption).foregroundStyle(.secondary)
@@ -716,6 +804,7 @@ private struct NumericOptionEditor: View {
             TextField(placeholder, text: $draft)
                 .textFieldStyle(.roundedBorder)
                 .frame(width: 120)
+                .focused($fieldFocused)
                 .onSubmit { commitUnclamped() }
             if let bytes = Double(draft.trimmingCharacters(in: .whitespaces)), bytes > 0 {
                 Text(NumericSpec.formatBytes(bytes))
@@ -735,6 +824,7 @@ private struct NumericOptionEditor: View {
             TextField(placeholder, text: $draft)
                 .textFieldStyle(.roundedBorder)
                 .frame(width: 80)
+                .focused($fieldFocused)
                 .onSubmit { commitUnclamped() }
             if inferredStep != 1 {
                 // A fractional default earns a fine stepper; an integer default drops
