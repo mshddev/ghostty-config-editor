@@ -28,11 +28,16 @@ struct OptionListView: View {
                     .id(categoryName)
             } else {
                 // Search and the Customized surface show one flat, ranked list —
-                // the Common/Advanced split is a browse-only affordance.
-                List(model.visibleOptions, selection: $model.selectedOptionName) { option in
-                    OptionRow(option: option)
-                        .tag(option.option.name)
+                // the Common/Advanced split is a browse-only affordance. Rendered as
+                // a single grouped-Form section so its rows match the browsed cards.
+                Form {
+                    Section {
+                        ForEach(model.visibleOptions) { option in
+                            OptionRow(option: option)
+                        }
+                    }
                 }
+                .formStyle(.grouped)
             }
         }
         .searchable(text: $model.query, placement: .toolbar,
@@ -97,10 +102,9 @@ private struct CategoryOptionList: View {
     }
 
     var body: some View {
-        @Bindable var model = model
-        List(selection: $model.selectedOptionName) {
-            let common = model.commonOptions
-            let advanced = model.advancedOptions
+        let common = model.commonOptions
+        let advanced = model.advancedOptions
+        Form {
             if !common.isEmpty {
                 Section {
                     rows(common)
@@ -115,20 +119,20 @@ private struct CategoryOptionList: View {
                     // Whole category is advanced — show it flat, never collapsed away.
                     Section { rows(advanced) }
                 } else {
-                    // A custom collapsible header rather than `Section(isExpanded:)`:
-                    // the native collapsible section renders no disclosure control in
-                    // the main-column list style, so it silently trapped the Advanced
-                    // options with no way to reveal them (caught in live testing). This
-                    // tappable header + conditional rows is what the plan foresaw for C2.
+                    // Grouped-Form Sections don't collapse natively (and the native
+                    // collapsible section renders no disclosure control here — it
+                    // silently trapped the Advanced options, caught in live testing),
+                    // so the disclosure is a custom tappable section header with the
+                    // rows conditionally rendered in the card below it.
                     Section {
+                        if advancedExpanded { rows(advanced) }
+                    } header: {
                         advancedHeader(count: advanced.count)
-                        if advancedExpanded {
-                            rows(advanced)
-                        }
                     }
                 }
             }
         }
+        .formStyle(.grouped)
     }
 
     private func advancedHeader(count: Int) -> some View {
@@ -156,7 +160,6 @@ private struct CategoryOptionList: View {
     private func rows(_ options: [MergedOption]) -> some View {
         ForEach(options) { option in
             OptionRow(option: option)
-                .tag(option.option.name)
         }
     }
 }
@@ -405,7 +408,10 @@ private struct InlineOptionEditor: View {
             }
             .labelsHidden()
             .pickerStyle(.menu)
-            .fixedSize()
+            // Cap + right-align instead of `.fixedSize()`: in the grouped Form's
+            // constrained trailing slot a fixed-size menu grew to its longest value
+            // and overflowed the card; a bounded frame truncates the label instead.
+            .frame(maxWidth: 220, alignment: .trailing)
         case .number:
             NumericOptionEditor(
                 option: option,
@@ -454,7 +460,11 @@ private struct InlineOptionEditor: View {
     /// covers the truncation at 160pt.
     private var freeTextField: some View {
         VStack(alignment: .trailing, spacing: 1) {
-            TextField(fieldPlaceholder, text: $draft)
+            // In a Form the title arg renders as a visible label, so the placeholder
+            // moves to `prompt:` and the (empty) label is hidden — otherwise every
+            // field shows its placeholder as a stray label beside the value.
+            TextField("", text: $draft, prompt: Text(fieldPlaceholder))
+                .labelsHidden()
                 .textFieldStyle(.roundedBorder)
                 .frame(width: 160)
                 .focused($textFieldFocused)
@@ -804,7 +814,8 @@ private struct NumericOptionEditor: View {
 
     private func fieldEditor(_ spec: NumericSpec) -> some View {
         HStack(spacing: 4) {
-            TextField(placeholder, text: $draft)
+            TextField("", text: $draft, prompt: Text(placeholder))
+                .labelsHidden()
                 .textFieldStyle(.roundedBorder)
                 .frame(width: 60)
                 .focused($fieldFocused)
@@ -845,7 +856,8 @@ private struct NumericOptionEditor: View {
 
     private var sizeEditor: some View {
         VStack(alignment: .trailing, spacing: 2) {
-            TextField(placeholder, text: $draft)
+            TextField("", text: $draft, prompt: Text(placeholder))
+                .labelsHidden()
                 .textFieldStyle(.roundedBorder)
                 .frame(width: 120)
                 .focused($fieldFocused)
@@ -865,7 +877,8 @@ private struct NumericOptionEditor: View {
     private var plainField: some View {
         let inferredStep = NumericSpec.inferredStep(forDefault: option.option.defaultValue)
         HStack(spacing: 4) {
-            TextField(placeholder, text: $draft)
+            TextField("", text: $draft, prompt: Text(placeholder))
+                .labelsHidden()
                 .textFieldStyle(.roundedBorder)
                 .frame(width: 80)
                 .focused($fieldFocused)
