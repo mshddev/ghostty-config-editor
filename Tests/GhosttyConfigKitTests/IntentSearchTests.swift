@@ -127,4 +127,40 @@ final class IntentSearchTests: XCTestCase {
         XCTAssertEqual(cats.first, "Font")
         XCTAssertTrue(cats.contains("Keybindings"))
     }
+
+    // MARK: - Expanded intent coverage (A6, IA-9, ONBOARD-4)
+
+    func testExpandedIntentPhrasesResolveToIntendedOptions() {
+        let cases: [(phrase: String, expected: String)] = [
+            ("opacity", "background-opacity"),
+            ("startup command", "command"),
+            ("bell sound", "bell-features"),
+            ("tab position", "window-new-tab-position"),
+            ("follow system dark mode", "theme"),
+            ("notify when done", "notify-on-command-finish"),
+            ("unfocused dim", "unfocused-split-opacity"),
+            ("stop cursor blinking", "cursor-style-blink"),
+        ]
+        for (phrase, expected) in cases {
+            let names = browser().searchResults(phrase).map(\.option.name)
+            XCTAssertTrue(names.contains(expected), "intent '\(phrase)' should surface \(expected)")
+        }
+    }
+
+    func testExistingIntentEntriesStillResolve() {
+        // Guard against regressions in the entries that predate the A6 expansion.
+        XCTAssertTrue(browser().searchResults("hide title bar").map(\.option.name).contains("macos-titlebar-style"))
+        XCTAssertTrue(browser().searchResults("font size").map(\.option.name).contains("font-size"))
+    }
+
+    func testEveryIntentMapOptionExistsInCatalog() {
+        // KTD1-style guard: no phrase may map to an option absent from the catalog.
+        let names = Set(catalog.options.map(\.name))
+        for entry in IntentMap.bundled.entries {
+            for option in entry.options {
+                XCTAssertTrue(names.contains(option),
+                              "intent-map.json references '\(option)', not present in the catalog")
+            }
+        }
+    }
 }
