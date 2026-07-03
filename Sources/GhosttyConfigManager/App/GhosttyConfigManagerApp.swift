@@ -8,15 +8,21 @@ import GhosttyConfigKit
 /// and the default was a separate magic number.
 enum WindowMetrics {
     /// Smallest the window may shrink to — the sidebar plus a still-usable detail column.
-    static let minWidth: CGFloat = 720
-    static let minHeight: CGFloat = 560
-    /// Comfortable first-launch size: room for grouped section cards without the
-    /// old cramped-compact open.
-    static let defaultWidth: CGFloat = 900
-    static let defaultHeight: CGFloat = 700
+    static let minWidth: CGFloat = 660
+    static let minHeight: CGFloat = 520
+    /// First-launch size: deliberately snug (like System Settings) so label and value
+    /// stay close. A wider window only inflates the gap between them, so we don't open big
+    /// — just wide enough that the toolbar chips don't collapse into an overflow menu.
+    static let defaultWidth: CGFloat = 780
+    static let defaultHeight: CGFloat = 600
+    /// Hard ceiling on how wide the window may get (drag-resize; zoom is disabled).
+    /// A settings utility has no use for a sprawling width — past here it's just void
+    /// beside a centered column. Height is generous for long option forms.
+    static let maxWidth: CGFloat = 900
+    static let maxHeight: CGFloat = 1300
     /// The detail column caps here and centers, so a wide window never strands a
     /// gap between each option's label and its right-aligned control.
-    static let contentMaxWidth: CGFloat = 680
+    static let contentMaxWidth: CGFloat = 640
 }
 
 /// Centers a surface in a fixed-width column (the System Settings idiom). Applied
@@ -32,6 +38,27 @@ private struct CappedContentColumn: ViewModifier {
 
 private extension View {
     func cappedContentColumn() -> some View { modifier(CappedContentColumn()) }
+}
+
+/// Makes the window behave like macOS System Settings: no fullscreen, no zoom, and a
+/// bounded maximum width. A config utility gains nothing from a maximized window — it
+/// just floats a centered column in a void — so we take those affordances away rather
+/// than manage the void. Reaches into the hosting `NSWindow` (SwiftUI exposes no
+/// declarative API for the zoom button or fullscreen behavior).
+private struct WindowConfigurator: NSViewRepresentable {
+    func makeNSView(context: Context) -> NSView {
+        let view = NSView()
+        // The window isn't attached during makeNSView; defer to the next runloop turn.
+        DispatchQueue.main.async { [weak view] in
+            guard let window = view?.window else { return }
+            window.collectionBehavior.insert(.fullScreenNone)
+            window.standardWindowButton(.zoomButton)?.isEnabled = false
+            window.maxSize = NSSize(width: WindowMetrics.maxWidth, height: WindowMetrics.maxHeight)
+        }
+        return view
+    }
+
+    func updateNSView(_ nsView: NSView, context: Context) {}
 }
 
 /// Without an `.app` bundle (e.g. when launched via `swift run`), macOS treats
@@ -59,14 +86,14 @@ struct GhosttyConfigManagerApp: App {
             RootView()
                 .environment(model)
                 .frame(minWidth: WindowMetrics.minWidth, minHeight: WindowMetrics.minHeight)
+                .background(WindowConfigurator())   // no fullscreen/zoom, bounded max width
                 .task { await model.bootstrap() }
         }
         .windowStyle(.titleBar)
-        // Each option row right-aligns its value control (the standard settings
-        // idiom). A centered, width-capped content column (`CappedContentColumn`)
-        // keeps every label beside its control even when the window is wide, so the
-        // window opens at a comfortable size instead of the old cramped-compact
-        // workaround. First launch is centered on screen.
+        // Options right-align their value control (the settings idiom), and a wider
+        // window only inflates the gap between each label and its control — so the
+        // window opens deliberately snug (like System Settings) and can't be zoomed or
+        // fullscreened (see `WindowConfigurator`). First launch is centered on screen.
         .defaultSize(width: WindowMetrics.defaultWidth, height: WindowMetrics.defaultHeight)
         .defaultPosition(.center)
 
