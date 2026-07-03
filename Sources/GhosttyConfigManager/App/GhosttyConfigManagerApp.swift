@@ -172,9 +172,18 @@ struct GhosttyConfigManagerApp: App {
                 .environment(model)
                 .frame(minWidth: WindowMetrics.minWidth, minHeight: WindowMetrics.minHeight)
                 .background(WindowConfigurator())   // no fullscreen/zoom, bounded max width
-                .task { await model.bootstrap() }
+                // Bootstrap, then decide once whether to present the first-run welcome
+                // (needs `configMissing`, known only after the config is read).
+                .task { await model.bootstrap(); model.showWelcomeIfNeeded() }
         }
         .windowStyle(.titleBar)
+        // Re-open the first-run welcome any time (F2). Replaces the app's (help-book-less)
+        // default Help menu with the one entry that's actually useful here.
+        .commands {
+            CommandGroup(replacing: .help) {
+                Button("Welcome to Ghostty Config") { model.openWelcome() }
+            }
+        }
         // Options right-align their value control (the settings idiom), and a wider
         // window only inflates the gap between each label and its control — so the
         // window opens deliberately snug (like System Settings) and can't be zoomed or
@@ -229,6 +238,11 @@ struct RootView: View {
                 statusView(ProgressView("Loading options…"))
             case .loaded:
                 browser(environment)
+                    // The first-run welcome overlays the loaded app (F2), animating in/out.
+                    .overlay {
+                        if model.isShowingWelcome { WelcomeView() }
+                    }
+                    .animation(.easeInOut(duration: 0.2), value: model.isShowingWelcome)
             }
         }
     }
@@ -273,7 +287,12 @@ struct RootView: View {
         NavigationSplitView {
             SidebarView()
         } detail: {
-            mainColumn
+            VStack(spacing: 0) {
+                // A plain first-run explanation while no config exists yet (F2), above
+                // whatever surface is showing. Disappears once the first change lands.
+                if model.configMissing { FirstRunBanner() }
+                mainColumn
+            }
         }
         // Changing surface clears any lingering apply feedback so the next surface
         // (which may now show its own SurfaceFeedbackBar) doesn't inherit a stale

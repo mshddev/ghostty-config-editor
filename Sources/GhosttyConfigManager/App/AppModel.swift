@@ -104,6 +104,25 @@ public final class AppModel {
         }
     }
 
+    /// `UserDefaults` key for the first-run welcome (F2).
+    static let hasSeenWelcomeDefaultsKey = "hasSeenWelcome"
+
+    /// Whether the user has dismissed the first-run welcome at least once (F2).
+    /// Persisted like `autoReloadEnabled`; defaults to `false` (a missing key reads
+    /// false), so a fresh install shows the welcome. Set true on first *dismiss*, not
+    /// on first edit, so the safety story is seen before anything is changed.
+    public private(set) var hasSeenWelcome: Bool {
+        didSet { UserDefaults.standard.set(hasSeenWelcome, forKey: Self.hasSeenWelcomeDefaultsKey) }
+    }
+
+    /// Whether the welcome pane is currently presented (F2). Transient (not persisted):
+    /// computed once per launch from `!hasSeenWelcome || configMissing`, cleared on
+    /// dismiss, and re-set when re-opened from the Help menu.
+    public var isShowingWelcome = false
+    /// Guards the once-per-launch welcome evaluation so a re-`bootstrap` (binary-override
+    /// change) never re-pops the pane.
+    private var welcomeEvaluated = false
+
     private var environment: GhosttyEnvironment?
     private var catalog: OptionCatalog?
     private var lastReceipt: WriteReceipt?
@@ -138,6 +157,29 @@ public final class AppModel {
         autoReloadEnabled = defaults.bool(forKey: Self.autoReloadDefaultsKey)
         // Favorites start empty (no key registered) and load from any prior session.
         favoriteThemes = Set(defaults.stringArray(forKey: Self.favoriteThemesDefaultsKey) ?? [])
+        // Welcome defaults to unseen on a fresh install (missing key → false).
+        hasSeenWelcome = defaults.bool(forKey: Self.hasSeenWelcomeDefaultsKey)
+    }
+
+    // MARK: - First-run welcome (F2)
+
+    /// Decide once per launch whether to present the welcome: shown when it's never been
+    /// dismissed *or* there's no config yet (so deleting the config later re-surfaces it).
+    /// Called after the first `bootstrap`, when `configMissing` is known; guarded so a
+    /// later re-bootstrap doesn't re-trigger it.
+    public func showWelcomeIfNeeded() {
+        guard !welcomeEvaluated else { return }
+        welcomeEvaluated = true
+        isShowingWelcome = !hasSeenWelcome || configMissing
+    }
+
+    /// Re-open the welcome from the Help menu (available at any time).
+    public func openWelcome() { isShowingWelcome = true }
+
+    /// Dismiss the welcome and remember it's been seen (F2: on first dismiss, not first edit).
+    public func dismissWelcome() {
+        isShowingWelcome = false
+        hasSeenWelcome = true
     }
 
     public var canUndo: Bool { lastReceipt?.previousText != nil }
