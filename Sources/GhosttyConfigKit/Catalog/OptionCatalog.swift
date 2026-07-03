@@ -85,6 +85,15 @@ public extension CatalogOption {
         case .restart: return "Needs a full Ghostty restart to take full effect."
         }
     }
+
+    /// Plain-language name for this option, from the bundled `LabelCatalog` (R1,
+    /// CONTENT-1). Always non-empty — a curated title when we have one, otherwise
+    /// the humanized raw key. The raw `name` stays searchable (R8).
+    var displayTitle: String { LabelCatalog.bundled.displayTitle(for: name) }
+
+    /// A best-effort one-line description (curated summary → first doc sentence →
+    /// empty). May be empty; the always-present `displayTitle` carries R1.
+    var shortSummary: String { LabelCatalog.bundled.shortSummary(for: name, documentation: documentation) }
 }
 
 /// The full set of options for a given Ghostty version (R1).
