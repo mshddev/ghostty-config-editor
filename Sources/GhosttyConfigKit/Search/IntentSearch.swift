@@ -122,7 +122,7 @@ public struct CatalogBrowser: Sendable {
     }
 
     public func options(in category: String) -> [MergedOption] {
-        merged.options(in: category).sorted { $0.option.name < $1.option.name }
+        merged.options(in: category).sorted { OptionOrdering.compare($0.option, $1.option) }
     }
 
     /// Search results as merged options, in ranked order.

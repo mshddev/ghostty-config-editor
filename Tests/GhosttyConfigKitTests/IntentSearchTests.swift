@@ -124,8 +124,8 @@ final class IntentSearchTests: XCTestCase {
 
     func testCategoriesIncludeKnownGroups() {
         let cats = browser().categories
-        XCTAssertEqual(cats.first, "Font")
-        XCTAssertTrue(cats.contains("Keybindings"))
+        XCTAssertEqual(cats.first, "Appearance")
+        XCTAssertTrue(cats.contains(OptionCategorizer.keybindingsCategory))
     }
 
     // MARK: - Expanded intent coverage (A6, IA-9, ONBOARD-4)

@@ -148,95 +148,129 @@ public struct OptionCatalog: Sendable, Codable {
     }
 
     public func options(in category: String) -> [CatalogOption] {
-        options.filter { $0.category == category }.sorted { $0.name < $1.name }
+        options.filter { $0.category == category }.sorted(by: OptionOrdering.compare)
     }
 }
 
 /// Maps option names to sidebar categories (R3). Ghostty's `--docs` output has
 /// no section headers, so categories are derived from the option name's prefix.
 public enum OptionCategorizer {
-    /// Preferred display order for the sidebar.
+    /// The one category name for keyboard shortcuts, shared by the categorizer, the
+    /// sidebar icon map, the `mainColumn` router, and the editor's title, so a
+    /// rename can't desync the routing that shows `KeybindEditorView` (P1 coupling).
+    public static let keybindingsCategory = "Keyboard Shortcuts"
+
+    /// The catch-all for options with no clearer home — the true internals. Also the
+    /// fallback for anything unmapped, so a new Ghostty option never resurfaces a
+    /// phantom "General" bucket.
+    public static let advancedCategory = "Advanced"
+
+    /// Preferred display order for the sidebar (newcomer-frequency order). "Themes"
+    /// and the keyboard editor are dedicated surfaces routed separately; every other
+    /// entry is an option-list category.
     public static let displayOrder: [String] = [
-        "Font",
-        "Colors",
-        "Cursor",
-        "Mouse",
+        "Appearance",
+        "Font & Text",
         "Window",
         "Tabs & Splits",
+        "Cursor",
+        "Mouse & Scrolling",
+        keybindingsCategory,
         "Clipboard",
-        "Keybindings",
-        "Shell Integration",
-        "Terminal",
+        "Notifications & Bell",
+        "Startup & Shell",
         "macOS",
-        // Retained intentionally: `MacOSCatalogScope` filters every Linux/GTK option
-        // out of the catalog, so no option carries this category today and it never
-        // surfaces (`orderedCategories` filters by present categories). Kept as a
-        // no-op affordance in case that scoping is ever relaxed.
-        "Linux / GTK",
-        "General",
+        advancedCategory,
     ]
 
-    /// First-segment prefix → category. Longest/most-specific intent wins via
-    /// the explicit name checks before the prefix map.
+    /// First-segment prefix → category. Explicit `nameOverrides` win over this for
+    /// options a prefix would mis-file. Linux-stack prefixes are intentionally
+    /// absent — `MacOSCatalogScope` drops those options before categorization.
     private static let prefixMap: [String: String] = [
-        "font": "Font",
-        "adjust": "Font",
-        "grapheme": "Font",
-        "palette": "Colors",
-        "theme": "Colors",
-        "background": "Colors",
-        "foreground": "Colors",
-        "selection": "Colors",
-        "bold": "Colors",
-        "minimum": "Colors",
+        // Font & Text
+        "font": "Font & Text",
+        "adjust": "Font & Text",
+        "grapheme": "Font & Text",
+        // Appearance
+        "background": "Appearance",
+        "foreground": "Appearance",
+        "selection": "Appearance",
+        "palette": "Appearance",
+        "bold": "Appearance",
+        "minimum": "Appearance",
+        "alpha": "Appearance",
+        "custom": "Appearance",   // custom-shader*
+        "faint": "Appearance",
+        "search": "Appearance",   // search-background/foreground colors
+        // Tabs & Splits
         "split": "Tabs & Splits",
         "unfocused": "Tabs & Splits",
+        "tab": "Tabs & Splits",
+        // Cursor
         "cursor": "Cursor",
-        "mouse": "Mouse",
-        "focus": "Mouse",
-        "click": "Mouse",
+        // Mouse & Scrolling
+        "mouse": "Mouse & Scrolling",
+        "focus": "Mouse & Scrolling",
+        "click": "Mouse & Scrolling",
+        "scroll": "Mouse & Scrolling",
+        "scrollback": "Mouse & Scrolling",
+        "scrollbar": "Mouse & Scrolling",
+        "right": "Mouse & Scrolling",   // right-click-action
+        // Window
         "window": "Window",
+        "title": "Window",
         "fullscreen": "Window",
         "maximize": "Window",
         "resize": "Window",
+        // Clipboard
         "clipboard": "Clipboard",
         "copy": "Clipboard",
         "paste": "Clipboard",
-        "keybind": "Keybindings",
-        "shell": "Shell Integration",
-        "scrollback": "Terminal",
-        "scroll": "Terminal",
-        "term": "Terminal",
-        "title": "Window",
+        // Keyboard Shortcuts
+        "keybind": keybindingsCategory,
+        // Notifications & Bell
+        "bell": "Notifications & Bell",
+        "notify": "Notifications & Bell",
+        // Startup & Shell
+        "shell": "Startup & Shell",
+        "command": "Startup & Shell",
+        "env": "Startup & Shell",
+        "working": "Startup & Shell",
+        "wait": "Startup & Shell",
+        "abnormal": "Startup & Shell",
+        // macOS
         "macos": "macOS",
-        "gtk": "Linux / GTK",
-        "linux": "Linux / GTK",
-        "x11": "Linux / GTK",
-        "wayland": "Linux / GTK",
-        // No `desktop` prefix: `desktop-notifications` is cross-platform (kept on
-        // macOS, categorized via a nameOverride below). Mapping `desktop-*` here
-        // would miscategorize a future cross-platform desktop option as Linux/GTK.
+        "quick": "macOS",     // quick-terminal-*
+        "auto": "macOS",      // auto-update*
         "app": "macOS",
-        "quick": "macOS",
-        "auto": "macOS",
     ]
 
     /// Exact-name overrides for options whose prefix would mis-categorize them.
     private static let nameOverrides: [String: String] = [
-        "theme": "Colors",
-        "bold-is-bright": "Colors",
-        "tab-bar": "Tabs & Splits",
-        // Kept on macOS (OSC 9/777 escape-sequence notifications work here), so it
-        // must not land in the otherwise-empty "Linux / GTK" group via its
-        // `desktop-` prefix. It's a terminal-protocol capability.
-        "desktop-notifications": "Terminal",
+        // "theme" has no useful prefix mapping of its own; it's an Appearance choice
+        // (also surfaced by the dedicated Themes browser).
+        "theme": "Appearance",
+        // The title bar is a window concern and a Window "common" setting, so keep it
+        // out of the macOS bucket its prefix would send it to.
+        "macos-titlebar-style": "Window",
+        // Cross-platform (OSC 9/777), grouped with the other notification settings.
+        "desktop-notifications": "Notifications & Bell",
+        // Tab-related despite the `window-`/`initial-` prefixes.
+        "window-new-tab-position": "Tabs & Splits",
+        // Startup, not a generic window/command.
+        "initial-command": "Startup & Shell",
+        "initial-window": "Window",
+        // Command-palette internals, not a startup command.
+        "command-palette-entry": advancedCategory,
     ]
 
     public static func category(for name: String) -> String {
         if let exact = nameOverrides[name] { return exact }
         let prefix = name.split(separator: "-").first.map(String.init) ?? name
         if let mapped = prefixMap[prefix.lowercased()] { return mapped }
-        return "General"
+        // Unmapped options land in Advanced — never a phantom "General" bucket, so
+        // `orderedCategories`' append-unknown step can't resurface one (IA-4).
+        return advancedCategory
     }
 
     /// Known categories first (in display order), then any extras alphabetically.

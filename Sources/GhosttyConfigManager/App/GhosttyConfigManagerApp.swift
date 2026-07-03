@@ -96,7 +96,7 @@ struct RootView: View {
         switch model.selection {
         case .problems: ProblemsView()
         case .themes: ThemeBrowserView()
-        case .category("Keybindings"): KeybindEditorView()
+        case .category(let name) where name == OptionCategorizer.keybindingsCategory: KeybindEditorView()
         default: OptionListView()
         }
     }

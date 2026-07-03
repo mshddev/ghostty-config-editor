@@ -1,0 +1,44 @@
+{
+  "version": 1,
+  "tiers": {
+    "background-opacity": { "tier": "common", "rank": 1 },
+    "background-blur": { "tier": "common", "rank": 2 },
+    "background": { "tier": "common", "rank": 3 },
+    "foreground": { "tier": "common", "rank": 4 },
+
+    "font-family": { "tier": "common", "rank": 1 },
+    "font-size": { "tier": "common", "rank": 2 },
+    "font-feature": { "tier": "common", "rank": 3 },
+
+    "window-decoration": { "tier": "common", "rank": 1 },
+    "macos-titlebar-style": { "tier": "common", "rank": 2 },
+    "window-padding-x": { "tier": "common", "rank": 3 },
+    "window-padding-y": { "tier": "common", "rank": 4 },
+    "window-save-state": { "tier": "common", "rank": 5 },
+
+    "unfocused-split-opacity": { "tier": "common", "rank": 1 },
+    "unfocused-split-fill": { "tier": "common", "rank": 2 },
+
+    "cursor-style": { "tier": "common", "rank": 1 },
+    "cursor-style-blink": { "tier": "common", "rank": 2 },
+    "cursor-color": { "tier": "common", "rank": 3 },
+
+    "scrollback-limit": { "tier": "common", "rank": 1 },
+    "mouse-scroll-multiplier": { "tier": "common", "rank": 2 },
+    "mouse-hide-while-typing": { "tier": "common", "rank": 3 },
+
+    "copy-on-select": { "tier": "common", "rank": 1 },
+    "clipboard-read": { "tier": "common", "rank": 2 },
+    "clipboard-write": { "tier": "common", "rank": 3 },
+
+    "desktop-notifications": { "tier": "common", "rank": 1 },
+    "notify-on-command-finish": { "tier": "common", "rank": 2 },
+    "bell-features": { "tier": "common", "rank": 3 },
+
+    "shell-integration": { "tier": "common", "rank": 1 },
+    "command": { "tier": "common", "rank": 2 },
+    "working-directory": { "tier": "common", "rank": 3 },
+
+    "macos-option-as-alt": { "tier": "common", "rank": 1 }
+  }
+}

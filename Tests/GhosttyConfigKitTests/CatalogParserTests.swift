@@ -44,8 +44,8 @@ final class CatalogParserTests: XCTestCase {
         // sharing the "desktop"/notification theme with the filtered GTK options.
         XCTAssertNotNil(catalog.option(named: "desktop-notifications"),
                         "desktop-notifications is cross-platform and must be kept")
-        // Kept, and re-homed out of the (now-empty) Linux / GTK group via nameOverride.
-        XCTAssertEqual(catalog.option(named: "desktop-notifications")?.category, "Terminal")
+        // Kept, and grouped with the other notification settings via nameOverride.
+        XCTAssertEqual(catalog.option(named: "desktop-notifications")?.category, "Notifications & Bell")
         // macOS-supported options that mention Linux in passing stay.
         for name in ["window-decoration", "window-save-state", "quick-terminal-space-behavior",
                      "macos-titlebar-style", "initial-window"] {
@@ -331,13 +331,14 @@ final class CatalogParserTests: XCTestCase {
 
     func testCategoriesAreDerivedAndOrdered() throws {
         let catalog = try realCatalog()
-        XCTAssertEqual(catalog.option(named: "font-size")?.category, "Font")
-        XCTAssertEqual(catalog.option(named: "keybind")?.category, "Keybindings")
-        XCTAssertEqual(catalog.option(named: "theme")?.category, "Colors")
-        // Known categories sort ahead of "General".
+        XCTAssertEqual(catalog.option(named: "font-size")?.category, "Font & Text")
+        XCTAssertEqual(catalog.option(named: "keybind")?.category, OptionCategorizer.keybindingsCategory)
+        XCTAssertEqual(catalog.option(named: "theme")?.category, "Appearance")
+        // Appearance leads the newcomer-frequency order; nothing lands in "General".
         let cats = catalog.categories
-        XCTAssertEqual(cats.first, "Font")
-        XCTAssertTrue(cats.contains("Keybindings"))
+        XCTAssertEqual(cats.first, "Appearance")
+        XCTAssertTrue(cats.contains(OptionCategorizer.keybindingsCategory))
+        XCTAssertFalse(cats.contains("General"))
     }
 
     // MARK: - Tolerance (R1 resilience)

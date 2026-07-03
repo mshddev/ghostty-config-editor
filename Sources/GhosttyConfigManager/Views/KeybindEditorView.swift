@@ -30,7 +30,7 @@ struct KeybindEditorView: View {
             lintBar
             feedbackBar
         }
-        .navigationTitle("Keybindings")
+        .navigationTitle(OptionCategorizer.keybindingsCategory)
         .task {
             await model.loadKeybindReferenceIfNeeded()
             didLoad = true

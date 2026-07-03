@@ -22,18 +22,18 @@ struct SidebarView: View {
 
     static func icon(for category: String) -> String {
         switch category {
-        case "Font": return "textformat"
-        case "Colors": return "paintpalette"
-        case "Cursor": return "cursorarrow"
-        case "Mouse": return "computermouse"
+        case "Appearance": return "paintpalette"
+        case "Font & Text": return "textformat"
         case "Window": return "macwindow"
         case "Tabs & Splits": return "rectangle.split.2x1"
+        case "Cursor": return "cursorarrow"
+        case "Mouse & Scrolling": return "computermouse"
+        case OptionCategorizer.keybindingsCategory: return "keyboard"
         case "Clipboard": return "doc.on.clipboard"
-        case "Keybindings": return "keyboard"
-        case "Shell Integration": return "terminal"
-        case "Terminal": return "apple.terminal"
+        case "Notifications & Bell": return "bell"
+        case "Startup & Shell": return "terminal"
         case "macOS": return "apple.logo"
-        case "Linux / GTK": return "shippingbox"
+        case OptionCategorizer.advancedCategory: return "gearshape.2"
         default: return "gearshape"
         }
     }
