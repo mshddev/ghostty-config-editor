@@ -5,11 +5,13 @@ import GhosttyConfigKit
 
 /// What the sidebar can select.
 ///
-/// `.themes` is the launch default (the first sidebar row); `.customized` and
-/// `.problems` are entered from the top bar rather than a sidebar row; the rest
-/// map to visible rows. A `nil` selection is a defensive fallback that shows the
-/// unfiltered option list.
+/// `.themes` is the launch default; `.recommended` is the curated "start here"
+/// surface (F1), pinned above Themes in Get started but *not* the launch default
+/// (the app keeps opening on Themes to preserve its identity). `.customized` and
+/// `.problems` are tagged Status rows; the rest map to option categories. A `nil`
+/// selection is a defensive fallback that shows the unfiltered option list.
 public enum SidebarSelection: Hashable {
+    case recommended
     case customized
     case problems
     case themes
@@ -674,6 +676,8 @@ public final class AppModel {
             return [] // rendered by ProblemsView, not the option list
         case .themes:
             return [] // rendered by ThemeBrowserView
+        case .recommended:
+            return [] // rendered by RecommendedView
         case .none:
             // Defensive fallback only — the sidebar always keeps a row selected,
             // so this nil branch isn't reachable through normal navigation.
@@ -706,6 +710,28 @@ public final class AppModel {
     public var advancedOptions: [MergedOption] {
         guard let browser, let category = browsedCategory else { return [] }
         return browser.advancedOptions(in: category).filter { $0.option.name != "theme" }
+    }
+
+    /// One titled Recommended group, resolved to the catalog's merged options (F1).
+    /// `id` is the section title (unique within the bundled list).
+    public struct RecommendedGroup: Identifiable {
+        public let id: String
+        public let options: [MergedOption]
+        public var title: String { id }
+    }
+
+    /// The curated "Recommended" sections (F1), each resolved to the merged options
+    /// present in the catalog. A key the catalog doesn't carry is skipped — the KTD1
+    /// orphan-key test keeps the bundled list honest, but the runtime degrades to a
+    /// shorter list rather than a blank row if a future catalog ever drops a key.
+    /// `theme` is intentionally *kept* here (unlike the option lists that filter it
+    /// out): the Recommended surface renders it as a deep-link into the Themes browser.
+    public func recommendedSections() -> [RecommendedGroup] {
+        guard let browser else { return [] }
+        return RecommendedSettings.bundled.sections.map { section in
+            RecommendedGroup(id: section.title,
+                             options: section.options.compactMap { browser.merged.option(named: $0) })
+        }
     }
 
     public func selectedOption() -> MergedOption? {

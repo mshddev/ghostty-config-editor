@@ -12,9 +12,12 @@ struct SidebarView: View {
     var body: some View {
         @Bindable var model = model
         List(selection: $model.selection) {
-            // Get started — the exploratory surfaces a newcomer opens first. The
-            // Recommended row joins this section in F1; the app still launches on Themes.
+            // Get started — the exploratory surfaces a newcomer opens first. Recommended
+            // is pinned at the top (the curated "start here" set, F1); the app still
+            // *launches* on Themes to preserve its identity (Open Question #2).
             Section("Get started") {
+                Label("Recommended", systemImage: "sparkles")
+                    .tag(SidebarSelection.recommended)
                 Label("Themes", systemImage: "paintpalette")
                     .tag(SidebarSelection.themes)
             }

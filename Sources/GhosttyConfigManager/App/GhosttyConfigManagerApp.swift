@@ -251,6 +251,7 @@ struct RootView: View {
                 GlobalFindView()
             } else {
                 switch model.selection {
+                case .recommended: RecommendedView()
                 case .problems: ProblemsView()
                 case .themes: ThemeBrowserView()
                 case .category(let name) where name == OptionCategorizer.keybindingsCategory: KeybindEditorView()

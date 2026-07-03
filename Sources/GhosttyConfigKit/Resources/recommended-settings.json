@@ -1,0 +1,26 @@
+{
+  "sections": [
+    {
+      "title": "Appearance",
+      "options": [
+        "theme",
+        "font-family",
+        "font-size",
+        "background-opacity"
+      ]
+    },
+    {
+      "title": "Behavior",
+      "options": [
+        "cursor-style",
+        "copy-on-select",
+        "confirm-close-surface",
+        "window-save-state",
+        "macos-option-as-alt",
+        "scrollback-limit",
+        "mouse-hide-while-typing",
+        "clipboard-paste-protection"
+      ]
+    }
+  ]
+}

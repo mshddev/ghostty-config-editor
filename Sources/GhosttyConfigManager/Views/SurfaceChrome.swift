@@ -99,6 +99,53 @@ struct SurfaceHeader: View {
     }
 }
 
+/// A row that *navigates* to the surface which owns a setting rather than editing it
+/// inline — used where a value has a rich dedicated home: `theme` → the Themes browser,
+/// `keybind` → the Keyboard Shortcuts surface (F1 Recommended, F3 Customized). This
+/// keeps the "one home per setting" rule so a value with a real editor is never also a
+/// raw field somewhere else (the two-ways-to-set-the-same-key footgun).
+struct DeepLinkRow: View {
+    let title: String
+    /// A one-line description under the title. Hidden when empty.
+    var subtitle: String = ""
+    /// A current-value summary shown before the link (e.g. the active theme). Hidden when empty.
+    var value: String = ""
+    let linkLabel: String
+    let systemImage: String
+    let action: () -> Void
+
+    var body: some View {
+        HStack(spacing: 8) {
+            VStack(alignment: .leading, spacing: 1) {
+                Text(title).font(RowMetrics.titleFont)
+                if !subtitle.isEmpty {
+                    Text(subtitle)
+                        .font(RowMetrics.subtitleFont)
+                        .foregroundStyle(.secondary)
+                        .lineLimit(1)
+                }
+            }
+            Spacer(minLength: 12)
+            if !value.isEmpty {
+                Text(value)
+                    .font(.callout)
+                    .foregroundStyle(.secondary)
+                    .lineLimit(1)
+                    .truncationMode(.middle)
+            }
+            Button(action: action) {
+                // Trailing chevron via the label text so it reads as "go there →".
+                Label("\(linkLabel) →", systemImage: systemImage)
+            }
+            .buttonStyle(.link)
+        }
+        .padding(.vertical, RowMetrics.rowVerticalPadding)
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel(value.isEmpty ? title : "\(title), \(value)")
+        .accessibilityHint(linkLabel)
+    }
+}
+
 /// The bottom of a surface: one consistent place for save-state (Saving… / Saved ·
 /// Undo / error) plus the auto-reload caption, shared by Themes and Keybindings so
 /// they stop hand-rolling their own bars. Options keeps its richer *per-row* feedback
