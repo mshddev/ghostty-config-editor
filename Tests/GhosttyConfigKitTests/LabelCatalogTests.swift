@@ -65,6 +65,23 @@ final class LabelCatalogTests: XCTestCase {
         XCTAssertEqual(catalog.shortSummary(for: "x", documentation: ""), "")
     }
 
+    // MARK: - exampleValue (B4)
+
+    func testExampleValuePullsFirstBacktickToken() {
+        let doc = "The terminal type. Set to `xterm-256color` for wide compatibility."
+        XCTAssertEqual(LabelCatalog.exampleValue(from: doc, excluding: "term"), "xterm-256color")
+    }
+
+    func testExampleValueSkipsTheOptionsOwnName() {
+        let doc = "`command` runs at startup, e.g. `/bin/zsh -l`."
+        XCTAssertEqual(LabelCatalog.exampleValue(from: doc, excluding: "command"), "/bin/zsh -l")
+    }
+
+    func testExampleValueEmptyWhenNoUsableToken() {
+        XCTAssertEqual(LabelCatalog.exampleValue(from: "Plain prose, no code spans.", excluding: ""), "")
+        XCTAssertEqual(LabelCatalog.exampleValue(from: "", excluding: ""), "")
+    }
+
     // MARK: - parity + orphan guards (against the real captured catalog)
 
     func testRawKeySearchStillMatchesAfterRelabeling() throws {

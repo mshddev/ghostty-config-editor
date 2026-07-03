@@ -307,12 +307,25 @@ private struct InlineOptionEditor: View {
 
     @ViewBuilder
     private var control: some View {
+        if option.option.isBooleanish {
+            // "Boolean impostors" (accept true/false alongside richer values) render
+            // toggle-first regardless of their inferred type, so the on/off axis is a
+            // switch, not a text box reading `false` (B4).
+            BooleanishEditor(option: option, savedValue: currentValue, apply: { apply($0) })
+        } else {
+            typedControl
+        }
+    }
+
+    @ViewBuilder
+    private var typedControl: some View {
         switch option.option.valueType {
         case .boolean:
             Toggle("", isOn: boolBinding)
                 .labelsHidden()
                 .toggleStyle(.switch)
-                .controlSize(.mini)
+                .controlSize(.small)   // matched to sibling controls (was .mini) (B4)
+                .accessibilityLabel(Text(option.option.displayTitle))
         case .enumeration:
             // Rows come from the kit helper (not raw enumValues) so a saved
             // out-of-enum value stays selectable and is never silently dropped.
@@ -364,10 +377,15 @@ private struct InlineOptionEditor: View {
         option.isSet ? (option.userValues.first ?? "") : option.option.defaultValue
     }
 
-    /// A hint for an empty free-text field: the option's default value if it has one
-    /// (so the field shows what Ghostty would fall back to), else a neutral "value".
-    /// Replaces the old generic "value" placeholder on every field (CONTENT/CONTROLS-15).
+    /// A hint for an empty free-text field. For untyped/text options, prefer a
+    /// concrete example mined from the docs (CONTROLS-17) so the field hints at the
+    /// *shape* of a valid value; otherwise fall back to the option's default value,
+    /// then a neutral "value". Replaces the old generic "value" placeholder (CONTROLS-15).
     private var fieldPlaceholder: String {
+        if option.option.valueType == .unknown || option.option.valueType == .string {
+            let example = LabelCatalog.exampleValue(from: option.option.documentation, excluding: option.option.name)
+            if !example.isEmpty { return example }
+        }
         let def = option.option.defaultValue.strippingConfigQuotes
         return def.isEmpty ? "value" : def
     }
@@ -715,6 +733,101 @@ private struct NumericOptionEditor: View {
         while s.hasSuffix("0") { s.removeLast() }
         if s.hasSuffix(".") { s.removeLast() }
         return s
+    }
+}
+
+// MARK: - Boolean-ish editor (U10)
+
+/// A toggle-first control for "boolean impostor" options — those that accept
+/// `true`/`false` alongside richer values (B4). The switch handles the on/off axis
+/// the way a newcomer expects (no more editing a text box that reads `false`); a
+/// trailing menu exposes the extra states (`always`, `left`, `osc8`, glass styles…)
+/// with friendly labels for anyone who needs them.
+///
+/// Value round-trip (R8): turning **On** restores the last non-`false` value the user
+/// had — client-cached across the toggle — or `true` if none; turning **Off** writes
+/// `false` while *preserving* that cache, so a custom value (a blur radius, a `left`
+/// Option mapping) survives an off→on cycle instead of collapsing to a bare `true`.
+private struct BooleanishEditor: View {
+    let option: MergedOption
+    let savedValue: String
+    let apply: (String) -> Void
+
+    /// The last "on" (non-`false`) value seen, so Off→On restores it rather than
+    /// snapping to a bare `true`. Seeded from the saved value and kept in sync with it.
+    @State private var lastOnValue: String?
+
+    var body: some View {
+        HStack(spacing: 6) {
+            Toggle("", isOn: onBinding)
+                .labelsHidden()
+                .toggleStyle(.switch)
+                .controlSize(.small)
+                .accessibilityLabel(Text(option.option.displayTitle))
+            if !extraChoices.isEmpty {
+                extrasMenu
+            }
+        }
+        .onAppear { if isOn(savedValue) { lastOnValue = savedValue } }
+        .onChange(of: savedValue) { _, newValue in
+            if isOn(newValue) { lastOnValue = newValue }
+        }
+    }
+
+    /// On unless the value is exactly `false` (or empty/unset) — any richer value
+    /// (`always`, `left`, a blur radius, a glass style) reads as enabled.
+    private func isOn(_ value: String) -> Bool {
+        let v = value.trimmingCharacters(in: .whitespaces).lowercased()
+        return !(v.isEmpty || v == "false")
+    }
+
+    private var onBinding: Binding<Bool> {
+        Binding(
+            get: { isOn(savedValue) },
+            set: { turnOn in
+                if turnOn {
+                    apply(lastOnValue ?? "true")
+                } else {
+                    if isOn(savedValue) { lastOnValue = savedValue } // preserve for re-enable
+                    apply("false")
+                }
+            }
+        )
+    }
+
+    /// The documented values beyond the plain true/false axis — the "extra states"
+    /// the trailing menu offers (with friendly labels, raw tags).
+    private var extraChoices: [EnumChoice] {
+        option.enumChoices(current: savedValue)
+            .filter { $0.value != "true" && $0.value != "false" && !$0.value.isEmpty }
+    }
+
+    private var extrasMenu: some View {
+        Menu {
+            ForEach(extraChoices) { choice in
+                Button {
+                    lastOnValue = choice.value
+                    apply(choice.value)
+                } label: {
+                    if choice.value == savedValue {
+                        Label(choice.label, systemImage: "checkmark")
+                    } else {
+                        Text(choice.label)
+                    }
+                }
+            }
+        } label: {
+            Text(activeExtraLabel).font(.callout)
+        }
+        .menuStyle(.borderlessButton)
+        .fixedSize()
+        .help("More options")
+        .accessibilityLabel(Text("\(option.option.displayTitle) — more options"))
+    }
+
+    /// The active extra's label when one is selected, else a neutral affordance.
+    private var activeExtraLabel: String {
+        extraChoices.first { $0.value == savedValue }?.label ?? "More…"
     }
 }
 

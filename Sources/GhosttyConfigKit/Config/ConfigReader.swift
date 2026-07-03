@@ -95,9 +95,12 @@ public extension MergedOption {
     ///   as its tag so the editor's selection always has a match.
     func enumChoices(current: String) -> [EnumChoice] {
         let values = option.enumValues
+        // Row text is the *friendly* label (A4/B4) while the tag stays the raw token,
+        // so a cryptic value like `osc8` reads as "Only OSC 8 hyperlinks" but still
+        // writes `osc8`.
         if !current.isEmpty, values.contains(current) {
             // The saved value is a listed choice — just mark it selected.
-            return values.map { EnumChoice(value: $0, label: $0, isSelected: $0 == current) }
+            return values.map { EnumChoice(value: $0, label: option.enumValueLabel($0), isSelected: $0 == current) }
         }
         // `current` is empty or outside the set: lead with a row that carries it as
         // the tag so the seeded selection matches, and is the only selected row.
@@ -109,7 +112,7 @@ public extension MergedOption {
             leadLabel = def.isEmpty ? "Not set — uses default" : "Not set — uses default (\(def))"
         }
         let lead = EnumChoice(value: current, label: leadLabel, isSelected: true)
-        return [lead] + values.map { EnumChoice(value: $0, label: $0, isSelected: false) }
+        return [lead] + values.map { EnumChoice(value: $0, label: option.enumValueLabel($0), isSelected: false) }
     }
 }
 

@@ -116,6 +116,25 @@ public struct LabelCatalog: Sendable {
         return sentence
     }
 
+    /// A short example value mined from a doc block — the first backtick-quoted token
+    /// that reads like a value (not the option's own name, no newline, bounded length)
+    /// — for use as a text-field placeholder on untyped options (B4, CONTROLS-17).
+    /// Returns "" when the docs offer nothing usable.
+    ///
+    /// `--docs` prose quotes concrete values in backticks (`` `xterm-256color` ``), so
+    /// this surfaces the shape of a valid value without curating one per option.
+    public static func exampleValue(from documentation: String, excluding name: String = "") -> String {
+        let parts = documentation.components(separatedBy: "`")
+        guard parts.count >= 3 else { return "" }   // need at least one `…` pair
+        // Odd indices sit inside a backtick pair.
+        for index in stride(from: 1, to: parts.count, by: 2) {
+            let token = parts[index].trimmingCharacters(in: .whitespacesAndNewlines)
+            guard !token.isEmpty, token != name, token.count <= 40, !token.contains("\n") else { continue }
+            return token
+        }
+        return ""
+    }
+
     // MARK: - Bundled resource
 
     private struct File: Codable { let labels: [String: Label] }

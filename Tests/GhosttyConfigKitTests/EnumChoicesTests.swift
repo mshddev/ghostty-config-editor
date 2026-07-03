@@ -84,6 +84,30 @@ final class EnumChoicesTests: XCTestCase {
         XCTAssertEqual(choices.first?.label, "Not set — uses default (foo)")
     }
 
+    // B4: friendly enum labels — row text is the curated label while the tag stays
+    // the raw token Ghostty expects.
+    func testFriendlyEnumLabelsWithRawTags() {
+        let option = enumOption(
+            name: "macos-option-as-alt",
+            values: ["true", "false", "left", "right"],
+            default: "true",
+            state: .setNonDefault,
+            userValues: ["left"]
+        )
+        let choices = option.enumChoices(current: "left")
+        XCTAssertEqual(choices.map(\.value), ["true", "false", "left", "right"], "tags stay raw")
+        XCTAssertEqual(choices.map(\.label),
+                       ["Both Option keys", "Off", "Left Option only", "Right Option only"],
+                       "labels are the curated friendly strings")
+        XCTAssertEqual(choices.filter(\.isSelected).map(\.value), ["left"])
+    }
+
+    // An option with no curated value labels shows its raw values unchanged.
+    func testUncuratedEnumFallsBackToRawLabels() {
+        let choices = enumOption(state: .setNonDefault, userValues: ["bar"]).enumChoices(current: "bar")
+        XCTAssertEqual(choices.map(\.label), choices.map(\.value))
+    }
+
     // Current equals default and both are listed → no duplicate row.
     func testNoDuplicateWhenCurrentEqualsListedDefault() {
         let option = enumOption(state: .setToDefault, userValues: ["block"])
