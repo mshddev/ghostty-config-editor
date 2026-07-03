@@ -289,10 +289,28 @@ public final class AppModel {
     public func focus(optionNamed name: String) {
         query = ""
         endFind()
-        selection = .category(OptionCategorizer.category(for: name))
+        // Default: don't scroll unless we arm it for a surface that renders an option row.
+        pendingFocusScroll = false
+
+        // `theme` has a dedicated Themes browser and is *filtered out* of the Appearance
+        // option list, so routing it to its category would dead-end on a surface that
+        // never shows it. Send it to the Themes browser instead (its real home).
+        if name == "theme" {
+            selectedOptionName = nil
+            selection = .themes
+            return
+        }
+
+        let category = OptionCategorizer.category(for: name)
         selectedOptionName = name
-        pendingFocusScroll = true
-        focusRequestID &+= 1
+        selection = .category(category)
+        // The Keyboard Shortcuts category renders the keybind editor, not an option list,
+        // so it has no row to scroll to and would strand the scroll flag. Only arm the
+        // scroll for the generic option list.
+        if category != OptionCategorizer.keybindingsCategory {
+            pendingFocusScroll = true
+            focusRequestID &+= 1
+        }
     }
 
     /// Ranked global-search results paired with their provenance (category pill +
