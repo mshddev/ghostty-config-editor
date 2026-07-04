@@ -265,6 +265,8 @@ struct GhosttyConfigManagerApp: App {
 /// inline in the list, so there is no separate detail column.
 struct RootView: View {
     @Environment(AppModel.self) private var model
+    /// Honor Reduce Motion: transient in/out animations are dropped when it's on (H3).
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     /// Last-visited surface so the app reopens where you left off (G2). `@AppStorage`
     /// (UserDefaults), not `@SceneStorage`: with a single `Window` (G6) it's app-wide
     /// state, and unlike scene restoration it doesn't depend on the OS "close windows on
@@ -313,7 +315,7 @@ struct RootView: View {
                     .overlay {
                         if model.isShowingWelcome { WelcomeView() }
                     }
-                    .animation(.easeInOut(duration: 0.2), value: model.isShowingWelcome)
+                    .animation(reduceMotion ? nil : .easeInOut(duration: 0.2), value: model.isShowingWelcome)
             }
         }
     }

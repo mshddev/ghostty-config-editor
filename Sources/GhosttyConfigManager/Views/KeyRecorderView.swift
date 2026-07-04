@@ -264,7 +264,7 @@ final class KeyRecorderNSView: NSView {
         } else if displayToken.isEmpty {
             // Names both affordances now that focus and recording are decoupled (A11Y-9).
             text = "Click or press ⏎ to record"
-            color = .tertiaryLabelColor
+            color = .secondaryLabelColor   // was tertiary — strict contrast (H3)
         } else {
             text = shown
             color = .labelColor
@@ -285,8 +285,11 @@ final class KeyRecorderNSView: NSView {
 
         if isRecording {
             let hint = NSAttributedString(string: "⌫ clear · esc cancel", attributes: [
-                .font: NSFont.systemFont(ofSize: 9),
-                .foregroundColor: NSColor.tertiaryLabelColor,
+                // `smallSystemFontSize` (~11pt) instead of a hardcoded 9pt — it tracks the
+                // system control-size setting, the closest AppKit gets to Dynamic Type here
+                // (H3, review nit #4). Contrast raised from tertiary to secondary.
+                .font: NSFont.systemFont(ofSize: NSFont.smallSystemFontSize),
+                .foregroundColor: NSColor.secondaryLabelColor,
             ])
             hint.draw(at: NSPoint(x: bounds.minX + 10, y: bounds.minY + 3 + size.height))
         }

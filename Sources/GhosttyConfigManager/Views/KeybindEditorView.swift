@@ -70,7 +70,7 @@ struct KeybindEditorView: View {
     private var keybindHint: some View {
         Text("Click a shortcut and press the new keys to rebind. Actions with no shortcut are listed too.")
             .font(.caption2)
-            .foregroundStyle(.tertiary)
+            .foregroundStyle(.secondary)
             .frame(maxWidth: .infinity, alignment: .leading)
             .padding(.horizontal, 20)
             .padding(.bottom, 8)
@@ -238,7 +238,7 @@ private struct KeybindRow: View {
                 // users, and searchable — R8 / Open Question #4).
                 Text(row.action)
                     .font(.caption2.monospaced())
-                    .foregroundStyle(.tertiary)
+                    .foregroundStyle(.secondary)
                     .lineLimit(1)
                     .truncationMode(.middle)
                 if let warning {

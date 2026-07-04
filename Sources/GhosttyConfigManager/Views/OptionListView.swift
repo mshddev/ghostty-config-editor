@@ -8,6 +8,7 @@ import GhosttyConfigKit
 /// in a popover behind the row's info button.
 struct OptionListView: View {
     @Environment(AppModel.self) private var model
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @State private var confirmingReset = false
 
     var body: some View {
@@ -88,7 +89,11 @@ struct OptionListView: View {
     private func scrollToFocusTarget(_ proxy: ScrollViewProxy) {
         guard model.pendingFocusScroll, let name = model.selectedOptionName else { return }
         DispatchQueue.main.async {
-            withAnimation { proxy.scrollTo(name, anchor: .center) }
+            if reduceMotion {
+                proxy.scrollTo(name, anchor: .center)
+            } else {
+                withAnimation { proxy.scrollTo(name, anchor: .center) }
+            }
             model.pendingFocusScroll = false
         }
     }
@@ -281,6 +286,7 @@ struct OptionListView: View {
 /// than hiding everything under a collapsed disclosure.
 private struct CategoryOptionList: View {
     @Environment(AppModel.self) private var model
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     let category: String
     @AppStorage private var advancedExpanded: Bool
 
@@ -338,7 +344,8 @@ private struct CategoryOptionList: View {
 
     private func advancedHeader(count: Int) -> some View {
         Button {
-            withAnimation(.easeInOut(duration: 0.15)) { advancedExpanded.toggle() }
+            if reduceMotion { advancedExpanded.toggle() }
+            else { withAnimation(.easeInOut(duration: 0.15)) { advancedExpanded.toggle() } }
         } label: {
             HStack(spacing: 6) {
                 Image(systemName: "chevron.right")
@@ -899,6 +906,10 @@ private struct InlineOptionEditor: View {
                     }
                     .buttonStyle(.plain)
                     .help(hex)
+                    // A preset swatch is pure color — VoiceOver gets the hex as its name
+                    // and the selected one is announced as selected (H3, A11Y-6).
+                    .accessibilityLabel("Color \(hex)")
+                    .accessibilityAddTraits(isSelectedPreset(hex) ? .isSelected : [])
                 }
             }
             Text("Type a hex code, an X11 color name, or cell-foreground / cell-background. Changes save when you close this.")
@@ -1345,8 +1356,10 @@ private struct FontFamilyEditor: View {
     /// Preview the chosen primary face in its own typeface (falls back to the system
     /// font when the name doesn't resolve), like a real font menu.
     private var primaryPreviewFont: Font {
-        if let primary = selected.first { return .custom(displayName(primary), size: 12) }
-        return .system(size: 12)
+        // `relativeTo:` so the face preview scales with the user's text-size setting
+        // instead of being pinned at 12pt (H3, Dynamic Type).
+        if let primary = selected.first { return .custom(displayName(primary), size: 12, relativeTo: .callout) }
+        return .system(.callout)
     }
 
     // MARK: Popover
@@ -1555,7 +1568,8 @@ private struct FontRow: View {
                 Text(name)
                     // Each name rendered in its own face, so the list reads like a
                     // font menu; unresolvable names fall back to the system font.
-                    .font(.custom(name, size: 14))
+                    // `relativeTo:` lets the list scale with Dynamic Type (H3).
+                    .font(.custom(name, size: 14, relativeTo: .body))
                     .lineLimit(1)
                 Spacer(minLength: 4)
                 if let selectionLabel {
@@ -1569,6 +1583,10 @@ private struct FontRow: View {
             .padding(.horizontal, 2)
         }
         .buttonStyle(.plain)
+        // The font name renders in its own face (a visual cue lost to VoiceOver), so
+        // name it and announce the current pick as selected (H3, A11Y-6).
+        .accessibilityLabel(selectionLabel.map { "\(name), \($0)" } ?? name)
+        .accessibilityAddTraits(isSelected ? .isSelected : [])
     }
 }
 
@@ -1888,11 +1906,46 @@ private struct OptionInfoPopover: View {
     }
 
     private var documentation: some View {
-        Text(hasDoc ? option.option.documentation : "No documentation available.")
-            .font(.callout)
-            .foregroundStyle(hasDoc ? .primary : .secondary)
-            .textSelection(.enabled)
-            .fixedSize(horizontal: false, vertical: true)
+        Group {
+            if hasDoc {
+                Text(Self.formattedDoc(option.option.documentation))
+                    .foregroundStyle(.primary)
+            } else {
+                Text("No documentation available.").foregroundStyle(.secondary)
+            }
+        }
+        .font(.callout)
+        .textSelection(.enabled)
+        .fixedSize(horizontal: false, vertical: true)
+    }
+
+    /// Lightly format a doc string for the popover (H3/GAP-8): bold the first sentence
+    /// (the summary line) and render `backtick` spans monospaced. Deliberately NOT full
+    /// Markdown — arbitrary doc text with `snake_case` or `*` would mangle under a real
+    /// parser; this only applies the two cues Ghostty docs actually use.
+    static func formattedDoc(_ doc: String) -> AttributedString {
+        var result = AttributedString()
+        // Odd-indexed segments (between backticks) are code spans.
+        for (index, segment) in doc.components(separatedBy: "`").enumerated() {
+            var piece = AttributedString(segment)
+            if !index.isMultiple(of: 2) { piece.font = .callout.monospaced() }
+            result.append(piece)
+        }
+        // Bold up to the first sentence break, so the summary line stands out.
+        if let dotSpace = result.range(of: ". ") {
+            result[result.startIndex..<dotSpace.upperBound].font = .callout.bold()
+        }
+        return result
+    }
+
+    /// Open a config file in an editor, falling back to TextEdit when the file has no
+    /// extension (the bare `config` has no default handler, so `open` would fail/prompt).
+    static func openInEditor(_ path: String) {
+        let url = URL(fileURLWithPath: path)
+        if NSWorkspace.shared.open(url) { return }
+        let textEdit = URL(fileURLWithPath: "/System/Applications/TextEdit.app")
+        NSWorkspace.shared.open([url], withApplicationAt: textEdit,
+                                configuration: NSWorkspace.OpenConfiguration())
     }
 
     private var metadata: some View {
@@ -1928,10 +1981,18 @@ private struct OptionInfoPopover: View {
                 Label(copied ? "Copied" : "Copy snippet", systemImage: copied ? "checkmark" : "doc.on.doc")
             }
             if let source = option.sources.first {
+                // Split the old single "Reveal in editor" (H3/GAP-8): Reveal in Finder
+                // always works; Open in editor opens the file, falling back to TextEdit
+                // for the extensionless `config` (which has no default handler app).
                 Button {
-                    NSWorkspace.shared.open(URL(fileURLWithPath: source.file))
+                    NSWorkspace.shared.activateFileViewerSelecting([URL(fileURLWithPath: source.file)])
                 } label: {
-                    Label("Reveal in editor", systemImage: "arrow.up.forward.app")
+                    Label("Reveal in Finder", systemImage: "folder")
+                }
+                Button {
+                    Self.openInEditor(source.file)
+                } label: {
+                    Label("Open in editor", systemImage: "arrow.up.forward.app")
                 }
             }
             // Only offer a reset when there's a user value to clear (B5). Writing an
