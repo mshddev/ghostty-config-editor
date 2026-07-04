@@ -163,10 +163,10 @@ private struct KeybindRow: View {
                 Spacer(minLength: 12)
                 trigger
             }
-            // Combine only the main row (the recorder is an NSView); keep the conflict
-            // prompt's buttons as their own accessible elements below.
-            .accessibilityElement(children: .combine)
-            .accessibilityLabel("\(friendlyTitle), \(triggerAccessibilityValue), \(badgeText)")
+            // H2/A11Y-3: the row is NOT `.combine`d — that flattened the key recorder
+            // (an NSView with its own role/label/value) and the ⋯ menu out of VoiceOver's
+            // reach. Instead only the action column collapses to one element (below), so
+            // the recorder and menu stay first-class, individually focusable and operable.
             if let pendingConflict {
                 conflictPrompt(pendingConflict)
             }
@@ -213,10 +213,6 @@ private struct KeybindRow: View {
         return ActionLabelCatalog.bundled.shortSummary(forAction: base.trimmingCharacters(in: .whitespaces))
     }
 
-    private var triggerAccessibilityValue: String {
-        isUnbound ? "no shortcut" : "bound to \(KeybindTrigger.displaySymbol(for: row.trigger))"
-    }
-
     // MARK: Action (the config item)
 
     private var actionColumn: some View {
@@ -254,6 +250,22 @@ private struct KeybindRow: View {
                 }
             }
         }
+        // Collapse the action column's fragments (title, summary, badge, raw id, any
+        // warning) into one VoiceOver element read as name + state — the raw id is a
+        // sighted power-user caption, so it's dropped from the spoken label (H2). The
+        // trigger recorder/menu are deliberately outside this element (see body).
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel(actionColumnA11yLabel)
+    }
+
+    /// The action column's VoiceOver reading: friendly name, its one-line summary when
+    /// curated, and the origin badge (Default / Customized / …), plus any live warning.
+    private var actionColumnA11yLabel: Text {
+        var parts = [friendlyTitle]
+        if !actionSummary.isEmpty { parts.append(actionSummary) }
+        parts.append(badgeText)
+        if let warning { parts.append(warning) }
+        return Text(parts.joined(separator: ", "))
     }
 
     private var actionColor: HierarchicalShapeStyle {
@@ -350,6 +362,9 @@ private struct KeybindRow: View {
         .menuIndicator(.hidden)
         .fixedSize()
         .help("More actions")
+        // First-class now that the row is no longer `.combine`d (H2): name it so
+        // VoiceOver announces which shortcut's menu this is, not just "pop up button".
+        .accessibilityLabel("More actions for \(friendlyTitle)")
         .popover(isPresented: $showingText, arrowEdge: .bottom) { textEditor }
         .popover(isPresented: $showingAddAnother, arrowEdge: .bottom) { addAnotherEditor }
     }

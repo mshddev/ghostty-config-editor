@@ -77,6 +77,7 @@ struct ProblemsView: View {
     private func unavailableRow(_ reason: String) -> some View {
         HStack(alignment: .top, spacing: 8) {
             Image(systemName: "questionmark.diamond.fill").foregroundStyle(.orange)
+                .accessibilityLabel("Warning")
             VStack(alignment: .leading, spacing: 2) {
                 Text("Couldn't run ghostty +validate-config").font(.body.bold())
                 Text("Static footguns are still listed, but live validation didn't run: \(reason)")
@@ -90,6 +91,7 @@ struct ProblemsView: View {
     private func genericValidationFailureRow() -> some View {
         HStack(alignment: .top, spacing: 8) {
             Image(systemName: "xmark.octagon.fill").foregroundStyle(.red)
+                .accessibilityLabel("Error")
             VStack(alignment: .leading, spacing: 2) {
                 Text("Config failed validation").font(.body.bold())
                 Text("`ghostty +validate-config` reported your config as invalid but returned no specific message.")
@@ -103,6 +105,7 @@ struct ProblemsView: View {
     private func validationRow(_ message: ValidationMessage) -> some View {
         HStack(alignment: .top, spacing: 8) {
             Image(systemName: "xmark.octagon.fill").foregroundStyle(.red)
+                .accessibilityLabel("Error")
             VStack(alignment: .leading, spacing: 2) {
                 // G5: when the validation `key` names a real catalog option, the title
                 // is a deep-link that jumps to that control (clears search, selects its
@@ -130,10 +133,17 @@ struct ProblemsView: View {
         HStack(alignment: .top, spacing: 8) {
             Image(systemName: icon(for: finding.severity))
                 .foregroundStyle(color(for: finding.severity))
+                // H2/A11Y-8: severity is conveyed as a word, not color/icon alone.
+                .accessibilityLabel(severityLabel(for: finding.severity))
             VStack(alignment: .leading, spacing: 2) {
-                Text(finding.title).font(.body.bold())
-                Text(finding.message).font(.callout).foregroundStyle(.secondary)
-                    .fixedSize(horizontal: false, vertical: true)
+                // Group the title + message into one VoiceOver element (a finding is one
+                // thought), while the file:line link stays a separate, actionable element.
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(finding.title).font(.body.bold())
+                    Text(finding.message).font(.callout).foregroundStyle(.secondary)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+                .accessibilityElement(children: .combine)
                 if let location = finding.locations.first {
                     Button {
                         NSWorkspace.shared.open(URL(fileURLWithPath: location.file))
@@ -153,6 +163,14 @@ struct ProblemsView: View {
         case .error: return "xmark.octagon.fill"
         case .warning: return "exclamationmark.triangle.fill"
         case .info: return "info.circle"
+        }
+    }
+
+    private func severityLabel(for severity: LintFinding.Severity) -> String {
+        switch severity {
+        case .error: return "Error"
+        case .warning: return "Warning"
+        case .info: return "Info"
         }
     }
 
