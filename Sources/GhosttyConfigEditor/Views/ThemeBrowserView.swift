@@ -317,6 +317,10 @@ private struct ThemeRow: View {
     var forcePlaceholder: Bool = false
     /// Drives the light/dark pairing dialog (U11 — replaces the two-click borderless menu).
     @State private var showingPairing = false
+    /// U16 (TH-4, TH-7): pointer hover over the row/card. Tints the row, strengthens the
+    /// star/⋯, and enlarges the terminal mockup **in place** — a look-before-you-commit
+    /// preview with no file write (apply stays an explicit click).
+    @State private var hovering = false
 
     var body: some View {
         let colors = forcePlaceholder ? nil : model.themeColors[theme.name]
@@ -347,12 +351,27 @@ private struct ThemeRow: View {
             favoriteButton
             pairingMenu
         }
+        .padding(.vertical, RowMetrics.rowVerticalPadding)
+        .padding(.horizontal, DesignTokens.Spacing.snug)
+        // U16 (U12 style): a subtle row tint on hover — not motion, so ungated.
+        .background(
+            RoundedRectangle(cornerRadius: DesignTokens.Radius.standard)
+                .fill(hovering ? DesignTokens.hoverLift : Color.clear)
+        )
+        .contentShape(Rectangle())
+        .onHover { hovering = $0 }
+        // Enlarge/tint settle in; keyed to hover so nothing else animates. Reduce-Motion
+        // gated (the enlarge *is* motion, unlike the flat tint).
+        .animation(MotionSystem.gated(MotionSystem.quickFade, reduceMotion: reduceMotion),
+                   value: hovering)
     }
 
     private func rowLabel(colors: ThemeColors?, failed: Bool, isCurrent: Bool) -> some View {
         HStack(spacing: 12) {
-            preview(colors: colors, failed: failed, enlarged: false)
-                .frame(width: 180, height: 40)
+            // TH-4/TH-7: hovering enlarges the mockup in place (bigger type, a third line)
+            // — a look-before-you-commit preview with no config write.
+            preview(colors: colors, failed: failed, enlarged: hovering)
+                .frame(width: hovering ? 240 : 180, height: hovering ? 96 : 40)
                 .clipShape(RoundedRectangle(cornerRadius: 6))
                 // E2: only a subtle accent preview border marks the current theme —
                 // the old full-row accent fill (which mimicked selection) is gone.
@@ -362,6 +381,9 @@ private struct ThemeRow: View {
                         lineWidth: isCurrent ? 2 : 1
                     )
                 )
+                // MO-3: the current border settles in when a theme is applied.
+                .animation(MotionSystem.gated(MotionSystem.settle, reduceMotion: reduceMotion),
+                           value: isCurrent)
             VStack(alignment: .leading, spacing: 3) {
                 HStack(spacing: 6) {
                     Text(theme.name)
@@ -383,7 +405,6 @@ private struct ThemeRow: View {
             }
             Spacer(minLength: 8)
         }
-        .padding(.vertical, RowMetrics.rowVerticalPadding)
         .contentShape(Rectangle())
     }
 
@@ -404,6 +425,9 @@ private struct ThemeRow: View {
                             lineWidth: isCurrent ? 2 : 1
                         )
                     )
+                    // MO-3: the current border settles in on apply.
+                    .animation(MotionSystem.gated(MotionSystem.settle, reduceMotion: reduceMotion),
+                               value: isCurrent)
                     .contentShape(RoundedRectangle(cornerRadius: DesignTokens.Radius.card))
             }
             .buttonStyle(.plain)
@@ -428,6 +452,15 @@ private struct ThemeRow: View {
             }
         }
         .padding(DesignTokens.Spacing.standard)
+        // U16: hover lifts the whole card and strengthens its controls (never hover-only).
+        .background(
+            RoundedRectangle(cornerRadius: DesignTokens.Radius.card)
+                .fill(hovering ? DesignTokens.hoverLift : Color.clear)
+        )
+        .contentShape(RoundedRectangle(cornerRadius: DesignTokens.Radius.card))
+        .onHover { hovering = $0 }
+        .animation(MotionSystem.gated(MotionSystem.quickFade, reduceMotion: reduceMotion),
+                   value: hovering)
     }
 
     /// The "Current" signal — a non-color pill (icon + text), so it reads without
@@ -479,12 +512,19 @@ private struct ThemeRow: View {
     private var favoriteButton: some View {
         let starred = model.isFavorite(theme.name)
         return Button {
-            model.toggleFavorite(theme.name)
+            // TH-9: animate the section membership move (All ↔ Favorites) so the row
+            // visibly relocates rather than teleporting.
+            withAnimation(MotionSystem.gated(MotionSystem.settle, reduceMotion: reduceMotion)) {
+                model.toggleFavorite(theme.name)
+            }
         } label: {
             Image(systemName: starred ? "star.fill" : "star")
                 .foregroundStyle(starred ? AnyShapeStyle(.yellow) : AnyShapeStyle(.secondary))
         }
         .buttonStyle(.plain)
+        // U16: dimmer at rest, full on hover — but never hidden, and a starred (yellow)
+        // star stays legible even dimmed so the state reads without hovering.
+        .opacity(hovering || starred ? 1 : 0.55)
         .accessibilityLabel(starred ? "Unstar \(theme.name)" : "Star \(theme.name)")
     }
 
@@ -500,17 +540,21 @@ private struct ThemeRow: View {
             Image(systemName: "ellipsis.circle").foregroundStyle(.secondary)
         }
         .buttonStyle(.plain)
+        // U16: dimmer at rest, full on hover — but always visible.
+        .opacity(hovering ? 1 : 0.55)
         .accessibilityLabel("Theme options for \(theme.name)")
         .confirmationDialog("Use \(theme.name) for…",
                             isPresented: $showingPairing,
                             titleVisibility: .visible) {
-            Button("Both light and dark") {
+            // CM-11/TH-8: action-first copy that reads back as a sentence with the title —
+            // "Use <name> for… Use for both / Use for Light mode / Use for Dark mode".
+            Button("Use for both") {
                 Task { await model.applyTheme(theme.name) }
             }
-            Button("Light mode only") {
+            Button("Use for Light mode") {
                 Task { await model.applyThemeInPair(theme.name, as: .light) }
             }
-            Button("Dark mode only") {
+            Button("Use for Dark mode") {
                 Task { await model.applyThemeInPair(theme.name, as: .dark) }
             }
             // Explicit cancel: without it SwiftUI adds an ambiguous "OK" that reads like a
