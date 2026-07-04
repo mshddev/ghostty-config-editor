@@ -48,7 +48,7 @@ struct OptionListView: View {
             "Reset all settings to their defaults?",
             isPresented: $confirmingReset, titleVisibility: .visible
         ) {
-            Button("Reset \(model.customizedCount) Setting\(model.customizedCount == 1 ? "" : "s")", role: .destructive) {
+            Button("Reset \(model.resettableCount) Setting\(model.resettableCount == 1 ? "" : "s")", role: .destructive) {
                 Task { await model.resetAllCustomized() }
             }
             Button("Cancel", role: .cancel) {}
@@ -133,7 +133,7 @@ struct OptionListView: View {
                 }
                 // Reset everything back to defaults in one undoable step (G4), only on the
                 // Customized surface where "everything you changed" is the list you see.
-                if model.selection == .customized && model.customizedCount > 0 {
+                if model.selection == .customized && model.resettableCount > 0 {
                     Section {
                         Button("Reset All to Defaults…", role: .destructive) { confirmingReset = true }
                     }
@@ -706,7 +706,12 @@ private struct InlineOptionEditor: View {
                 .textFieldStyle(.roundedBorder)
                 .frame(width: 160)
                 .focused($textFieldFocused)
-                .onSubmit { commit() }
+                // Resign on Return (rather than commit-in-place): committing on blur is
+                // the single write path, and resigning clears the field editor's undo
+                // stack so a following ⌘Z targets the config revert (undoLastApply), not
+                // the just-typed text — otherwise smart ⌘Z can't undo a text-option write
+                // while the field stays focused (adversarial review #2).
+                .onSubmit { textFieldFocused = false }
                 .help(currentValue.isEmpty ? "" : currentValue)
                 .accessibilityLabel(optionControlA11yLabel(option))
             if isDirty {
@@ -1062,7 +1067,9 @@ private struct NumericOptionEditor: View {
                 .textFieldStyle(.roundedBorder)
                 .frame(width: 60)
                 .focused($fieldFocused)
-                .onSubmit { commitField(spec) }
+                // Resign on Return so commit-on-blur is the single write path and a
+                // following ⌘Z reverts the config write, not the field text (review #2).
+                .onSubmit { fieldFocused = false }
             if let unit = spec.unit {
                 Text(unit).font(.caption).foregroundStyle(.secondary)
             }
@@ -1104,7 +1111,7 @@ private struct NumericOptionEditor: View {
                 .textFieldStyle(.roundedBorder)
                 .frame(width: 120)
                 .focused($fieldFocused)
-                .onSubmit { commitUnclamped() }
+                .onSubmit { fieldFocused = false }   // resign → commit-on-blur; ⌘Z targets config (review #2)
             if let bytes = Double(draft.trimmingCharacters(in: .whitespaces)), bytes > 0 {
                 Text(NumericSpec.formatBytes(bytes))
                     .font(.caption2.monospaced())
@@ -1943,9 +1950,12 @@ private struct OptionInfoPopover: View {
     static func openInEditor(_ path: String) {
         let url = URL(fileURLWithPath: path)
         if NSWorkspace.shared.open(url) { return }
-        let textEdit = URL(fileURLWithPath: "/System/Applications/TextEdit.app")
-        NSWorkspace.shared.open([url], withApplicationAt: textEdit,
-                                configuration: NSWorkspace.OpenConfiguration())
+        // Extensionless `config` has no default handler — fall back to TextEdit, located
+        // by bundle id (robust to relocation) rather than a hardcoded /System path.
+        if let textEdit = NSWorkspace.shared.urlForApplication(withBundleIdentifier: "com.apple.TextEdit") {
+            NSWorkspace.shared.open([url], withApplicationAt: textEdit,
+                                    configuration: NSWorkspace.OpenConfiguration())
+        }
     }
 
     private var metadata: some View {

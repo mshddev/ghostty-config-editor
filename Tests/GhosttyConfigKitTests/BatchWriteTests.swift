@@ -22,6 +22,18 @@ final class BatchWriteTests: XCTestCase {
         XCTAssertEqual(edited.serialized(), "copy-on-select = true\n")
     }
 
+    func testBatchLeavesThePrimaryUntouchedForKeysItDoesNotContain() {
+        // Pins the invariant behind the app-side reset scoping (review #1): the batch only
+        // rewrites the primary, so an unset op for a key that lives only in an include (not
+        // the primary) is a no-op here — which is exactly why the app must NOT count or
+        // promise to reset such options.
+        let writer = ConfigWriter()
+        let primary = "font-size = 16\n"
+        let model = ConfigModel(primary: ConfigFile.parse(text: primary, path: "/tmp/config", resolvedPath: "/tmp/config"))
+        let edited = writer.editedFile(applying: [.unset("cursor-style", isRepeatable: false)], in: model)
+        XCTAssertEqual(edited.serialized(), primary, "unsetting a key absent from the primary must not change it")
+    }
+
     func testBatchReconcilesRepeatableAndScalarOpsTogether() {
         let writer = ConfigWriter()
         let cfg = "keybind = ctrl+a=copy_to_clipboard\nkeybind = ctrl+b=paste_from_clipboard\nfont-size = 16\n"

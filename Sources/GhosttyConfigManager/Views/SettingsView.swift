@@ -42,7 +42,7 @@ struct SettingsView: View {
             "Reset all settings to their defaults?",
             isPresented: $confirmingReset, titleVisibility: .visible
         ) {
-            Button("Reset \(model.customizedCount) Setting\(model.customizedCount == 1 ? "" : "s")", role: .destructive) {
+            Button("Reset \(model.resettableCount) Setting\(model.resettableCount == 1 ? "" : "s")", role: .destructive) {
                 Task { await model.resetAllCustomized() }
             }
             Button("Cancel", role: .cancel) {}
@@ -65,7 +65,7 @@ struct SettingsView: View {
                     Task { await model.importConfig(text: text) }
                 }
             }
-            if model.customizedCount > 0 {
+            if model.resettableCount > 0 {
                 Button("Reset All to Defaults…", role: .destructive) { confirmingReset = true }
             }
         }

@@ -464,8 +464,25 @@ public final class AppModel {
         browser?.merged.model.primary.serialized()
     }
 
-    /// How many options the user has customized — gates the reset affordance and labels it.
-    public var customizedCount: Int { browser?.customizedOptions.count ?? 0 }
+    /// Options customized in the PRIMARY file — the ones a batch reset can actually clear.
+    /// The batch owns only the primary (options set in a `config-file` include are left
+    /// untouched), so gating/labelling the reset on the *total* customized count would
+    /// promise to reset options it can't, report a false success, and re-offer a reset
+    /// that never reduces the count (adversarial review #1). This counts only what will
+    /// truly change.
+    public var resettableCount: Int {
+        guard let browser else { return 0 }
+        return browser.customizedOptions.filter { isPrimaryResident($0) }.count
+    }
+
+    /// True when a customized option is defined in the primary config file, so the
+    /// primary-only batch reset will actually unset it (canonical-path compared, matching
+    /// how the writer resolves targets).
+    private func isPrimaryResident(_ option: MergedOption) -> Bool {
+        guard let primary = browser?.merged.model.primary.resolvedPath else { return false }
+        let canonicalPrimary = ConfigReader.canonicalPath(primary)
+        return option.sources.contains { ConfigReader.canonicalPath($0.file) == canonicalPrimary }
+    }
 
     /// Copy the full config to the pasteboard (a trivial read; G4).
     public func copyConfigToPasteboard() {
@@ -484,10 +501,12 @@ public final class AppModel {
         }
     }
 
-    /// Reset every customized option to its default in ONE undoable batch (G4). Options in
-    /// `config-file` includes are left untouched (the batch owns only the primary file).
+    /// Reset the primary file's customized options to their defaults in ONE undoable
+    /// batch (G4). Options set in a `config-file` include are left untouched — the batch
+    /// owns only the primary — and the reset affordance is gated/counted on
+    /// `resettableCount` so it only offers, and reports, what it can actually clear.
     public func resetAllCustomized() async {
-        await applyReset(in: nil, notice: "Reset all settings to their defaults.")
+        await applyReset(in: nil, notice: "Reset settings to their defaults.")
     }
 
     /// Reset just one category's customized options in one undoable batch (G4).
@@ -504,10 +523,13 @@ public final class AppModel {
         }
     }
 
-    /// Build the unset ops for a reset — every customized option (optionally filtered to
-    /// one category). Repeatable keys carry their flag so the batch reconciles them right.
+    /// Build the unset ops for a reset — primary-resident customized options (optionally
+    /// filtered to one category). Include-resident options are excluded because the batch
+    /// only rewrites the primary; unsetting them would be a silent no-op (review #1).
+    /// Repeatable keys carry their flag so the batch reconciles them right.
     private func resetOperations(in category: String?, browser: CatalogBrowser) -> [ConfigWriter.BatchOperation] {
         browser.customizedOptions
+            .filter { isPrimaryResident($0) }
             .filter { category == nil || OptionCategorizer.category(for: $0.option.name) == category }
             .map { .unset($0.option.name, isRepeatable: $0.option.isRepeatable) }
     }
@@ -664,7 +686,12 @@ public final class AppModel {
     public func loadThemesIfNeeded() async {
         guard case .idle = themesLoad, let provider = themeProviderIfAvailable() else { return }
         themesLoad = .loading
-        themesLoad = await ResourceLoad.capture { try await provider.themes() }
+        let result = await ResourceLoad.capture { try await provider.themes() }
+        // A re-bootstrap mid-load (binary switch) swaps the provider and resets themesLoad
+        // to .idle; don't write this now-stale result back over that reset (review #3,
+        // mirroring the keybind loader's `keybindReference === provider` guard).
+        guard themeProvider === provider else { return }
+        themesLoad = result
         await loadFontsIfNeeded()
     }
 
@@ -674,7 +701,9 @@ public final class AppModel {
     public func loadFontsIfNeeded() async {
         guard case .idle = fontsLoad, let provider = themeProviderIfAvailable() else { return }
         fontsLoad = .loading
-        fontsLoad = await ResourceLoad.capture { try await provider.fonts() }
+        let result = await ResourceLoad.capture { try await provider.fonts() }
+        guard themeProvider === provider else { return }   // stale after a provider swap (review #3)
+        fontsLoad = result
     }
 
     /// Force a fresh theme-list load regardless of the current phase — backs the
@@ -683,14 +712,18 @@ public final class AppModel {
     public func reloadThemes() async {
         guard let provider = themeProviderIfAvailable() else { return }
         themesLoad = .loading
-        themesLoad = await ResourceLoad.capture { try await provider.themes() }
+        let result = await ResourceLoad.capture { try await provider.themes() }
+        guard themeProvider === provider else { return }   // stale after a provider swap (review #3)
+        themesLoad = result
     }
 
     /// Force a fresh font-list load (the font picker's "Try again").
     public func reloadFonts() async {
         guard let provider = themeProviderIfAvailable() else { return }
         fontsLoad = .loading
-        fontsLoad = await ResourceLoad.capture { try await provider.fonts() }
+        let result = await ResourceLoad.capture { try await provider.fonts() }
+        guard themeProvider === provider else { return }   // stale after a provider swap (review #3)
+        fontsLoad = result
     }
 
     /// Lazily load (and cache) a theme's colors so swatches render on demand.
