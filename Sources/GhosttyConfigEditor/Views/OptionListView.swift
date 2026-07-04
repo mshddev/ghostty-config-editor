@@ -2059,18 +2059,29 @@ private struct OptionInfoPopover: View {
     @State private var copied = false
 
     var body: some View {
-        ScrollView {
-            VStack(alignment: .leading, spacing: 12) {
-                header
-                Divider()
+        VStack(alignment: .leading, spacing: 0) {
+            header
+                .padding(.horizontal, 16)
+                .padding(.top, 16)
+                .padding(.bottom, 12)
+            Divider()
+            // Only the prose scrolls; the decision facts (Your value / Default / where
+            // it's defined / Reset) pin as a footer below, so they never hide behind long
+            // documentation (CM-4, Xcode Quick Help pattern).
+            ScrollView {
                 documentation
-                Divider()
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .padding(16)
+            }
+            Divider()
+            VStack(alignment: .leading, spacing: 12) {
                 metadata
                 actions
             }
-            .frame(width: 360, alignment: .leading)
+            .frame(maxWidth: .infinity, alignment: .leading)
             .padding(16)
         }
+        .frame(width: 380)
         .frame(maxHeight: 460)
     }
 
@@ -2087,7 +2098,11 @@ private struct OptionInfoPopover: View {
                 .textSelection(.enabled)
             HStack(spacing: 8) {
                 Pill(text: option.option.category, systemImage: "folder")
-                Pill(text: option.option.valueType.rawValue, systemImage: "tag")
+                // The friendly type name ("Choice", "On/off"), and no chip at all for an
+                // untyped option — a bare "unknown" told the reader nothing (CM-10/CV-4).
+                if let typeName = option.option.valueType.displayName {
+                    Pill(text: typeName, systemImage: "tag")
+                }
                 if option.option.isRepeatable {
                     Pill(text: "repeatable", systemImage: "plus.square.on.square")
                 }
@@ -2112,8 +2127,23 @@ private struct OptionInfoPopover: View {
     private var documentation: some View {
         Group {
             if hasDoc {
-                Text(Self.formattedDoc(option.option.documentation))
-                    .foregroundStyle(.primary)
+                let blocks = DocFormatter.format(option.option.documentation)
+                VStack(alignment: .leading, spacing: 6) {
+                    ForEach(Array(blocks.enumerated()), id: \.offset) { index, block in
+                        switch block {
+                        case .paragraph(let text):
+                            Text(Self.styled(text, boldFirstSentence: index == 0))
+                                .frame(maxWidth: .infinity, alignment: .leading)
+                        case .bullet(let text):
+                            HStack(alignment: .firstTextBaseline, spacing: 6) {
+                                Text("•").foregroundStyle(.secondary)
+                                Text(Self.styled(text, boldFirstSentence: false))
+                                    .frame(maxWidth: .infinity, alignment: .leading)
+                            }
+                        }
+                    }
+                }
+                .foregroundStyle(.primary)
             } else {
                 Text("No documentation available.").foregroundStyle(.secondary)
             }
@@ -2123,20 +2153,19 @@ private struct OptionInfoPopover: View {
         .fixedSize(horizontal: false, vertical: true)
     }
 
-    /// Lightly format a doc string for the popover (H3/GAP-8): bold the first sentence
-    /// (the summary line) and render `backtick` spans monospaced. Deliberately NOT full
-    /// Markdown — arbitrary doc text with `snake_case` or `*` would mangle under a real
-    /// parser; this only applies the two cues Ghostty docs actually use.
-    static func formattedDoc(_ doc: String) -> AttributedString {
+    /// Style one reflowed doc block (`DocFormatter` already joined hard wraps and lifted
+    /// bullets): render `backtick` spans monospaced and — for the summary paragraph only
+    /// — bold the first sentence so it stands out (H3/GAP-8/U9). Deliberately NOT full
+    /// Markdown; only the two cues Ghostty docs actually use.
+    static func styled(_ text: String, boldFirstSentence: Bool) -> AttributedString {
         var result = AttributedString()
         // Odd-indexed segments (between backticks) are code spans.
-        for (index, segment) in doc.components(separatedBy: "`").enumerated() {
+        for (index, segment) in text.components(separatedBy: "`").enumerated() {
             var piece = AttributedString(segment)
             if !index.isMultiple(of: 2) { piece.font = .callout.monospaced() }
             result.append(piece)
         }
-        // Bold up to the first sentence break, so the summary line stands out.
-        if let dotSpace = result.range(of: ". ") {
+        if boldFirstSentence, let dotSpace = result.range(of: ". ") {
             result[result.startIndex..<dotSpace.upperBound].font = .callout.bold()
         }
         return result
@@ -2159,16 +2188,12 @@ private struct OptionInfoPopover: View {
         VStack(alignment: .leading, spacing: 8) {
             if option.isSet {
                 LabeledRow("Your value") {
-                    Text(option.userValues.map(\.strippingConfigQuotes).joined(separator: "\n"))
-                        .font(.callout.monospaced())
-                        .textSelection(.enabled)
+                    metadataValue(option.userValues.map(displayValue).joined(separator: "\n"))
                 }
             }
             LabeledRow("Default") {
-                Text(option.option.defaultValue.isEmpty ? "—" : option.option.defaultValue.strippingConfigQuotes)
-                    .font(.callout.monospaced())
-                    .foregroundStyle(.secondary)
-                    .textSelection(.enabled)
+                metadataValue(option.option.defaultValue.isEmpty ? "—" : displayValue(option.option.defaultValue),
+                              secondary: true)
             }
             if let source = option.sources.first {
                 LabeledRow("Defined in") {
@@ -2178,6 +2203,28 @@ private struct OptionInfoPopover: View {
                 }
             }
         }
+    }
+
+    /// A metadata value's display form: enum / boolean-ish values pass through the label
+    /// humanizer ("bar" → "Bar", "true" → "On") so a raw token never shows here (KTD3);
+    /// every other value (hex, path, number) stays its exact stripped self.
+    private func displayValue(_ raw: String) -> String {
+        let stripped = raw.strippingConfigQuotes
+        guard isEnumLike else { return stripped }
+        return EnumValueLabels.bundled.label(option: option.option.name, value: stripped)
+    }
+
+    private var isEnumLike: Bool {
+        option.option.valueType == .enumeration || option.option.isBooleanish
+    }
+
+    /// Render a metadata value: mono for raw tokens (hex/paths/numbers), regular text for
+    /// a humanized enum label — a word reads oddly in monospace.
+    private func metadataValue(_ text: String, secondary: Bool = false) -> some View {
+        Text(text)
+            .font(isEnumLike ? .callout : .callout.monospaced())
+            .foregroundStyle(secondary ? Color.secondary : Color.primary)
+            .textSelection(.enabled)
     }
 
     private var actions: some View {
