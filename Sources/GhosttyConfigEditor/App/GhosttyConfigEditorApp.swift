@@ -98,14 +98,35 @@ private struct ToolbarChip: View {
     var body: some View {
         if let action {
             Button(action: action) {
-                content.foregroundStyle(isActive ? AnyShapeStyle(Color.accentColor) : AnyShapeStyle(.primary))
+                chipContent
             }
-            .buttonStyle(.bordered)
-            .controlSize(.small)
+            .buttonStyle(.plain)
             .accessibilityAddTraits(isActive ? .isSelected : [])
         } else {
             content.foregroundStyle(.secondary)
         }
+    }
+
+    /// The actionable chip's own chrome. The label stays `.primary` — accent tints only
+    /// the glyph (DS-6), so "on" doesn't read as a hyperlink. A hairline border is always
+    /// present so it reads as clickable regardless of state, and an *active* chip fills
+    /// with a subtle accent tint (not border-only) so the on-state survives focus loss
+    /// instead of riding on accent alone (CB-10).
+    private var chipContent: some View {
+        let shape = RoundedRectangle(cornerRadius: DesignTokens.Radius.standard, style: .continuous)
+        return content
+            .foregroundStyle(.primary)
+            .padding(.horizontal, 8)
+            .padding(.vertical, 3)
+            .background {
+                ZStack {
+                    shape.fill(isActive ? AnyShapeStyle(DesignTokens.accentFill) : AnyShapeStyle(Color.clear))
+                    shape.strokeBorder(
+                        isActive ? AnyShapeStyle(Color.accentColor.opacity(0.45)) : AnyShapeStyle(.quaternary),
+                        lineWidth: 1)
+                }
+            }
+            .contentShape(shape)
     }
 
     private var content: some View {
@@ -441,13 +462,22 @@ struct RootView: View {
     /// own local filter — it searches *all* options regardless of the current surface
     /// and opens a results overlay. Clickable (for pointer users) with a ⌘F equivalent.
     private func findButton() -> some View {
-        // ⌘F lives on the View-menu Find command now (G2), so the shortcut isn't
-        // declared twice; this stays a click affordance for pointer users.
-        Button { model.beginFind() } label: {
-            Label("Find", systemImage: "magnifyingglass")
-        }
+        // ⌘F lives on the View-menu Find command now (G2), so the shortcut isn't declared
+        // twice; this stays a click affordance for pointer users. Routed through the
+        // active-capable chip (U20/IA-3) so Find-mode is legible *in the chrome*: the chip
+        // fills when a Find is in progress, and clicking it again ends Find. Toggle trait
+        // for VoiceOver.
+        ToolbarChip(
+            systemImage: "magnifyingglass",
+            tint: model.isFinding ? .accentColor : .secondary,
+            title: "Find",
+            isActive: model.isFinding,
+            action: { model.isFinding ? model.endFind() : model.beginFind() }
+        )
         .help("Find any setting (⌘F)")
         .accessibilityLabel("Find settings")
+        .accessibilityValue(model.isFinding ? "Active" : "")
+        .accessibilityAddTraits(.isToggle)
     }
 
     /// Identity: which Ghostty this is managing. A plain label — the version is
