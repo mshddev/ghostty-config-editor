@@ -32,6 +32,7 @@ struct SettingsView: View {
                         .fixedSize(horizontal: false, vertical: true)
                 }
                 backupSection
+                resetSection
             }
             .formStyle(.grouped)
             // Import / reset route through the shared write engine, so their outcome
@@ -55,7 +56,7 @@ struct SettingsView: View {
 
     @ViewBuilder
     private var backupSection: some View {
-        Section("Backup & reset") {
+        Section("Backup") {
             Button("Copy Full Config") { model.copyConfigToPasteboard() }
             Button("Export…") {
                 if let text = model.primaryConfigText { ConfigTransfer.export(text) }
@@ -65,8 +66,17 @@ struct SettingsView: View {
                     Task { await model.importConfig(text: text) }
                 }
             }
-            if model.resettableCount > 0 {
-                Button("Reset All to Defaults…", role: .destructive) { confirmingReset = true }
+        }
+    }
+
+    /// Reset lives in its own trailing section, separated from the benign backup actions
+    /// (IA-6, matching the Customized surface), and renders red via DestructiveRowButton
+    /// since a grouped Form drops `role:`-only styling (DS-7).
+    @ViewBuilder
+    private var resetSection: some View {
+        if model.resettableCount > 0 {
+            Section {
+                DestructiveRowButton(title: "Reset All to Defaults…") { confirmingReset = true }
             }
         }
     }

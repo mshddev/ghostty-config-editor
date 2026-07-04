@@ -132,10 +132,12 @@ struct OptionListView: View {
                     }
                 }
                 // Reset everything back to defaults in one undoable step (G4), only on the
-                // Customized surface where "everything you changed" is the list you see.
+                // Customized surface where "everything you changed" is the list you see. A
+                // grouped Form drops `role:`-only red styling, so render via
+                // DestructiveRowButton for explicit red (DS-7).
                 if model.selection == .customized && model.resettableCount > 0 {
                     Section {
-                        Button("Reset All to Defaults…", role: .destructive) { confirmingReset = true }
+                        DestructiveRowButton(title: "Reset All to Defaults…") { confirmingReset = true }
                     }
                 }
             }
