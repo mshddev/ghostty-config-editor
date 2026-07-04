@@ -44,6 +44,42 @@ public struct MergedKeybind: Sendable, Equatable, Identifiable {
     }
 }
 
+/// One action's row in the editor (U17): the action plus **every chord bound to it**,
+/// so Copy renders once carrying both ⌘C and the physical Copy key instead of as two
+/// separate rows (KB-1). Each element of `chords` is one `MergedKeybind` — a single
+/// trigger with its own origin and source, so conflict-at-capture and read-only-by-file
+/// still evaluate per chord (two chords for one action can differ in origin/source).
+///
+/// A disabled default stays here as a struck chord (`.userDisablesDefault`) rather than
+/// dropping the row (the LOCKED behavior flip, KB-2). An action with no shortcut at all
+/// carries a single `.unbound` placeholder chord, so the whole action set still lists
+/// like a system shortcuts pane.
+public struct KeybindActionGroup: Sendable, Equatable, Identifiable {
+    /// The full action string (params included) — unique per row, so it's the SwiftUI id.
+    public var id: String { action }
+    public let action: String
+    /// The chords bound to this action, in listed order. Never empty.
+    public let chords: [MergedKeybind]
+
+    public init(action: String, chords: [MergedKeybind]) {
+        self.action = action
+        self.chords = chords
+    }
+
+    /// The action has no shortcut at all — its only chord is the empty `.unbound`
+    /// placeholder, so the row shows a lone recorder rather than any struck capsule.
+    public var isUnbound: Bool { chords.allSatisfy { $0.origin == .unbound } }
+
+    /// The chords that currently fire: excludes the empty placeholder and any default the
+    /// user turned off. Drives the truthful "N with a shortcut" header count (KB-7/CM-12).
+    public var activeChords: [MergedKeybind] {
+        chords.filter { $0.origin != .unbound && $0.origin != .userDisablesDefault }
+    }
+
+    /// Whether at least one chord is live (see `activeChords`).
+    public var hasActiveShortcut: Bool { !activeChords.isEmpty }
+}
+
 /// A user's parsed `keybind` binding paired with where it was defined.
 public struct UserKeybind: Sendable, Equatable {
     public let keybind: Keybind
@@ -128,21 +164,39 @@ public enum KeybindMerge {
         return rows
     }
 
-    /// The action a chord would collide with: the action a *different* live binding
-    /// already uses for `trigger`, or nil when the chord is free (or only used by
-    /// `action` itself). Powers the conflict-at-capture prompt (F4, CONTROLS-10/11) — a
-    /// rebind onto ⌘C should warn that Copy already uses it, before the after-the-fact
-    /// lint bar. Skips unbound rows (no shortcut) and disabled defaults (whose trigger is
-    /// actually free), and ignores `action` (recording a second trigger for the same
-    /// action is not a conflict). Trigger matching is canonical, so `Super+C` collides
-    /// with `super+c`.
-    public static func conflictingAction(forTrigger trigger: String, excludingAction action: String, in merged: [MergedKeybind]) -> String? {
+    /// Fold the per-chord merge output into one entry per action (U17). Each distinct
+    /// action becomes a `KeybindActionGroup` carrying its chords in first-appearance
+    /// order, so the list still reads defaults-first, then user-added, then the unbound
+    /// tail — but Copy's two triggers now share one row. An action's disabled default is
+    /// kept in place as a struck chord (it is not dropped before grouping — the LOCKED
+    /// behavior flip, KB-2), and an otherwise-unbound action keeps its single `.unbound`
+    /// placeholder chord.
+    public static func group(_ merged: [MergedKeybind]) -> [KeybindActionGroup] {
+        var order: [String] = []
+        var chordsByAction: [String: [MergedKeybind]] = [:]
+        for chord in merged {
+            if chordsByAction[chord.action] == nil { order.append(chord.action) }
+            chordsByAction[chord.action, default: []].append(chord)
+        }
+        return order.map { KeybindActionGroup(action: $0, chords: chordsByAction[$0]!) }
+    }
+
+    /// The action a chord would collide with: the action a *different* live chord already
+    /// uses for `trigger`, or nil when the chord is free (or only used by `action` itself).
+    /// Powers the conflict-at-capture prompt (F4, CONTROLS-10/11) — a rebind onto ⌘C should
+    /// warn that Copy already uses it, before the after-the-fact lint bar. Scans **per
+    /// chord** across the grouped rows: skips the empty placeholder and disabled defaults
+    /// (whose trigger is actually free), and ignores the action being edited (recording a
+    /// second trigger for the same action is not a conflict). Trigger matching is canonical,
+    /// so `Super+C` collides with `super+c`.
+    public static func conflictingAction(forTrigger trigger: String, excludingAction action: String, in groups: [KeybindActionGroup]) -> String? {
         let canonical = KeybindTrigger.parse(trigger).canonical()
         guard !canonical.isEmpty else { return nil }
-        for row in merged where row.canonicalTrigger == canonical {
-            if row.origin == .unbound || row.origin == .userDisablesDefault { continue }
-            if row.action == action { continue }
-            return row.action
+        for group in groups where group.action != action {
+            for chord in group.chords where chord.canonicalTrigger == canonical {
+                if chord.origin == .unbound || chord.origin == .userDisablesDefault { continue }
+                return group.action
+            }
         }
         return nil
     }

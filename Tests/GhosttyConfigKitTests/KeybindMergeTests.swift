@@ -23,27 +23,43 @@ final class KeybindMergeTests: XCTestCase {
     }
 
     func testConflictingActionFindsTheActionAlreadyBoundToTheChord() {
-        let rows = [
+        let groups = KeybindMerge.group([
             merged("super+c", "copy_to_clipboard", .default),
             merged("", "new_split", .unbound),
-        ]
+        ])
         // Recording ⌘C for a different action collides with Copy — matched canonically.
         XCTAssertEqual(
-            KeybindMerge.conflictingAction(forTrigger: "Super+C", excludingAction: "new_split", in: rows),
+            KeybindMerge.conflictingAction(forTrigger: "Super+C", excludingAction: "new_split", in: groups),
             "copy_to_clipboard"
         )
         // A free chord doesn't collide.
-        XCTAssertNil(KeybindMerge.conflictingAction(forTrigger: "super+ctrl+k", excludingAction: "new_split", in: rows))
+        XCTAssertNil(KeybindMerge.conflictingAction(forTrigger: "super+ctrl+k", excludingAction: "new_split", in: groups))
         // Recording the same chord for the SAME action is a second trigger, not a conflict.
-        XCTAssertNil(KeybindMerge.conflictingAction(forTrigger: "super+c", excludingAction: "copy_to_clipboard", in: rows))
+        XCTAssertNil(KeybindMerge.conflictingAction(forTrigger: "super+c", excludingAction: "copy_to_clipboard", in: groups))
     }
 
     func testConflictingActionIgnoresDisabledDefaultsAndUnboundRows() {
         // ⌘C's default is turned off, so the chord is actually free.
-        let disabled = [merged("super+c", "copy_to_clipboard", .userDisablesDefault)]
+        let disabled = KeybindMerge.group([merged("super+c", "copy_to_clipboard", .userDisablesDefault)])
         XCTAssertNil(KeybindMerge.conflictingAction(forTrigger: "super+c", excludingAction: "new_split", in: disabled))
         // An empty trigger never collides.
         XCTAssertNil(KeybindMerge.conflictingAction(forTrigger: "", excludingAction: "x", in: disabled))
+    }
+
+    // A conflict is found even when the colliding trigger is the action's *second* chord —
+    // the scan is per chord, not just the first trigger of each action (U17).
+    func testConflictingActionScansEverySecondaryChord() {
+        // Copy carries two chords; recording ⌘C for another action must still collide.
+        let groups = KeybindMerge.group([
+            merged("copy", "copy_to_clipboard", .default),      // physical key (first chord)
+            merged("super+c", "copy_to_clipboard", .default),   // ⌘C (second chord, same action)
+            merged("", "new_split", .unbound),
+        ])
+        XCTAssertEqual(groups.first { $0.action == "copy_to_clipboard" }?.chords.count, 2)
+        XCTAssertEqual(
+            KeybindMerge.conflictingAction(forTrigger: "super+c", excludingAction: "new_split", in: groups),
+            "copy_to_clipboard"
+        )
     }
 
     // MARK: - Merge (RK1)
@@ -304,5 +320,77 @@ final class KeybindMergeTests: XCTestCase {
         let merged = KeybindMerge.merge(defaults: defaults, user: [])
         XCTAssertEqual(merged.filter { $0.canonicalTrigger == "super+t" }.count, 1)
         XCTAssertEqual(merged.first?.action, "new_window", "last wins, matching Ghostty")
+    }
+
+    // MARK: - group() — one entry per action, chords folded in (U17, R8)
+
+    private func defaultsFixture() throws -> [DefaultKeybind] {
+        let actions = KeybindReference.parseActions(try Fixture.text("list-actions", "txt"))
+        return KeybindReference.parseDefaults(try Fixture.text("list-keybinds-default", "txt"),
+                                              knownActions: Set(actions.map(\.name)))
+    }
+
+    func testGroupFoldsDefaultsIntoOneEntryPerActionWithChordLists() throws {
+        let merged = KeybindMerge.merge(defaults: try defaultsFixture(), user: [])
+        let groups = KeybindMerge.group(merged)
+
+        // 93 default binds collapse to 75 distinct actions; 18 of them carry two chords
+        // (copy/paste/undo/goto_tab:1…8/…). (The plan estimated ~17; the 1.3.1 fixture is 18.)
+        XCTAssertEqual(groups.count, 75)
+        XCTAssertEqual(groups.filter { $0.chords.count == 2 }.count, 18)
+        XCTAssertTrue(groups.allSatisfy { $0.chords.count == 1 || $0.chords.count == 2 })
+
+        // Copy appears once, carrying both the physical Copy key and ⌘C.
+        let copy = try XCTUnwrap(groups.first { $0.action == "copy_to_clipboard:mixed" })
+        XCTAssertEqual(copy.chords.count, 2)
+        XCTAssertEqual(Set(copy.chords.map(\.canonicalTrigger)),
+                       [KeybindTrigger.parse("copy").canonical(), KeybindTrigger.parse("super+c").canonical()])
+        XCTAssertTrue(copy.hasActiveShortcut)
+        XCTAssertFalse(copy.isUnbound)
+    }
+
+    func testGroupKeepsADisabledDefaultAsAStruckChordInPlaceRatherThanDroppingTheRow() {
+        // The LOCKED behavior flip (KB-2): an action whose only default is turned off keeps
+        // its row with a `.userDisablesDefault` chord — it does NOT collapse to an empty
+        // "No shortcut" row, and `withUnboundActions` must not re-add it as unbound.
+        let defaults = [DefaultKeybind(trigger: "super+shift+t", action: "new_tab")]
+        let user = KeybindMerge.userBindings(values: ["super+shift+t=unbind"], sources: [loc(primary, 1)],
+                                             knownActions: ["unbind"])
+        let merged = KeybindMerge.merge(defaults: defaults, user: user)
+        let padded = KeybindMerge.withUnboundActions(merged, allActions: [KeybindAction(name: "new_tab")])
+        let groups = KeybindMerge.group(padded)
+
+        XCTAssertEqual(groups.count, 1)
+        let group = groups[0]
+        XCTAssertEqual(group.action, "new_tab")
+        XCTAssertEqual(group.chords.map(\.origin), [.userDisablesDefault])
+        XCTAssertFalse(group.isUnbound, "a turned-off default is a chord, not an unbound placeholder")
+        XCTAssertFalse(group.hasActiveShortcut, "a turned-off default doesn't count as an active shortcut")
+    }
+
+    func testGroupPreservesPerChordOriginAndCollectsAddedChordsUnderOneAction() {
+        // new_tab keeps its default (super+t) and gains a user-added chord (super+shift+t):
+        // both land under a single new_tab group, in listed order, origins intact.
+        let defaults = [DefaultKeybind(trigger: "super+t", action: "new_tab")]
+        let user = KeybindMerge.userBindings(values: ["super+shift+t=new_tab"], sources: [loc(primary, 1)],
+                                             knownActions: ["new_tab"])
+        let merged = KeybindMerge.merge(defaults: defaults, user: user)
+        let groups = KeybindMerge.group(merged)
+
+        let group = try? XCTUnwrap(groups.first { $0.action == "new_tab" })
+        XCTAssertEqual(group?.chords.count, 2)
+        XCTAssertEqual(group?.chords.map(\.origin), [.default, .userAdded])
+        XCTAssertEqual(group?.activeChords.count, 2)
+    }
+
+    func testGroupPlacesAnUnboundActionAsASingleEmptyPlaceholderChord() {
+        let merged = KeybindMerge.merge(defaults: [], user: [])
+        let padded = KeybindMerge.withUnboundActions(merged, allActions: [KeybindAction(name: "toggle_quick_terminal")])
+        let groups = KeybindMerge.group(padded)
+
+        XCTAssertEqual(groups.count, 1)
+        XCTAssertTrue(groups[0].isUnbound)
+        XCTAssertEqual(groups[0].chords.map(\.origin), [.unbound])
+        XCTAssertTrue(groups[0].activeChords.isEmpty)
     }
 }

@@ -1007,23 +1007,24 @@ public final class AppModel {
     }
 
     /// Ghostty's defaults merged with the user's bindings, marking overrides (RK1),
-    /// then padded with an empty row per still-unbound action so the whole action set
-    /// is listed and bindable inline (like a system shortcuts pane).
+    /// padded with an empty row per still-unbound action so the whole action set is
+    /// listed and bindable inline, then **grouped into one entry per action** so Copy's
+    /// two triggers render as a single row with two chord capsules (U17, KB-1).
     ///
-    /// "Disabled default" rows are hidden: they're noisy and usually duplicate an
-    /// action that's rebound elsewhere ("Restore default" on that action re-enables the
-    /// default instead). Dropping them *before* `withUnboundActions` means an action
-    /// whose only shortcut was disabled reappears as a bindable "no shortcut" row rather
-    /// than vanishing.
-    public var mergedKeybinds: [MergedKeybind] {
+    /// Disabled defaults are **kept** (the LOCKED behavior flip, KB-2): an action whose
+    /// default the user turned off renders that chord struck-through in place, with a
+    /// one-click re-enable, instead of collapsing to an empty "No shortcut" row. Because
+    /// the disabled chord carries the action, `withUnboundActions` already treats the
+    /// action as bound and doesn't also append a placeholder for it.
+    public var keybindGroups: [KeybindActionGroup] {
         let user = KeybindMerge.userBindings(
             values: keybindOption?.userValues ?? [],
             sources: keybindOption?.sources ?? [],
             knownActions: keybindActionNames
         )
         let merged = KeybindMerge.merge(defaults: keybindDefaults, user: user)
-            .filter { $0.origin != .userDisablesDefault }
-        return KeybindMerge.withUnboundActions(merged, allActions: keybindActions)
+        let padded = KeybindMerge.withUnboundActions(merged, allActions: keybindActions)
+        return KeybindMerge.group(padded)
     }
 
     /// Canonical default trigger(s) grouped by *full* action (params included, so
@@ -1071,11 +1072,12 @@ public final class AppModel {
         return ConfigWriter().targetFile(forOption: "keybind", in: model).resolvedPath
     }
 
-    /// True when a merged row's user binding lives outside the writer's target
-    /// file, so editing it here would risk duplicating it across files (R-F). Such
-    /// rows are rendered read-only by the surface.
-    public func isReadOnly(_ row: MergedKeybind) -> Bool {
-        guard let source = row.source, let target = keybindTargetPath else { return false }
+    /// True when a chord's user binding lives outside the writer's target file, so
+    /// editing it here would risk duplicating it across files (R-F). Evaluated per
+    /// chord (U17): two chords for one action can live in different files, and only the
+    /// out-of-target ones render read-only.
+    public func isReadOnly(_ chord: MergedKeybind) -> Bool {
+        guard let source = chord.source, let target = keybindTargetPath else { return false }
         return ConfigReader.canonicalPath(source.file) != ConfigReader.canonicalPath(target)
     }
 
