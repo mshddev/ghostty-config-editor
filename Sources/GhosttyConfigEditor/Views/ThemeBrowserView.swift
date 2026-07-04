@@ -28,6 +28,11 @@ struct ThemeBrowserView: View {
                 // of a row that permanently eats vertical space.
                 infoText: ThemeParser.previewFidelityDisclaimer
             )
+            // U15: appearance/favorites filter + list/grid toggle, only once themes load
+            // (no filter to offer over a spinner or an error).
+            if case .loaded = model.themesLoad {
+                themeToolbar(model: model)
+            }
             Divider()
             content(filtered: filtered)
             // The shared save-state bar (C3) — carries the failure banner, the
@@ -59,77 +64,232 @@ struct ThemeBrowserView: View {
         }
     }
 
+    /// U15 (TH-3, TH-5): the appearance/favorites filter and the list/grid toggle. The
+    /// first Dark/Light selection kicks off the one-time batch classification (its
+    /// determinate count shows inline); a later selection is instant (memoized).
+    private func themeToolbar(model: AppModel) -> some View {
+        @Bindable var model = model
+        return HStack(spacing: DesignTokens.Spacing.cozy) {
+            Picker("Filter themes", selection: $model.themeFilter) {
+                ForEach(ThemeFilter.allCases, id: \.self) { Text($0.title).tag($0) }
+            }
+            .pickerStyle(.segmented)
+            .labelsHidden()
+            .fixedSize()
+            .onChange(of: model.themeFilter) { _, new in
+                if new.needsClassification {
+                    Task { await model.classifyThemesIfNeeded() }
+                }
+            }
+            if let remaining = model.classifyProgress {
+                HStack(spacing: DesignTokens.Spacing.tight) {
+                    ProgressView().controlSize(.small)
+                    Text("Classifying \(remaining)…")
+                        .font(.caption).foregroundStyle(.secondary)
+                }
+                .transition(.opacity)
+            }
+            Spacer(minLength: DesignTokens.Spacing.standard)
+            Picker("View as", selection: $model.themeViewMode) {
+                Image(systemName: "list.bullet").tag(ThemeViewMode.list)
+                    .accessibilityLabel("List")
+                Image(systemName: "square.grid.2x2").tag(ThemeViewMode.grid)
+                    .accessibilityLabel("Grid")
+            }
+            .pickerStyle(.segmented)
+            .labelsHidden()
+            .fixedSize()
+            .accessibilityLabel("View as")
+        }
+        .padding(.horizontal, DesignTokens.Spacing.surface)
+        .padding(.bottom, 10)
+    }
+
+    // MARK: - Deduped section model (U15 / TH-1, IA-7)
+
+    /// The three browsing buckets after dedupe, computed once so a pinned theme never also
+    /// appears in the main list (TH-1) and Current never doubles inside Favorites (IA-7).
+    private struct Sections {
+        var current: ThemeSelection?
+        var favorites: [ThemeRef]
+        var browse: [ThemeRef]
+        var browseHeader: String
+        var hasPinned: Bool { current != nil || !favorites.isEmpty }
+    }
+
+    private func sections(filtered: [ThemeRef]) -> Sections {
+        let currentNames = model.currentSelectedThemeNames
+        // The Favorites *section* is only surfaced while browsing everything: a Dark /
+        // Light / Favorites filter already scopes the main list, so a duplicate favorites
+        // band would be redundant (and, under the favorites filter, it would swallow the
+        // whole list). Under a filter, favorites simply live in the main list.
+        let showFavorites = model.themeFilter == .all
+        let favorites = showFavorites
+            ? filtered.filter { model.isFavorite($0.name) && !currentNames.contains($0.name) }
+            : []
+        // Exclude the pinned set from the main browsing list.
+        let pinned = currentNames.union(favorites.map(\.name))
+        let browse = filtered.filter { !pinned.contains($0.name) }
+        let header = model.themeQuery.trimmingCharacters(in: .whitespaces).isEmpty ? "All themes" : "Results"
+        return Sections(current: model.currentThemeSelection,
+                        favorites: favorites,
+                        browse: browse,
+                        browseHeader: header)
+    }
+
     @ViewBuilder
     private func loadedList(filtered: [ThemeRef]) -> some View {
-        Group {
-            let favorites = filtered.filter { model.isFavorite($0.name) }
-            let hasPinnedSections = model.currentThemeSelection != nil || !favorites.isEmpty
-            List {
-                // E2: the current theme is pinned at the very top and stays visible
-                // even while filtering, so it's never confusable with row selection.
-                if let selection = model.currentThemeSelection {
-                    Section("Current theme") {
-                        currentRows(selection)
-                    }
-                }
-                // E4: starred themes, quick-access under the pin.
-                if !favorites.isEmpty {
-                    Section("Favorites") {
-                        ForEach(favorites) { ThemeRow(theme: $0) }
-                    }
-                }
-                // The full (filtered) list. Only labeled when a pinned section sits
-                // above it — a lone unlabeled list reads cleaner on first launch.
-                allThemesSection(filtered, labeled: hasPinnedSections)
+        let s = sections(filtered: filtered)
+        switch model.themeViewMode {
+        case .list: listBody(s)
+        case .grid: gridBody(s)
+        }
+    }
+
+    // MARK: - List mode (default)
+
+    @ViewBuilder
+    private func listBody(_ s: Sections) -> some View {
+        List {
+            // E2: the current theme is pinned at the very top and stays visible
+            // even while filtering, so it's never confusable with row selection.
+            if let selection = s.current {
+                Section("Current theme") { currentRows(selection, layout: .row) }
             }
+            // E4: starred themes, quick-access under the pin.
+            if !s.favorites.isEmpty {
+                Section("Favorites") { ForEach(s.favorites) { ThemeRow(theme: $0) } }
+            }
+            allThemesSection(s)
         }
     }
 
     @ViewBuilder
-    private func allThemesSection(_ filtered: [ThemeRef], labeled: Bool) -> some View {
-        let header = model.themeQuery.trimmingCharacters(in: .whitespaces).isEmpty ? "All themes" : "Results"
-        if filtered.isEmpty {
-            Section(labeled ? header : "") {
-                ContentUnavailableView.search(text: model.themeQuery)
-            }
-        } else if labeled {
-            Section(header) { ForEach(filtered) { ThemeRow(theme: $0) } }
+    private func allThemesSection(_ s: Sections) -> some View {
+        if s.browse.isEmpty {
+            // Only labeled when a pinned section sits above — a lone unlabeled list reads
+            // cleaner on first launch.
+            Section(s.hasPinned ? s.browseHeader : "") { emptyBrowse }
+        } else if s.hasPinned {
+            Section(s.browseHeader) { ForEach(s.browse) { ThemeRow(theme: $0) } }
         } else {
-            Section { ForEach(filtered) { ThemeRow(theme: $0) } }
+            Section { ForEach(s.browse) { ThemeRow(theme: $0) } }
         }
     }
 
-    /// The pinned Current-theme row(s): one for a single theme, or a labeled Light/Dark
-    /// pair. Reuses `ThemeRow` (so it carries the same swatch/star/pairing affordances),
-    /// falling back to a plain text row for a value not present in `+list-themes`.
+    /// The empty state, distinguishing "no search results", "no favorites yet", and a
+    /// filter that classification hasn't populated, so it never reads as a broken list.
     @ViewBuilder
-    private func currentRows(_ selection: ThemeSelection) -> some View {
+    private var emptyBrowse: some View {
+        if !model.themeQuery.trimmingCharacters(in: .whitespaces).isEmpty {
+            ContentUnavailableView.search(text: model.themeQuery)
+        } else if model.themeFilter == .favorites {
+            ContentUnavailableView("No favorites yet", systemImage: "star",
+                                   description: Text("Tap the ☆ on any theme to keep it here."))
+        } else {
+            ContentUnavailableView("No themes", systemImage: "paintpalette",
+                                   description: Text("No \(model.themeFilter.title.lowercased()) themes to show."))
+        }
+    }
+
+    // MARK: - Grid mode (U15 / TH-5)
+
+    /// The minimum card width; the grid fits as many columns of at least this width as the
+    /// pane allows and degrades to one column below the threshold (GAP-4). The detail
+    /// surface caps at `WindowMetrics.contentMaxWidth` (640pt), so 280pt puts the 1→2 break
+    /// at ~846pt of window width — one column at 660, two by 900 (the plan's gate).
+    private static let minCardWidth: CGFloat = 280
+
+    /// Grid browsing (TH-5): the deduped sections as `LazyVGrid`s under plain headers in
+    /// one `ScrollView`. The column count is measured from the pane width (a `GeometryReader`)
+    /// and rendered with `.flexible()` columns, so the grid always fills the pane — a plain
+    /// `.adaptive` grid collapsed to a single left-aligned column in this split-view detail.
+    private func gridBody(_ s: Sections) -> some View {
+        GeometryReader { geo in
+            let spacing = DesignTokens.Spacing.large
+            let available = geo.size.width - DesignTokens.Spacing.surface * 2
+            let count = max(1, Int((available + spacing) / (Self.minCardWidth + spacing)))
+            let columns = Array(repeating: GridItem(.flexible(), spacing: spacing), count: count)
+            ScrollView {
+                LazyVStack(alignment: .leading, spacing: DesignTokens.Spacing.large) {
+                    if let selection = s.current {
+                        gridSection("Current theme") {
+                            LazyVGrid(columns: columns, alignment: .leading, spacing: spacing) {
+                                currentRows(selection, layout: .card)
+                            }
+                        }
+                    }
+                    if !s.favorites.isEmpty {
+                        gridSection("Favorites") {
+                            LazyVGrid(columns: columns, alignment: .leading, spacing: spacing) {
+                                ForEach(s.favorites) { ThemeRow(theme: $0, layout: .card) }
+                            }
+                        }
+                    }
+                    if s.browse.isEmpty {
+                        if s.hasPinned { sectionHeaderText(s.browseHeader) }
+                        emptyBrowse.frame(maxWidth: .infinity).padding(.vertical, DesignTokens.Spacing.large)
+                    } else {
+                        gridSection(s.hasPinned ? s.browseHeader : nil) {
+                            LazyVGrid(columns: columns, alignment: .leading, spacing: spacing) {
+                                ForEach(s.browse) { ThemeRow(theme: $0, layout: .card) }
+                            }
+                        }
+                    }
+                }
+                .padding(DesignTokens.Spacing.surface)
+            }
+        }
+    }
+
+    @ViewBuilder
+    private func gridSection<Content: View>(_ title: String?, @ViewBuilder content: () -> Content) -> some View {
+        VStack(alignment: .leading, spacing: DesignTokens.Spacing.standard) {
+            if let title { sectionHeaderText(title) }
+            content()
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+    }
+
+    private func sectionHeaderText(_ title: String) -> some View {
+        Text(title)
+            .font(.subheadline).fontWeight(.semibold)
+            .foregroundStyle(.secondary)
+            .textCase(.uppercase)
+    }
+
+    // MARK: - Current-theme rows/cards (E2 / TH-10)
+
+    /// The pinned Current-theme entries: one for a single theme, or a labeled Light/Dark
+    /// pair. Rendered as rows or cards via the shared `themeItem`, which reuses `ThemeRow`
+    /// (so the same preview/star/pairing affordances) and falls back to a placeholder-
+    /// preview row for a value not present in `+list-themes` (TH-10).
+    @ViewBuilder
+    private func currentRows(_ selection: ThemeSelection, layout: ThemeRow.Layout) -> some View {
+        let entries = currentEntries(selection)
+        ForEach(Array(entries.enumerated()), id: \.offset) { _, entry in
+            themeItem(name: entry.name, roleCaption: entry.role, layout: layout)
+        }
+    }
+
+    private func currentEntries(_ selection: ThemeSelection) -> [(name: String, role: String?)] {
         switch selection {
-        case .single(let name):
-            currentRow(name: name, roleCaption: nil)
-        case .lightDark(let light, let dark):
-            currentRow(name: light, roleCaption: "Light mode")
-            currentRow(name: dark, roleCaption: "Dark mode")
+        case .single(let name): return [(name, nil)]
+        case .lightDark(let light, let dark): return [(light, "Light mode"), (dark, "Dark mode")]
         }
     }
 
     @ViewBuilder
-    private func currentRow(name: String, roleCaption: String?) -> some View {
+    private func themeItem(name: String, roleCaption: String?, layout: ThemeRow.Layout) -> some View {
         if let ref = model.themes.first(where: { $0.name == name }) {
-            ThemeRow(theme: ref, roleCaption: roleCaption)
+            ThemeRow(theme: ref, roleCaption: roleCaption, layout: layout)
         } else {
-            // A theme value that isn't a listed theme (a custom name, or one removed
-            // on a Ghostty upgrade). Never leave the pin blank — show the raw value.
-            HStack(spacing: 8) {
-                if let roleCaption {
-                    Text(roleCaption).font(.caption).foregroundStyle(.secondary)
-                }
-                Text(name).lineLimit(1)
-                Spacer(minLength: 8)
-                Label("Current", systemImage: "checkmark.circle.fill")
-                    .font(.caption2).foregroundStyle(Color.accentColor)
-            }
-            .padding(.vertical, RowMetrics.rowVerticalPadding)
+            // TH-10: a current value that isn't a listed theme (a custom name, or one
+            // removed on a Ghostty upgrade). Keep the row *consistent* — a synthetic ref
+            // whose preview is forced to the "unavailable" placeholder, with the star and
+            // pairing menu (keyed by name) still working — rather than a bare text line.
+            ThemeRow(theme: ThemeRef(name: name, source: "user", path: ""),
+                     roleCaption: roleCaption, layout: layout, forcePlaceholder: true)
         }
     }
 }
@@ -139,6 +299,9 @@ struct ThemeBrowserView: View {
 /// Tapping the preview/name applies the theme as a single selection. All state is
 /// derived from the model so a row re-renders the moment its colors load or fail.
 private struct ThemeRow: View {
+    /// Row (list) vs card (grid) presentation of the same theme (U15).
+    enum Layout { case row, card }
+
     @Environment(AppModel.self) private var model
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     let theme: ThemeRef
@@ -146,13 +309,31 @@ private struct ThemeRow: View {
     /// the appearance badge — so "Light mode" (the slot) never collides visually with
     /// the "Light" appearance badge (the theme's own color).
     var roleCaption: String? = nil
+    /// Row or card layout (U15).
+    var layout: Layout = .row
+    /// TH-10: force the "unavailable" placeholder preview and skip color loading — for the
+    /// synthetic current-theme fallback (a name not in `+list-themes`), so an unknown
+    /// current theme still reads as a proper row (star + menu work) rather than bare text.
+    var forcePlaceholder: Bool = false
     /// Drives the light/dark pairing dialog (U11 — replaces the two-click borderless menu).
     @State private var showingPairing = false
 
     var body: some View {
-        let colors = model.themeColors[theme.name]
-        let failed = model.previewFailed(theme.name)
+        let colors = forcePlaceholder ? nil : model.themeColors[theme.name]
+        let failed = forcePlaceholder || model.previewFailed(theme.name)
         let isCurrent = model.currentSelectedThemeNames.contains(theme.name)
+        Group {
+            switch layout {
+            case .row: rowBody(colors: colors, failed: failed, isCurrent: isCurrent)
+            case .card: cardBody(colors: colors, failed: failed, isCurrent: isCurrent)
+            }
+        }
+        .onAppear { if !forcePlaceholder { model.ensureColors(for: theme) } }
+    }
+
+    // MARK: - Row body (list)
+
+    private func rowBody(colors: ThemeColors?, failed: Bool, isCurrent: Bool) -> some View {
         HStack(spacing: 8) {
             Button {
                 Task { await model.applyTheme(theme.name) }
@@ -166,14 +347,11 @@ private struct ThemeRow: View {
             favoriteButton
             pairingMenu
         }
-        .onAppear { model.ensureColors(for: theme) }
     }
-
-    // MARK: - Row label (tap target)
 
     private func rowLabel(colors: ThemeColors?, failed: Bool, isCurrent: Bool) -> some View {
         HStack(spacing: 12) {
-            preview(colors: colors, failed: failed)
+            preview(colors: colors, failed: failed, enlarged: false)
                 .frame(width: 180, height: 40)
                 .clipShape(RoundedRectangle(cornerRadius: 6))
                 // E2: only a subtle accent preview border marks the current theme —
@@ -209,6 +387,49 @@ private struct ThemeRow: View {
         .contentShape(Rectangle())
     }
 
+    // MARK: - Card body (grid, U15)
+
+    private func cardBody(colors: ThemeColors?, failed: Bool, isCurrent: Bool) -> some View {
+        VStack(alignment: .leading, spacing: DesignTokens.Spacing.standard) {
+            Button {
+                Task { await model.applyTheme(theme.name) }
+            } label: {
+                preview(colors: colors, failed: failed, enlarged: true)
+                    .frame(height: 120)
+                    .frame(maxWidth: .infinity)
+                    .clipShape(RoundedRectangle(cornerRadius: DesignTokens.Radius.card))
+                    .overlay(
+                        RoundedRectangle(cornerRadius: DesignTokens.Radius.card).strokeBorder(
+                            isCurrent ? AnyShapeStyle(Color.accentColor) : AnyShapeStyle(.separator),
+                            lineWidth: isCurrent ? 2 : 1
+                        )
+                    )
+                    .contentShape(RoundedRectangle(cornerRadius: DesignTokens.Radius.card))
+            }
+            .buttonStyle(.plain)
+            .accessibilityLabel(accessibilityLabel(isCurrent: isCurrent, colors: colors))
+            .accessibilityHint("Apply this theme")
+
+            HStack(spacing: 6) {
+                Text(theme.name)
+                    .fontWeight(isCurrent ? .semibold : .regular)
+                    .lineLimit(1)
+                if isCurrent { currentPill }
+                Spacer(minLength: 4)
+                favoriteButton
+                pairingMenu
+            }
+            .animation(MotionSystem.gated(MotionSystem.settle, reduceMotion: reduceMotion),
+                       value: isCurrent)
+            if let roleCaption {
+                Text(roleCaption).font(.caption2).foregroundStyle(.secondary)
+            } else if let appearance = colors?.appearance {
+                appearanceBadge(appearance)
+            }
+        }
+        .padding(DesignTokens.Spacing.standard)
+    }
+
     /// The "Current" signal — a non-color pill (icon + text), so it reads without
     /// relying on hue alone (A11Y-7).
     private var currentPill: some View {
@@ -227,9 +448,9 @@ private struct ThemeRow: View {
     // MARK: - Preview swatch (U14: a miniature terminal, not a chip grid)
 
     @ViewBuilder
-    private func preview(colors: ThemeColors?, failed: Bool) -> some View {
+    private func preview(colors: ThemeColors?, failed: Bool, enlarged: Bool) -> some View {
         if let model = colors.flatMap(ThemePreviewModel.resolve) {
-            TerminalMockup(model: model)
+            TerminalMockup(model: model, large: enlarged)
         } else if failed || colors != nil {
             // A failed load, *or* colors that loaded but lack background/foreground: the
             // U14 nil-fallback contract renders the placeholder, never an empty cell.

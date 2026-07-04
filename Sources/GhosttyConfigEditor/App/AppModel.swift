@@ -51,6 +51,31 @@ extension SidebarSelection {
     }
 }
 
+/// The Themes browser's appearance/favorites filter (U15 / TH-3). In-memory (a session
+/// choice, like `selection`/`query`), not a persisted preference.
+public enum ThemeFilter: String, CaseIterable, Sendable {
+    case all, dark, light, favorites
+
+    /// The segmented-control label.
+    public var title: String {
+        switch self {
+        case .all: return "All"
+        case .dark: return "Dark"
+        case .light: return "Light"
+        case .favorites: return "Favorites"
+        }
+    }
+
+    /// Whether choosing this filter needs every theme classified light/dark first.
+    var needsClassification: Bool { self == .dark || self == .light }
+}
+
+/// List vs grid browsing of themes (U15 / TH-5). Persisted like `autoReloadEnabled` —
+/// a durable view preference. List is the default (LOCKED 2026-07-04).
+public enum ThemeViewMode: String, Sendable {
+    case list, grid
+}
+
 /// Root application state (KTD9: `@Observable`, macOS 14+).
 ///
 /// Owns the discovered Ghostty environment, the loaded catalog + merged config,
@@ -117,7 +142,19 @@ public final class AppModel {
     /// `SurfaceHeader` field. Distinct from `query` so each surface filters itself
     /// and never means two things at once (C3). E1 layers light/dark grouping on top.
     public var themeQuery: String = ""
+    /// The Themes browser's appearance/favorites filter (U15). In-memory like `themeQuery`.
+    public var themeFilter: ThemeFilter = .all
     public var selectedOptionName: String?
+
+    /// `UserDefaults` key for the themes list/grid toggle (U15).
+    static let themeViewModeDefaultsKey = "themeViewMode"
+
+    /// List vs grid browsing of themes (U15 / TH-5). Persisted across launches like
+    /// `autoReloadEnabled`; defaults to `.list` (LOCKED 2026-07-04). `didSet` mirrors it
+    /// to `UserDefaults` (assigning in `init` doesn't fire `didSet`).
+    public var themeViewMode: ThemeViewMode = .list {
+        didSet { UserDefaults.standard.set(themeViewMode.rawValue, forKey: Self.themeViewModeDefaultsKey) }
+    }
 
     /// `UserDefaults` key for the auto-reload toggle (KTD7).
     static let autoReloadDefaultsKey = "autoReloadEnabled"
@@ -201,6 +238,13 @@ public final class AppModel {
     public var themes: [ThemeRef] { themesLoad.value ?? [] }
     public var fonts: [String] { fontsLoad.value ?? [] }
     public private(set) var themeColors: [String: ThemeColors] = [:]
+    /// Determinate progress of the one-time Dark/Light batch classification (U15): `nil`
+    /// when idle, otherwise the number of themes still to read. Drives "Classifying N…".
+    /// Doubles as the "already running" guard so a second filter tap doesn't re-enter.
+    public private(set) var classifyProgress: Int?
+    /// True once every theme has been read for classification, so re-selecting Dark/Light
+    /// is instant (memoized — GAP-5). Reset on re-bootstrap with the other theme caches.
+    public private(set) var didClassifyAll = false
 
     // Keybindings (U5)
     private var keybindReference: KeybindReferenceProvider?
@@ -217,6 +261,8 @@ public final class AppModel {
         autoReloadEnabled = defaults.bool(forKey: Self.autoReloadDefaultsKey)
         // Favorites start empty (no key registered) and load from any prior session.
         favoriteThemes = Set(defaults.stringArray(forKey: Self.favoriteThemesDefaultsKey) ?? [])
+        // List/grid preference survives relaunch; an unknown/absent value falls back to list.
+        themeViewMode = ThemeViewMode(rawValue: defaults.string(forKey: Self.themeViewModeDefaultsKey) ?? "") ?? .list
         // Welcome defaults to unseen on a fresh install (missing key → false).
         hasSeenWelcome = defaults.bool(forKey: Self.hasSeenWelcomeDefaultsKey)
         // A prior manual Ghostty binary path survives relaunch (G1), so a fix on the
@@ -272,6 +318,10 @@ public final class AppModel {
         themeColors = [:]
         fontsLoad = .idle
         failedThemes = []
+        // A batch classification in flight targets the old provider; its per-iteration
+        // provider-identity guard stops it feeding this reset state, and the memo restarts.
+        classifyProgress = nil
+        didClassifyAll = false
         keybindReference = nil
         keybindDefaults = []
         keybindActions = []
@@ -726,15 +776,51 @@ public final class AppModel {
         browser?.merged.option(named: "theme").flatMap { $0.isSet ? $0.userValues.first : nil }
     }
 
-    /// The themes matching `themeQuery` by name (case- and diacritic-insensitive);
-    /// the whole list when the query is empty. The Themes surface renders this instead
-    /// of `themes` so its shared-header search field actually filters (C3). Colors still
-    /// load lazily per visible row, so filtering never forces an eager color read.
-    /// The match itself is the kit's `ThemeParser.nameMatches` (unit-tested there, E1).
+    /// The themes matching the active appearance/favorites filter (U15) *and* the
+    /// `themeQuery` name search (case- and diacritic-insensitive); the whole list when
+    /// both are neutral. The Themes surface renders this instead of `themes` so its
+    /// shared-header search field and segmented filter both apply (C3/TH-3). Colors still
+    /// load lazily per visible row; the Dark/Light filter reads only *already-classified*
+    /// appearance, so `classifyThemesIfNeeded()` — not this getter — is what forces the
+    /// batch read. The name match is the kit's `ThemeParser.nameMatches` (unit-tested, E1).
     public var filteredThemes: [ThemeRef] {
+        var result = themes
+        switch themeFilter {
+        case .all: break
+        case .dark: result = result.filter { themeColors[$0.name]?.appearance == .dark }
+        case .light: result = result.filter { themeColors[$0.name]?.appearance == .light }
+        case .favorites: result = result.filter { favoriteThemes.contains($0.name) }
+        }
         let q = themeQuery.trimmingCharacters(in: .whitespaces)
-        guard !q.isEmpty else { return themes }
-        return themes.filter { ThemeParser.nameMatches($0.name, query: q) }
+        if !q.isEmpty { result = result.filter { ThemeParser.nameMatches($0.name, query: q) } }
+        return result
+    }
+
+    /// On the first Dark/Light filter selection, read every still-unclassified theme's
+    /// colors off the main actor so `appearance` resolves for all of them (U15 / GAP-5).
+    /// Determinate (`classifyProgress` counts down), cancellable (the per-iteration
+    /// provider-identity guard drops a run whose provider was swapped by a re-bootstrap),
+    /// and memoized (`didClassifyAll`) so a later Dark/Light tap is instant. Sequential —
+    /// but the provider caches by path, so themes already read while scrolling return from
+    /// cache and only the genuinely-unread ones cost a file read.
+    public func classifyThemesIfNeeded() async {
+        // `classifyProgress != nil` is the re-entrancy guard: a run is already in flight.
+        guard !didClassifyAll, classifyProgress == nil, let provider = themeProviderIfAvailable() else { return }
+        let pending = themes.filter { themeColors[$0.name] == nil && !failedThemes.contains($0.name) }
+        guard !pending.isEmpty else { didClassifyAll = true; return }
+        classifyProgress = pending.count
+        for (index, theme) in pending.enumerated() {
+            // A re-bootstrap mid-classify swaps the provider; stop feeding a stale run
+            // (the reset already cleared `classifyProgress`/`didClassifyAll`).
+            guard themeProvider === provider else { return }
+            let colors = try? await provider.colors(for: theme)
+            guard themeProvider === provider else { return }
+            if let colors { themeColors[theme.name] = colors }
+            else { failedThemes.insert(theme.name) }
+            classifyProgress = pending.count - (index + 1)
+        }
+        classifyProgress = nil
+        didClassifyAll = true
     }
 
     /// The theme names the current `theme = …` value selects — one for a single
