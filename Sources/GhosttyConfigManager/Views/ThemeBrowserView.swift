@@ -39,10 +39,29 @@ struct ThemeBrowserView: View {
 
     @ViewBuilder
     private func content(filtered: [ThemeRef]) -> some View {
-        if model.themes.isEmpty {
+        switch model.themesLoad {
+        case .idle, .loading:
             ProgressView("Loading themes…")
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
-        } else {
+        case .failed(let reason):
+            // G3: a failed `+list-themes` is a distinct, recoverable state — an error with
+            // a "Try again", not the eternal spinner it used to show (themeColors[name] nil).
+            ContentUnavailableView {
+                Label("Couldn't load themes", systemImage: "exclamationmark.triangle")
+            } description: {
+                Text("Ghostty's theme list couldn't be read.\n\(reason)")
+            } actions: {
+                Button("Try again") { Task { await model.reloadThemes() } }
+            }
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
+        case .loaded:
+            loadedList(filtered: filtered)
+        }
+    }
+
+    @ViewBuilder
+    private func loadedList(filtered: [ThemeRef]) -> some View {
+        Group {
             let favorites = filtered.filter { model.isFavorite($0.name) }
             let hasPinnedSections = model.currentThemeSelection != nil || !favorites.isEmpty
             List {

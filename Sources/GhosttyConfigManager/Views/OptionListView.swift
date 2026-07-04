@@ -481,11 +481,19 @@ struct OptionRow: View {
                     }
                 }
                 .padding(.leading, 15)
-            case .failed(let message):
-                Label(message, systemImage: "xmark.octagon.fill")
-                    .foregroundStyle(.red).font(.caption2)
-                    .fixedSize(horizontal: false, vertical: true)
-                    .padding(.leading, 15)
+            case .failed(let message, let offersReload):
+                HStack(alignment: .firstTextBaseline, spacing: 8) {
+                    Label(message, systemImage: "xmark.octagon.fill")
+                        .foregroundStyle(.red).font(.caption2)
+                        .fixedSize(horizontal: false, vertical: true)
+                    // Stale-on-disk is the one failure a reload fixes — offer it inline
+                    // right where the error shows, so "reload and try again" is one click (G3).
+                    if offersReload {
+                        Button("Reload") { Task { await model.reloadFromDisk() } }
+                            .buttonStyle(.link).font(.caption2)
+                    }
+                }
+                .padding(.leading, 15)
             }
         }
     }

@@ -1,5 +1,6 @@
 import SwiftUI
 import AppKit
+import Combine
 import GhosttyConfigKit
 
 /// Window sizing + content-width metrics kept in one place so the WindowGroup
@@ -167,7 +168,12 @@ struct GhosttyConfigManagerApp: App {
     @State private var model = AppModel()
 
     var body: some Scene {
-        WindowGroup {
+        // A single `Window`, not a `WindowGroup` (U35/GAP-5): this is a settings editor,
+        // and two windows sharing one `AppModel` made `selection`/`query`/`applyState`
+        // global — the windows interfered and could drive each other into stale-on-disk.
+        // One window matches the mental model and makes `@SceneStorage` restoration (G2)
+        // unambiguous (there's exactly one window's state to persist).
+        Window("Ghostty Config", id: "main") {
             RootView()
                 .environment(model)
                 .frame(minWidth: WindowMetrics.minWidth, minHeight: WindowMetrics.minHeight)
@@ -302,6 +308,14 @@ struct RootView: View {
         .onChange(of: model.selection) { _, _ in
             model.resetApplyState()
             model.endFind()
+        }
+        // On-activate re-sync (G3): coming back to the app after editing the config
+        // externally ("Reveal in editor" invites exactly this) reloads from disk — but
+        // only when the file actually changed and nothing is mid-apply, so it never
+        // clobbers an in-app edit. The guard lives in the model; this only supplies the
+        // AppKit focus signal.
+        .onReceive(NotificationCenter.default.publisher(for: NSApplication.didBecomeActiveNotification)) { _ in
+            Task { await model.syncFromDiskIfChanged() }
         }
         .toolbar {
             // Identity only now — health and Customized moved into the sidebar's

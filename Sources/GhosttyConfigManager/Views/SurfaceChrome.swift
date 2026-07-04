@@ -188,11 +188,19 @@ struct SurfaceFeedbackBar: View {
                     }
                 }
             }
-        case .failed(let message):
+        case .failed(let message, let offersReload):
             bar {
-                Label(message, systemImage: "xmark.octagon.fill")
-                    .foregroundStyle(.red).font(.caption)
-                    .fixedSize(horizontal: false, vertical: true)
+                HStack(alignment: .firstTextBaseline, spacing: 8) {
+                    Label(message, systemImage: "xmark.octagon.fill")
+                        .foregroundStyle(.red).font(.caption)
+                        .fixedSize(horizontal: false, vertical: true)
+                    // Stale-on-disk: the fix is a reload, so offer it right on the banner (G3).
+                    if offersReload {
+                        Spacer(minLength: 8)
+                        Button("Reload") { Task { await model.reloadFromDisk() } }
+                            .buttonStyle(.link).font(.caption)
+                    }
+                }
             }
         }
     }

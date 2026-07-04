@@ -49,7 +49,11 @@ public final class AppModel {
         /// `reload` is the auto-reload outcome whose kit-derived caption the views
         /// stack beneath the notice (R1, R6 — see `GhosttyReloader`).
         case succeeded(notice: String?, gitTracked: Bool, reload: ReloadOutcome)
-        case failed(String)
+        /// A write/validation failure. `offersReload` is true only for the stale-on-disk
+        /// case, where re-reading disk is the actual fix — so the surface can show an inline
+        /// "Reload" (the message says "reload" and now something does, G3/GAP-2). All other
+        /// failures pass `false`.
+        case failed(String, offersReload: Bool)
     }
 
     public private(set) var environmentState: EnvironmentState = .loading
@@ -138,9 +142,15 @@ public final class AppModel {
     /// environment is reloaded (rather than leaking and writing into stale state).
     private var colorTasks: [String: Task<Void, Never>] = [:]
     private var failedThemes: Set<String> = []
-    public private(set) var themes: [ThemeRef] = []
+    /// Tri-state theme/font list loads (G3): a failed `+list-themes`/`+list-fonts` becomes
+    /// a *distinct* `.failed` phase the surface renders as an error + "Try again", instead
+    /// of an empty list that spins a `ProgressView` forever (GAP-3). `themes`/`fonts` are
+    /// the loaded values, empty until `.loaded`, so their readers stay unchanged.
+    public private(set) var themesLoad: ResourceLoad<[ThemeRef]> = .idle
+    public private(set) var fontsLoad: ResourceLoad<[String]> = .idle
+    public var themes: [ThemeRef] { themesLoad.value ?? [] }
+    public var fonts: [String] { fontsLoad.value ?? [] }
     public private(set) var themeColors: [String: ThemeColors] = [:]
-    public private(set) var fonts: [String] = []
 
     // Keybindings (U5)
     private var keybindReference: KeybindReferenceProvider?
@@ -190,9 +200,9 @@ public final class AppModel {
         // loads and clears caches so themes reload against the new environment.
         cancelInFlightColorLoads()
         themeProvider = nil
-        themes = []
+        themesLoad = .idle
         themeColors = [:]
-        fonts = []
+        fontsLoad = .idle
         failedThemes = []
         keybindReference = nil
         keybindDefaults = []
@@ -286,13 +296,13 @@ public final class AppModel {
             let reload = reloader.reload(enabled: autoReloadEnabled)
             applyState = .succeeded(notice: option.option.applyNotice, gitTracked: gitTracked, reload: reload)
         } catch ConfigWriteError.validationFailed(let messages) {
-            applyState = .failed(messages.first?.message ?? "The change didn't validate.")
+            applyState = .failed(messages.first?.message ?? "The change didn't validate.", offersReload: false)
         } catch ConfigWriteError.staleOnDisk {
-            applyState = .failed("This file changed on disk since it was read. Reload and try again.")
+            applyState = .failed("This file changed on disk since it was read. Reload and try again.", offersReload: true)
         } catch ConfigWriteError.invalidValue {
-            applyState = .failed("That value can't contain a line break.")
+            applyState = .failed("That value can't contain a line break.", offersReload: false)
         } catch {
-            applyState = .failed(error.localizedDescription)
+            applyState = .failed(error.localizedDescription, offersReload: false)
         }
     }
 
@@ -309,13 +319,46 @@ public final class AppModel {
             let reload = reloader.reload(enabled: autoReloadEnabled)
             applyState = .succeeded(notice: "Reverted to the previous value.", gitTracked: false, reload: reload)
         } catch {
-            applyState = .failed(error.localizedDescription)
+            applyState = .failed(error.localizedDescription, offersReload: false)
         }
     }
 
     public func resetApplyState() {
         applyState = .idle
         applyingOptionName = nil
+    }
+
+    // MARK: - Reload from disk (G3)
+
+    /// Re-read the config from disk and rebuild the browser, reusing the already-
+    /// discovered environment/catalog (no rediscovery) (G3/GAP-2). Backs the ⌘R command
+    /// and the inline "Reload" recovery on a stale-on-disk failure — the error told the
+    /// user to reload and now the app actually does. Clears the apply feedback so a
+    /// lingering stale-on-disk banner disappears once memory matches disk.
+    public func reloadFromDisk() async {
+        guard let environment, let catalog else { return }
+        await refreshConfig(environment: environment, catalog: catalog)
+        resetApplyState()
+    }
+
+    /// True when the primary config's bytes on disk differ from what was last read — an
+    /// external edit. A cheap SHA compare (`FileIdentity`), used to gate the on-activate
+    /// re-sync so it only fires on a real change and never resets in-app state for a file
+    /// that didn't move.
+    private var primaryChangedOnDisk: Bool {
+        guard let loaded = browser?.merged.model.primary.identity,
+              let current = FileIdentity.capture(path: loaded.resolvedPath) else { return false }
+        return !loaded.contentMatches(current)
+    }
+
+    /// Re-sync from disk when the app regains focus — but only when the file actually
+    /// changed externally and nothing is mid-apply, so "Reveal in editor" round-trips
+    /// (edit outside, come back, see it) without a spurious reload clobbering an in-app
+    /// edit (G3; live FSEvents watching remains a deferred enhancement).
+    public func syncFromDiskIfChanged() async {
+        if case .applying = applyState { return }
+        guard !configMissing, primaryChangedOnDisk else { return }
+        await reloadFromDisk()
     }
 
     // MARK: - Navigation & global Find (D)
@@ -438,19 +481,39 @@ public final class AppModel {
         return provider
     }
 
-    /// Load the theme + font lists once, lazily (the Themes tab triggers this).
+    /// Load the theme + font lists once, lazily (the Themes tab triggers this). A load
+    /// is attempted only from `.idle`, so a prior `.failed` isn't silently retried on
+    /// every re-appear — retry is the explicit `reloadThemes()` (G3).
     public func loadThemesIfNeeded() async {
-        guard themes.isEmpty, let provider = themeProviderIfAvailable() else { return }
-        themes = (try? await provider.themes()) ?? []
-        if fonts.isEmpty { fonts = (try? await provider.fonts()) ?? [] }
+        guard case .idle = themesLoad, let provider = themeProviderIfAvailable() else { return }
+        themesLoad = .loading
+        themesLoad = await ResourceLoad.capture { try await provider.themes() }
+        await loadFontsIfNeeded()
     }
 
     /// Load the available font families once, lazily. The font-family picker in the
     /// Font category triggers this, so the list is populated without first opening
     /// the Themes tab (both share the provider's cache via `themeProviderIfAvailable`).
     public func loadFontsIfNeeded() async {
-        guard fonts.isEmpty, let provider = themeProviderIfAvailable() else { return }
-        fonts = (try? await provider.fonts()) ?? []
+        guard case .idle = fontsLoad, let provider = themeProviderIfAvailable() else { return }
+        fontsLoad = .loading
+        fontsLoad = await ResourceLoad.capture { try await provider.fonts() }
+    }
+
+    /// Force a fresh theme-list load regardless of the current phase — backs the
+    /// "Try again" button on the failed-themes state so a transient `+list-themes`
+    /// failure is recoverable without relaunching (G3).
+    public func reloadThemes() async {
+        guard let provider = themeProviderIfAvailable() else { return }
+        themesLoad = .loading
+        themesLoad = await ResourceLoad.capture { try await provider.themes() }
+    }
+
+    /// Force a fresh font-list load (the font picker's "Try again").
+    public func reloadFonts() async {
+        guard let provider = themeProviderIfAvailable() else { return }
+        fontsLoad = .loading
+        fontsLoad = await ResourceLoad.capture { try await provider.fonts() }
     }
 
     /// Lazily load (and cache) a theme's colors so swatches render on demand.
@@ -635,7 +698,7 @@ public final class AppModel {
         let action = action.trimmingCharacters(in: .whitespaces)
         let issues = KeybindValidation.validate(trigger: trigger, action: action, knownActions: keybindActionNames)
         if let hardError = issues.first(where: { $0.severity == .error }) {
-            applyState = .failed(hardError.message)
+            applyState = .failed(hardError.message, offersReload: false)
             return
         }
         await writeKeybinds { $0.updating(originalTrigger: originalTrigger, trigger: trigger, action: action) }
@@ -650,7 +713,7 @@ public final class AppModel {
         let action = action.trimmingCharacters(in: .whitespaces)
         let issues = KeybindValidation.validate(trigger: newTrigger, action: action, knownActions: keybindActionNames)
         if let hardError = issues.first(where: { $0.severity == .error }) {
-            applyState = .failed(hardError.message)
+            applyState = .failed(hardError.message, offersReload: false)
             return
         }
         await writeKeybinds { $0.movingDefault(fromTrigger: oldTrigger, toTrigger: newTrigger, action: action) }
@@ -672,7 +735,7 @@ public final class AppModel {
     /// no-op (no needless write/backup).
     private func writeKeybinds(_ transform: (TargetScopedBindings) -> [String]) async {
         guard let option = keybindOption, let target = keybindTargetPath else {
-            applyState = .failed("Couldn't locate the keybind setting in the catalog.")
+            applyState = .failed("Couldn't locate the keybind setting in the catalog.", offersReload: false)
             return
         }
         let scoped = TargetScopedBindings(
