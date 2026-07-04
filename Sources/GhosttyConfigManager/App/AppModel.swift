@@ -457,6 +457,87 @@ public final class AppModel {
         await reloadFromDisk()
     }
 
+    // MARK: - Import / export / copy / reset (G4)
+
+    /// The whole primary config as text — the source for "Copy full config" and Export.
+    public var primaryConfigText: String? {
+        browser?.merged.model.primary.serialized()
+    }
+
+    /// How many options the user has customized — gates the reset affordance and labels it.
+    public var customizedCount: Int { browser?.customizedOptions.count ?? 0 }
+
+    /// Copy the full config to the pasteboard (a trivial read; G4).
+    public func copyConfigToPasteboard() {
+        guard let text = primaryConfigText else { return }
+        NSPasteboard.general.clearContents()
+        NSPasteboard.general.setString(text, forType: .string)
+    }
+
+    /// Replace the primary config with imported `text` — validated, backed up, and
+    /// undoable as one step (G4, replace-with-backup). A config that fails validation is
+    /// rejected before anything is written.
+    public func importConfig(text: String) async {
+        guard let environment, let browser else { return }
+        await commitWrite(notice: "Imported configuration.") {
+            try await ConfigWriter().validateAndImport(text: text, into: browser.merged.model, cli: environment.cli)
+        }
+    }
+
+    /// Reset every customized option to its default in ONE undoable batch (G4). Options in
+    /// `config-file` includes are left untouched (the batch owns only the primary file).
+    public func resetAllCustomized() async {
+        await applyReset(in: nil, notice: "Reset all settings to their defaults.")
+    }
+
+    /// Reset just one category's customized options in one undoable batch (G4).
+    public func resetCategory(_ category: String) async {
+        await applyReset(in: category, notice: "Reset \(category) to defaults.")
+    }
+
+    private func applyReset(in category: String?, notice: String) async {
+        guard let environment, let browser else { return }
+        let ops = resetOperations(in: category, browser: browser)
+        guard !ops.isEmpty else { return }
+        await commitWrite(notice: notice) {
+            try await ConfigWriter().validateAndApplyBatch(operations: ops, in: browser.merged.model, cli: environment.cli)
+        }
+    }
+
+    /// Build the unset ops for a reset — every customized option (optionally filtered to
+    /// one category). Repeatable keys carry their flag so the batch reconciles them right.
+    private func resetOperations(in category: String?, browser: CatalogBrowser) -> [ConfigWriter.BatchOperation] {
+        browser.customizedOptions
+            .filter { category == nil || OptionCategorizer.category(for: $0.option.name) == category }
+            .map { .unset($0.option.name, isRepeatable: $0.option.isRepeatable) }
+    }
+
+    /// Run a whole-file/batch write and map its outcome into `applyState` + refresh +
+    /// reload, shared by import and reset (the single-option `applyEdit` keeps its own
+    /// path because it anchors feedback to a row via `applyingOptionName`). Clears that
+    /// anchor so surface-level feedback bars show the result instead of a stale row.
+    private func commitWrite(notice: String, _ work: () async throws -> WriteReceipt) async {
+        guard let environment, let catalog else { return }
+        applyingOptionName = nil
+        applyState = .applying
+        do {
+            let receipt = try await work()
+            lastReceipt = receipt
+            let gitTracked = GitContext.isInsideWorkingTree(path: receipt.resolvedPath)
+            await refreshConfig(environment: environment, catalog: catalog)
+            let reload = reloader.reload(enabled: autoReloadEnabled)
+            applyState = .succeeded(notice: notice, gitTracked: gitTracked, reload: reload)
+        } catch ConfigWriteError.validationFailed(let messages) {
+            applyState = .failed(messages.first?.message ?? "The change didn't validate.", offersReload: false)
+        } catch ConfigWriteError.staleOnDisk {
+            applyState = .failed("This file changed on disk since it was read. Reload and try again.", offersReload: true)
+        } catch ConfigWriteError.invalidValue {
+            applyState = .failed("That value can't contain a line break.", offersReload: false)
+        } catch {
+            applyState = .failed(error.localizedDescription, offersReload: false)
+        }
+    }
+
     // MARK: - Navigation & global Find (D)
 
     /// Bumped on each `focus(optionNamed:)` so a *mounted* option list can react to an

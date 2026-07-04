@@ -203,6 +203,19 @@ struct GhosttyConfigManagerApp: App {
                 Button("Find…") { model.beginFind() }
                     .keyboardShortcut("f", modifiers: .command)
             }
+            // Import / export / copy the whole config in the File menu (G4). Import is
+            // replace-with-backup (confirmed + undoable); the model validates before writing.
+            CommandGroup(replacing: .importExport) {
+                Button("Copy Full Config") { model.copyConfigToPasteboard() }
+                Button("Import Config…") {
+                    if let text = ConfigTransfer.chooseImportText() {
+                        Task { await model.importConfig(text: text) }
+                    }
+                }
+                Button("Export Config…") {
+                    if let text = model.primaryConfigText { ConfigTransfer.export(text) }
+                }
+            }
             // Re-open the first-run welcome any time (F2). Replaces the app's
             // (help-book-less) default Help menu with the one entry that's useful here.
             CommandGroup(replacing: .help) {

@@ -8,6 +8,7 @@ import GhosttyConfigKit
 /// in a popover behind the row's info button.
 struct OptionListView: View {
     @Environment(AppModel.self) private var model
+    @State private var confirmingReset = false
 
     var body: some View {
         @Bindable var model = model
@@ -33,8 +34,26 @@ struct OptionListView: View {
                     .onAppear { scrollToFocusTarget(proxy) }
                     .onChange(of: model.focusRequestID) { _, _ in scrollToFocusTarget(proxy) }
             }
+            // Reset-all is a batch op with no per-row anchor (`applyingOptionName == nil`),
+            // so its Saved · Undo / error feedback shows in a surface bar here instead of on
+            // a row (G4). Per-row edits keep `applyingOptionName` set, so this stays hidden
+            // for them and the per-row feedback is the single source.
+            if model.applyingOptionName == nil {
+                SurfaceFeedbackBar(applyState: model.applyState)
+            }
         }
         .navigationSplitViewColumnWidth(min: 360, ideal: 460)
+        .confirmationDialog(
+            "Reset all settings to their defaults?",
+            isPresented: $confirmingReset, titleVisibility: .visible
+        ) {
+            Button("Reset \(model.customizedCount) Setting\(model.customizedCount == 1 ? "" : "s")", role: .destructive) {
+                Task { await model.resetAllCustomized() }
+            }
+            Button("Cancel", role: .cancel) {}
+        } message: {
+            Text("Every option you've customized returns to its default. Your current config is backed up first, and you can undo this with ⌘Z.")
+        }
     }
 
     /// On the Appearance surface, a one-line cross-link clarifying that colors come from
@@ -105,6 +124,13 @@ struct OptionListView: View {
                 Section {
                     ForEach(model.visibleOptions) { option in
                         customizedRow(option)
+                    }
+                }
+                // Reset everything back to defaults in one undoable step (G4), only on the
+                // Customized surface where "everything you changed" is the list you see.
+                if model.selection == .customized && model.customizedCount > 0 {
+                    Section {
+                        Button("Reset All to Defaults…", role: .destructive) { confirmingReset = true }
                     }
                 }
             }

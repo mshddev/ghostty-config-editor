@@ -76,6 +76,40 @@ public struct ConfigWriter: Sendable {
         return target.replacingLines(newLines)
     }
 
+    /// One mutation in a batched edit: set `key` to `values` (empty = unset). Repeatable
+    /// keys reconcile position-wise like the single-option path.
+    public struct BatchOperation: Sendable, Equatable {
+        public let key: String
+        public let values: [String]
+        public let isRepeatable: Bool
+        public init(key: String, values: [String], isRepeatable: Bool) {
+            self.key = key
+            self.values = values
+            self.isRepeatable = isRepeatable
+        }
+
+        /// An "unset this option" op (reset-to-default), the batch's main use (KTD5).
+        public static func unset(_ key: String, isRepeatable: Bool) -> BatchOperation {
+            BatchOperation(key: key, values: [], isRepeatable: isRepeatable)
+        }
+    }
+
+    /// Fold several mutations into the **primary** file's lines in one pass and return the
+    /// edited primary (KTD5). Unlike looping `editedFile(setting:)` — which retargets and
+    /// commits per call, yielding N backups / N validations / N reloads and a depth-1 undo
+    /// that reverts only the last op — this produces one file so a single `commit` gives one
+    /// backup / one validation / one receipt (hence one ⌘Z reverts the whole batch).
+    /// Operates on the primary alone (options living in `config-file` includes are left
+    /// untouched — the safe choice, never rewriting a file the batch doesn't own).
+    public func editedFile(applying operations: [BatchOperation], in model: ConfigModel) -> ConfigFile {
+        var lines = model.primary.lines
+        for op in operations {
+            lines = Self.mutate(lines, key: op.key, newValues: op.values,
+                                isRepeatable: op.isRepeatable, lineEnding: model.primary.lineEnding)
+        }
+        return model.primary.replacingLines(lines)
+    }
+
     static func mutate(_ original: [ConfigLine], key: String, newValues: [String], isRepeatable: Bool, lineEnding: String = "\n") -> [ConfigLine] {
         var lines = original
         let occurrences = lines.indices.filter { lines[$0].key == key }
@@ -164,6 +198,54 @@ public struct ConfigWriter: Sendable {
             }
         }
         return try commit(edited)
+    }
+
+    /// Validate a whole batch (all ops folded into the primary) then commit it once, so a
+    /// reset-all / reset-category is one backup, one validation, one reload, one undoable
+    /// receipt (KTD5, G4). Same validate-before-write contract as the single-option path.
+    @discardableResult
+    public func validateAndApplyBatch(
+        operations: [BatchOperation],
+        in model: ConfigModel,
+        cli: GhosttyCLI?,
+        linter: ConfigLinter = ConfigLinter()
+    ) async throws -> WriteReceipt {
+        for op in operations { try Self.rejectLineBreaks(key: op.key, values: op.values) }
+        let edited = editedFile(applying: operations, in: model)
+        if let cli {
+            let validation = try await validatePreview(edited: edited, model: model, cli: cli, linter: linter)
+            guard validation.isValid else {
+                throw ConfigWriteError.validationFailed(validation.messages)
+            }
+        }
+        return try commit(edited)
+    }
+
+    /// Replace the ENTIRE primary config with `text` after validating it (G4 import =
+    /// replace-with-backup). Validates the imported bytes in their real include context,
+    /// then commits — so a bad paste is rejected over one backup and never reaches disk.
+    /// The new file is stamped with the **current on-disk identity** (not the imported
+    /// bytes' own), so the stale-overwrite guard compares against what's actually there
+    /// now and doesn't misfire on the (intentionally different) imported content. When no
+    /// file exists yet, the stamp is nil and the import creates it.
+    @discardableResult
+    public func validateAndImport(
+        text: String,
+        into model: ConfigModel,
+        cli: GhosttyCLI?,
+        linter: ConfigLinter = ConfigLinter(),
+        fileManager: FileManager = .default
+    ) async throws -> WriteReceipt {
+        let primary = model.primary
+        var newFile = ConfigFile.parse(text: text, path: primary.path, resolvedPath: primary.resolvedPath)
+        newFile.identity = FileIdentity.capture(path: primary.resolvedPath, fileManager: fileManager)
+        if let cli {
+            let validation = try await validatePreview(edited: newFile, model: model, cli: cli, linter: linter)
+            guard validation.isValid else {
+                throw ConfigWriteError.validationFailed(validation.messages)
+            }
+        }
+        return try commit(newFile, fileManager: fileManager)
     }
 
     /// Validate the proposed change against the **full merged config**, not the

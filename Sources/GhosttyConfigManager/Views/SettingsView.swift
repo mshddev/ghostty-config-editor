@@ -14,6 +14,7 @@ import GhosttyConfigKit
 /// more cross-scene injection, since the separate `Settings` scene is gone).
 struct SettingsView: View {
     @Environment(AppModel.self) private var model
+    @State private var confirmingReset = false
 
     var body: some View {
         @Bindable var model = model
@@ -30,8 +31,43 @@ struct SettingsView: View {
                         .foregroundStyle(.secondary)
                         .fixedSize(horizontal: false, vertical: true)
                 }
+                backupSection
             }
             .formStyle(.grouped)
+            // Import / reset route through the shared write engine, so their outcome
+            // (Saved · Undo / error + Reload) shows in the same bar as every surface (G4).
+            SurfaceFeedbackBar(applyState: model.applyState)
+        }
+        .confirmationDialog(
+            "Reset all settings to their defaults?",
+            isPresented: $confirmingReset, titleVisibility: .visible
+        ) {
+            Button("Reset \(model.customizedCount) Setting\(model.customizedCount == 1 ? "" : "s")", role: .destructive) {
+                Task { await model.resetAllCustomized() }
+            }
+            Button("Cancel", role: .cancel) {}
+        } message: {
+            Text("Every option you've customized returns to its default. Your current config is backed up first, and you can undo this with ⌘Z.")
+        }
+    }
+
+    // MARK: - Backup & reset (G4)
+
+    @ViewBuilder
+    private var backupSection: some View {
+        Section("Backup & reset") {
+            Button("Copy Full Config") { model.copyConfigToPasteboard() }
+            Button("Export…") {
+                if let text = model.primaryConfigText { ConfigTransfer.export(text) }
+            }
+            Button("Import…") {
+                if let text = ConfigTransfer.chooseImportText() {
+                    Task { await model.importConfig(text: text) }
+                }
+            }
+            if model.customizedCount > 0 {
+                Button("Reset All to Defaults…", role: .destructive) { confirmingReset = true }
+            }
         }
     }
 
@@ -103,6 +139,41 @@ struct SettingsView: View {
     private func chooseBinary() {
         guard let chosen = BinaryChooser.choose() else { return }
         Task { await model.setBinaryOverride(chosen) }
+    }
+}
+
+/// Import/export of the whole config, shared by the Settings pane and the File menu (G4).
+/// Export writes the current bytes to a chosen file; import reads a file, confirms the
+/// replace (the write engine backs up the current config first and the import is
+/// undoable), and returns the text for `AppModel.importConfig` to validate + commit.
+enum ConfigTransfer {
+    static func export(_ text: String) {
+        let panel = NSSavePanel()
+        panel.title = "Export Ghostty config"
+        panel.nameFieldStringValue = "ghostty-config.txt"
+        panel.canCreateDirectories = true
+        guard panel.runModal() == .OK, let url = panel.url else { return }
+        try? text.write(to: url, atomically: true, encoding: .utf8)
+    }
+
+    /// Present an open panel, then a replace confirmation, returning the imported text
+    /// (or nil if cancelled / unreadable). Import replaces-with-backup, so the confirm
+    /// alert says exactly that.
+    static func chooseImportText() -> String? {
+        let panel = NSOpenPanel()
+        panel.title = "Import Ghostty config"
+        panel.message = "Choose a config file to replace your current one."
+        panel.canChooseFiles = true
+        panel.canChooseDirectories = false
+        panel.allowsMultipleSelection = false
+        guard panel.runModal() == .OK, let url = panel.url,
+              let text = try? String(contentsOf: url, encoding: .utf8) else { return nil }
+        let alert = NSAlert()
+        alert.messageText = "Replace your Ghostty config?"
+        alert.informativeText = "This replaces your current config with the imported file. Your current config is backed up first, and you can undo this with ⌘Z."
+        alert.addButton(withTitle: "Replace")
+        alert.addButton(withTitle: "Cancel")
+        return alert.runModal() == .alertFirstButtonReturn ? text : nil
     }
 }
 
