@@ -183,11 +183,18 @@ struct GhosttyConfigManagerApp: App {
                 .task { await model.bootstrap(); model.showWelcomeIfNeeded() }
         }
         .windowStyle(.titleBar)
-        // Re-open the first-run welcome any time (F2). Replaces the app's (help-book-less)
-        // default Help menu with the one entry that's actually useful here.
         .commands {
+            // Re-open the first-run welcome any time (F2). Replaces the app's
+            // (help-book-less) default Help menu with the one entry that's useful here.
             CommandGroup(replacing: .help) {
                 Button("Welcome to Ghostty Config") { model.openWelcome() }
+            }
+            // ⌘, still works, but there's no Preferences *window* anymore (G1/G6):
+            // it selects the in-window Settings pane instead, preserving the macOS
+            // muscle-memory affordance without a dead one-toggle window.
+            CommandGroup(replacing: .appSettings) {
+                Button("Settings…") { model.selection = .settings }
+                    .keyboardShortcut(",", modifiers: .command)
             }
         }
         // Options right-align their value control (the settings idiom), and a wider
@@ -196,14 +203,6 @@ struct GhosttyConfigManagerApp: App {
         // fullscreened (see `WindowConfigurator`). First launch is centered on screen.
         .defaultSize(width: WindowMetrics.defaultWidth, height: WindowMetrics.defaultHeight)
         .defaultPosition(.center)
-
-        // Standard ⌘, Preferences window for the auto-reload toggle (U3). The model
-        // is injected explicitly — SwiftUI does not propagate `.environment` across
-        // scenes, so the WindowGroup injection above does not reach this one (KTD7).
-        Settings {
-            SettingsView()
-                .environment(model)
-        }
     }
 }
 
@@ -221,13 +220,17 @@ struct RootView: View {
             statusView(ContentUnavailableView {
                 Label("Ghostty not found", systemImage: "exclamationmark.triangle")
             } description: {
-                Text("Install Ghostty, or set the binary path, then reopen.\nSearched the app bundle, Homebrew, and your login shell.")
+                Text("Install Ghostty, or choose the binary yourself.\nSearched the app bundle, Homebrew, and your login shell.")
+            } actions: {
+                recoveryButtons()
             })
         case .unsupported(let detail):
             statusView(ContentUnavailableView {
                 Label("Couldn't verify Ghostty", systemImage: "questionmark.diamond")
             } description: {
                 Text(detail)
+            } actions: {
+                recoveryButtons()
             })
         case .ready(let environment):
             // Ghostty is located; now reflect catalog/config loading so a load
@@ -239,6 +242,8 @@ struct RootView: View {
                     Label("Couldn't load options", systemImage: "exclamationmark.triangle")
                 } description: {
                     Text("Ghostty was found, but reading its option catalog failed.\n\(detail)")
+                } actions: {
+                    recoveryButtons()
                 })
             case .idle, .loading:
                 statusView(ProgressView("Loading options…"))
@@ -255,6 +260,22 @@ struct RootView: View {
 
     private func statusView(_ content: some View) -> some View {
         content.frame(minWidth: WindowMetrics.minWidth, minHeight: WindowMetrics.minHeight)
+    }
+
+    /// Recovery actions on the not-found/unsupported/load-failed screens (G1): choose
+    /// the Ghostty binary yourself (the dead-end the old copy pointed at with no UI) or
+    /// retry discovery. "Choose Ghostty…" persists the pick and re-bootstraps.
+    @ViewBuilder
+    private func recoveryButtons() -> some View {
+        HStack {
+            Button("Choose Ghostty…") {
+                if let path = BinaryChooser.choose() {
+                    Task { await model.setBinaryOverride(path) }
+                }
+            }
+            .buttonStyle(.borderedProminent)
+            Button("Try again") { Task { await model.bootstrap() } }
+        }
     }
 
     /// The detail surface for the current selection, centered in a width-capped
@@ -274,6 +295,7 @@ struct RootView: View {
                 case .recommended: RecommendedView()
                 case .problems: ProblemsView()
                 case .themes: ThemeBrowserView()
+                case .settings: SettingsView()
                 case .category(let name) where name == OptionCategorizer.keybindingsCategory: KeybindEditorView()
                 default: OptionListView()
                 }
@@ -318,10 +340,14 @@ struct RootView: View {
             Task { await model.syncFromDiskIfChanged() }
         }
         .toolbar {
-            // Identity only now — health and Customized moved into the sidebar's
-            // Status section (D1), so the top bar carries just "which Ghostty" plus Find.
+            // Identity ("which Ghostty") + the auto-reload status chip. Health and
+            // Customized moved into the sidebar's Status section (D1); the top bar now
+            // carries identity, at-a-glance auto-reload state, and Find.
             ToolbarItem(placement: .status) {
                 identityChip(environment)
+            }
+            ToolbarItem(placement: .status) {
+                autoReloadChip()
             }
             ToolbarItem(placement: .primaryAction) {
                 findButton()
@@ -347,5 +373,24 @@ struct RootView: View {
     private func identityChip(_ environment: GhosttyEnvironment) -> some View {
         ToolbarChip(title: "Ghostty \(environment.version)")
             .help("The Ghostty this app is configuring")
+    }
+
+    /// A clickable auto-reload status chip (G1): at-a-glance state plus a one-click
+    /// toggle, so the setting isn't only reachable from the Settings pane. The pane's
+    /// toggle and this chip bind the same stored `autoReloadEnabled`, so they stay in
+    /// sync. Exposed to VoiceOver as a switch (not a bare button) per KTD7.
+    private func autoReloadChip() -> some View {
+        let on = model.autoReloadEnabled
+        return ToolbarChip(
+            systemImage: "arrow.clockwise",
+            tint: on ? .accentColor : .secondary,
+            title: on ? "Auto-reload: On" : "Auto-reload: Off",
+            isActive: on,
+            action: { model.autoReloadEnabled.toggle() }
+        )
+        .help("Automatically reload Ghostty after each change")
+        .accessibilityLabel("Auto-reload")
+        .accessibilityValue(on ? "On" : "Off")
+        .accessibilityAddTraits(.isToggle)
     }
 }

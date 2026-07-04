@@ -16,6 +16,9 @@ public enum SidebarSelection: Hashable {
     case problems
     case themes
     case category(String)
+    /// The in-window app-settings pane (G1): Ghostty binary path, config-file location,
+    /// and behavior. Replaces the removed ⌘, `Settings` *window* — ⌘, now selects this.
+    case settings
 }
 
 /// Root application state (KTD9: `@Observable`, macOS 14+).
@@ -71,7 +74,11 @@ public final class AppModel {
     /// the state unambiguously is gone).
     public private(set) var applyingOptionName: String?
 
-    public var binaryOverride: String?
+    /// The user's manual Ghostty binary-path override (G1, FEATURES-2). **Persisted**
+    /// across launches via the kit's `BinaryOverrideStore` — read in `init`, written by
+    /// `setBinaryOverride(_:)` — so a fix on the "not found" screen survives relaunch.
+    /// Read by `bootstrap()` as `GhosttyEnvironment.discover(userOverride:)`.
+    public private(set) var binaryOverride: String?
     public var selection: SidebarSelection? = .themes
     public var query: String = ""
     /// The Themes surface's own search text (name filter), bound to the shared
@@ -84,9 +91,8 @@ public final class AppModel {
     static let autoReloadDefaultsKey = "autoReloadEnabled"
 
     /// Whether a successful in-app write auto-reloads the running Ghostty (R7, KTD7).
-    /// **On by default**; the toggle persists across launches. This is the app's first
-    /// persisted setting — `binaryOverride`/`selection`/`query` are in-memory only, so
-    /// they are not a persistence precedent. Stored (not computed) so a mid-session
+    /// **On by default**; the toggle persists across launches (alongside `binaryOverride`
+    /// and `favoriteThemes`; `selection`/`query` remain in-memory). Stored (not computed) so a mid-session
     /// toggle updates the in-memory value immediately while `didSet` mirrors it to
     /// `UserDefaults`; the `Settings` toggle binds to this property, never to a bare
     /// `@AppStorage` that would leave this stored value stale (U3).
@@ -169,6 +175,24 @@ public final class AppModel {
         favoriteThemes = Set(defaults.stringArray(forKey: Self.favoriteThemesDefaultsKey) ?? [])
         // Welcome defaults to unseen on a fresh install (missing key → false).
         hasSeenWelcome = defaults.bool(forKey: Self.hasSeenWelcomeDefaultsKey)
+        // A prior manual Ghostty binary path survives relaunch (G1), so a fix on the
+        // "not found" screen sticks; nil (unset/blank) falls back to auto-detection.
+        binaryOverride = BinaryOverrideStore(defaults: defaults).load()
+    }
+
+    // MARK: - Binary override (G1)
+
+    /// Set (or clear, with nil) the manual Ghostty binary path, persist it, and
+    /// re-discover the environment so the change takes effect immediately (G1). Backs the
+    /// Settings "Choose…"/"Use auto-detected" buttons and the "Choose Ghostty…" recovery
+    /// on the not-found/unsupported screens. Re-evaluates the first-run welcome (a no-op
+    /// after it's been seen) so a fresh discovery with no config still surfaces it.
+    public func setBinaryOverride(_ path: String?) async {
+        let store = BinaryOverrideStore()
+        store.save(path)
+        binaryOverride = store.load()
+        await bootstrap()
+        showWelcomeIfNeeded()
     }
 
     // MARK: - First-run welcome (F2)
@@ -358,6 +382,48 @@ public final class AppModel {
     public func syncFromDiskIfChanged() async {
         if case .applying = applyState { return }
         guard !configMissing, primaryChangedOnDisk else { return }
+        await reloadFromDisk()
+    }
+
+    // MARK: - Settings pane data (G1)
+
+    /// The resolved Ghostty binary path, shown in the Settings "Ghostty" section — nil
+    /// until discovery succeeds (the pane shows a not-found note + "Choose…" then).
+    public var resolvedBinaryPath: String? {
+        if case .ready(let environment) = environmentState { return environment.binaryPath }
+        return nil
+    }
+
+    /// Where the primary config file lives (or *would* live on first write) — shown in
+    /// the Settings "Config file" section and used by Reveal-in-Finder / create (G1).
+    public var configFilePath: String? {
+        browser?.merged.model.primary.path
+    }
+
+    /// Reveal the config file (or its parent directory when it doesn't exist yet) in the
+    /// Finder (G1). Uses the resolved path so a symlinked `~/.config` lands on the real file.
+    public func revealConfigInFinder() {
+        guard let file = browser?.merged.model.primary else { return }
+        let resolved = file.resolvedPath
+        if FileManager.default.fileExists(atPath: resolved) {
+            NSWorkspace.shared.activateFileViewerSelecting([URL(fileURLWithPath: resolved)])
+        } else {
+            // No file yet — open the directory it would be created in.
+            let dir = (resolved as NSString).deletingLastPathComponent
+            NSWorkspace.shared.activateFileViewerSelecting([URL(fileURLWithPath: dir)])
+        }
+    }
+
+    /// Create an empty config file at the primary path when none exists yet (G1), so a
+    /// newcomer can open it in an editor before making a first change. Creates the parent
+    /// directory as needed, then reloads so `configMissing` clears. A no-op if a file is
+    /// already there.
+    public func createConfigFileIfMissing() async {
+        guard configMissing, let resolved = browser?.merged.model.primary.resolvedPath else { return }
+        let dir = (resolved as NSString).deletingLastPathComponent
+        try? FileManager.default.createDirectory(atPath: dir, withIntermediateDirectories: true)
+        guard !FileManager.default.fileExists(atPath: resolved) else { return }
+        FileManager.default.createFile(atPath: resolved, contents: Data())
         await reloadFromDisk()
     }
 
@@ -783,6 +849,8 @@ public final class AppModel {
             return [] // rendered by ThemeBrowserView
         case .recommended:
             return [] // rendered by RecommendedView
+        case .settings:
+            return [] // rendered by SettingsView (G1)
         case .none:
             // Defensive fallback only — the sidebar always keeps a row selected,
             // so this nil branch isn't reachable through normal navigation.

@@ -39,6 +39,11 @@ struct SidebarView: View {
                 Label("Problems", systemImage: "checklist")
                     .badge(problemsBadge)
                     .tag(SidebarSelection.problems)
+                // App settings, in-window now (G1): binary path, config-file location,
+                // auto-reload. ⌘, selects this too. The gear icon distinguishes it from
+                // the "Settings" *section* header above (which groups option categories).
+                Label("Settings", systemImage: "gearshape")
+                    .tag(SidebarSelection.settings)
             }
         }
         .navigationTitle("Ghostty")

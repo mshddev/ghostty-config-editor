@@ -177,6 +177,7 @@ struct OptionListView: View {
         case .problems: return "Problems"
         case .themes: return "Themes"
         case .recommended: return "Recommended" // rendered by RecommendedView; here for exhaustiveness
+        case .settings: return "Settings" // rendered by SettingsView; here for exhaustiveness
         case .none: return "Options"
         }
     }
