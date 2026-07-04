@@ -903,7 +903,7 @@ private struct InlineOptionEditor: View {
         colorFill(currentValue)
             .frame(width: 44, height: 22)
             .clipShape(RoundedRectangle(cornerRadius: 5))
-            .overlay(RoundedRectangle(cornerRadius: 5).strokeBorder(.separator, lineWidth: 1))
+            .overlay { swatchRing(cornerRadius: 5) }
             .contentShape(RoundedRectangle(cornerRadius: 5))
     }
 
@@ -930,6 +930,23 @@ private struct InlineOptionEditor: View {
         }
     }
 
+    /// The one swatch-edge rule (DS-2): a two-layer hairline — a dark ring at the very
+    /// edge over a light ring one point inside — so a swatch's boundary stays visible
+    /// against *any* fill in *either* card appearance. A near-black color on a dark card
+    /// no longer reads as an unset/empty swatch, and a white color on a light card still
+    /// shows an edge. The explicit light+dark pair is deliberate (not a dark-assumed
+    /// alpha): whichever one the fill/background swallows, the other contrasts. Applied
+    /// identically at every swatch site.
+    private func swatchRing(cornerRadius r: CGFloat) -> some View {
+        RoundedRectangle(cornerRadius: r)
+            .strokeBorder(Color.black.opacity(0.28), lineWidth: 1)
+            .overlay(
+                RoundedRectangle(cornerRadius: r)
+                    .inset(by: 1)
+                    .strokeBorder(Color.white.opacity(0.30), lineWidth: 1)
+            )
+    }
+
     /// A curated spread of neutrals and hues for one-click picking. The text field
     /// covers everything else — any hex, plus the values a swatch can't express.
     private static let colorPresets: [String] = [
@@ -943,7 +960,7 @@ private struct InlineOptionEditor: View {
                 colorFill(draft)
                     .frame(width: 36, height: 36)
                     .clipShape(RoundedRectangle(cornerRadius: 6))
-                    .overlay(RoundedRectangle(cornerRadius: 6).strokeBorder(.separator, lineWidth: 1))
+                    .overlay { swatchRing(cornerRadius: 6) }
                 VStack(alignment: .leading, spacing: 2) {
                     Text(option.option.displayTitle).font(.callout.weight(.semibold)).lineLimit(1)
                     Text(draft.isEmpty ? "no value" : draft)
@@ -973,11 +990,14 @@ private struct InlineOptionEditor: View {
                         RoundedRectangle(cornerRadius: 4)
                             .fill(Color(hex: hex) ?? .gray)
                             .frame(width: 22, height: 22)
-                            .overlay(
-                                RoundedRectangle(cornerRadius: 4)
-                                    .strokeBorder(isSelectedPreset(hex) ? Color.accentColor : Color(nsColor: .separatorColor),
-                                                  lineWidth: isSelectedPreset(hex) ? 2 : 1)
-                            )
+                            .overlay {
+                                if isSelectedPreset(hex) {
+                                    RoundedRectangle(cornerRadius: 4)
+                                        .strokeBorder(Color.accentColor, lineWidth: 2)
+                                } else {
+                                    swatchRing(cornerRadius: 4)
+                                }
+                            }
                     }
                     .buttonStyle(.plain)
                     .help(hex)
@@ -1521,9 +1541,17 @@ private struct FontFamilyEditor: View {
 
     private var picker: some View {
         VStack(alignment: .leading, spacing: 8) {
-            Text(option.option.name)
-                .font(.callout.weight(.semibold))
-                .lineLimit(1)
+            // Friendly title over the raw key as a mono caption — matching the info
+            // popover's header pattern, so the picker names "Font", not "font-family" (CB-3).
+            VStack(alignment: .leading, spacing: 1) {
+                Text(option.option.displayTitle)
+                    .font(.callout.weight(.semibold))
+                    .lineLimit(1)
+                Text(option.option.name)
+                    .font(.caption2.monospaced())
+                    .foregroundStyle(.secondary)
+                    .lineLimit(1)
+            }
 
             TextField("Search fonts", text: $search)
                 .textFieldStyle(.roundedBorder)
@@ -1714,18 +1742,32 @@ private struct FontRow: View {
     let isSelected: Bool
     let onTap: () -> Void
 
+    /// A fixed terminal-representative sample: mixed-case letterforms, digits, the
+    /// programming ligature triggers (`->`, `=>`, `!=`), and a check glyph — so
+    /// monospacing, ligatures, and Nerd-Font coverage are visible in the row's own
+    /// face rather than guessed from the name alone (CV-12).
+    private static let sample = "AaBbGg 0123 -> => != ✓"
+
     var body: some View {
         Button(action: onTap) {
             HStack(spacing: 8) {
                 Image(systemName: isSelected ? "checkmark.circle.fill" : "circle")
                     .imageScale(.small)
                     .foregroundStyle(isSelected ? Color.accentColor : Color.secondary.opacity(0.35))
-                Text(name)
-                    // Each name rendered in its own face, so the list reads like a
-                    // font menu; unresolvable names fall back to the system font.
-                    // `relativeTo:` lets the list scale with Dynamic Type (H3).
-                    .font(.custom(name, size: 14, relativeTo: .body))
-                    .lineLimit(1)
+                VStack(alignment: .leading, spacing: 1) {
+                    Text(name)
+                        // Each name rendered in its own face, so the list reads like a
+                        // font menu; unresolvable names fall back to the system font.
+                        // `relativeTo:` lets the list scale with Dynamic Type (H3).
+                        .font(.custom(name, size: 14, relativeTo: .body))
+                        .lineLimit(1)
+                    Text(Self.sample)
+                        .font(.custom(name, size: 12, relativeTo: .caption))
+                        .foregroundStyle(.secondary)
+                        .lineLimit(1)
+                        // Decorative — the row's a11y label already names the font.
+                        .accessibilityHidden(true)
+                }
                 Spacer(minLength: 4)
                 if let selectionLabel {
                     Text(selectionLabel)
