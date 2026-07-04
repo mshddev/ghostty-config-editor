@@ -424,6 +424,7 @@ struct OptionRow: View {
                 Image(systemName: "arrow.uturn.backward.circle")
                     .imageScale(.medium)
                     .foregroundStyle(.secondary)
+                    .frame(width: 28, height: 28)   // comfortable hit target (A11Y-10/11)
                     .contentShape(Rectangle())
             }
             .buttonStyle(.plain)
@@ -465,6 +466,9 @@ struct OptionRow: View {
             Image(systemName: "info.circle")
                 .imageScale(.medium)
                 .foregroundStyle(.secondary)
+                // ~28pt hit target so the info affordance is comfortably tappable
+                // (A11Y-10) — the bare glyph was a ~16pt target.
+                .frame(width: 28, height: 28)
                 .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
@@ -546,6 +550,19 @@ struct OptionRow: View {
 /// controls (toggle, dropdown, stepper) apply immediately on change; free-text
 /// commits on Return. Every write is validated against the live binary by the
 /// model, so on failure the control snaps back to the value that's actually saved.
+/// The shared VoiceOver label for an option's inline control: name + default + state,
+/// so a control announced on its own (a VO user swiping controls, not row titles) still
+/// conveys everything the sighted row shows — the plan's "Font size, default 13,
+/// customized" (H1, A11Y-1/2/17). The control's own trait adds the type ("text field")
+/// and its live value is the `accessibilityValue`. Used across every editor struct so the
+/// announcement is identical whichever control renders.
+func optionControlA11yLabel(_ option: MergedOption) -> Text {
+    var parts = [option.option.displayTitle]
+    if !option.option.defaultValue.isEmpty { parts.append("default \(option.option.defaultValue)") }
+    parts.append(option.state.displayName)
+    return Text(parts.joined(separator: ", "))
+}
+
 private struct InlineOptionEditor: View {
     @Environment(AppModel.self) private var model
     let option: MergedOption
@@ -605,7 +622,7 @@ private struct InlineOptionEditor: View {
                 .labelsHidden()
                 .toggleStyle(.switch)
                 .controlSize(.small)   // matched to sibling controls (was .mini) (B4)
-                .accessibilityLabel(Text(option.option.displayTitle))
+                .accessibilityLabel(optionControlA11yLabel(option))
         case .enumeration:
             // Rows come from the kit helper (not raw enumValues) so a saved
             // out-of-enum value stays selectable and is never silently dropped.
@@ -621,6 +638,7 @@ private struct InlineOptionEditor: View {
             // constrained trailing slot a fixed-size menu grew to its longest value
             // and overflowed the card; a bounded frame truncates the label instead.
             .frame(maxWidth: 220, alignment: .trailing)
+            .accessibilityLabel(optionControlA11yLabel(option))
         case .number:
             NumericOptionEditor(
                 option: option,
@@ -639,6 +657,10 @@ private struct InlineOptionEditor: View {
             Button { showingColorPopover.toggle() } label: { swatch }
                 .buttonStyle(.plain)
                 .help("Edit color")
+                // A swatch is pure color — VoiceOver would otherwise announce nothing but
+                // "button", so name+state+the color value are made explicit here (H1).
+                .accessibilityLabel(optionControlA11yLabel(option))
+                .accessibilityValue(Text(currentValue.isEmpty ? "not set" : currentValue))
                 .popover(isPresented: $showingColorPopover, arrowEdge: .bottom) {
                     colorEditor
                 }
@@ -679,7 +701,7 @@ private struct InlineOptionEditor: View {
                 .focused($textFieldFocused)
                 .onSubmit { commit() }
                 .help(currentValue.isEmpty ? "" : currentValue)
-                .accessibilityLabel(Text(option.option.displayTitle))
+                .accessibilityLabel(optionControlA11yLabel(option))
             if isDirty {
                 Text("Return to save").font(.caption2).foregroundStyle(.secondary)
             }
@@ -703,6 +725,7 @@ private struct InlineOptionEditor: View {
         .controlSize(.small)
         .help(currentValue.isEmpty ? "Set a value" : currentValue)
         .accessibilityLabel(Text("Edit \(option.option.displayTitle)"))
+        .accessibilityValue(Text(currentValue.isEmpty ? "not set" : currentValue))
         .popover(isPresented: $showingLongEditor, arrowEdge: .bottom) { longValueEditor }
         .onChange(of: showingLongEditor) { _, open in
             if open { draft = currentValue } else { commit() }   // commit on close
@@ -1184,7 +1207,7 @@ private struct BooleanishEditor: View {
                 .labelsHidden()
                 .toggleStyle(.switch)
                 .controlSize(.small)
-                .accessibilityLabel(Text(option.option.displayTitle))
+                .accessibilityLabel(optionControlA11yLabel(option))
             if !extraChoices.isEmpty {
                 extrasMenu
             }
