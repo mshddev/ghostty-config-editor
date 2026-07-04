@@ -87,7 +87,6 @@ struct ThemeBrowserView: View {
                     Text("Classifying \(remaining)…")
                         .font(.caption).foregroundStyle(.secondary)
                 }
-                .transition(.opacity)
             }
             Spacer(minLength: DesignTokens.Spacing.standard)
             Picker("View as", selection: $model.themeViewMode) {
@@ -177,11 +176,20 @@ struct ThemeBrowserView: View {
         }
     }
 
-    /// The empty state, distinguishing "no search results", "no favorites yet", and a
-    /// filter that classification hasn't populated, so it never reads as a broken list.
+    /// The empty state, distinguishing "still classifying", "no search results", "no
+    /// favorites yet", and a genuinely empty filter, so it never reads as a broken list.
     @ViewBuilder
     private var emptyBrowse: some View {
-        if !model.themeQuery.trimmingCharacters(in: .whitespaces).isEmpty {
+        if model.themeFilter.needsClassification && !model.didClassifyAll {
+            // Dark/Light before the batch finishes: only a few lazily-loaded rows are
+            // classified yet, so the bucket can be momentarily empty. Don't claim "no dark
+            // themes" while the toolbar is still counting down — that reads as broken.
+            ContentUnavailableView {
+                Label("Classifying themes…", systemImage: "circle.dotted")
+            } description: {
+                Text("Sorting themes into light and dark.")
+            }
+        } else if !model.themeQuery.trimmingCharacters(in: .whitespaces).isEmpty {
             ContentUnavailableView.search(text: model.themeQuery)
         } else if model.themeFilter == .favorites {
             ContentUnavailableView("No favorites yet", systemImage: "star",
@@ -435,10 +443,15 @@ private struct ThemeRow: View {
             .accessibilityHint("Apply this theme")
 
             HStack(spacing: 6) {
+                // Name + pill + badge repeat what the apply Button's `accessibilityLabel`
+                // already announces (unlike the list row, where they live *inside* the
+                // Button's label). Hidden from VoiceOver so a card is one announcement, not
+                // three; the star/pairing keep their own labels.
                 Text(theme.name)
                     .fontWeight(isCurrent ? .semibold : .regular)
                     .lineLimit(1)
-                if isCurrent { currentPill }
+                    .accessibilityHidden(true)
+                if isCurrent { currentPill.accessibilityHidden(true) }
                 Spacer(minLength: 4)
                 favoriteButton
                 pairingMenu
@@ -447,8 +460,9 @@ private struct ThemeRow: View {
                        value: isCurrent)
             if let roleCaption {
                 Text(roleCaption).font(.caption2).foregroundStyle(.secondary)
+                    .accessibilityHidden(true)
             } else if let appearance = colors?.appearance {
-                appearanceBadge(appearance)
+                appearanceBadge(appearance).accessibilityHidden(true)
             }
         }
         .padding(DesignTokens.Spacing.standard)

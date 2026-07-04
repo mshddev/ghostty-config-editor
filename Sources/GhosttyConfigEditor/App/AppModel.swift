@@ -807,7 +807,13 @@ public final class AppModel {
         // `classifyProgress != nil` is the re-entrancy guard: a run is already in flight.
         guard !didClassifyAll, classifyProgress == nil, let provider = themeProviderIfAvailable() else { return }
         let pending = themes.filter { themeColors[$0.name] == nil && !failedThemes.contains($0.name) }
-        guard !pending.isEmpty else { didClassifyAll = true; return }
+        // Memoize "done" only when there was actually a full list to classify — a call
+        // that somehow arrives before the list loads (themes empty) must not permanently
+        // wedge classification off (its `!didClassifyAll` guard would then no-op forever).
+        guard !pending.isEmpty else {
+            if !themes.isEmpty { didClassifyAll = true }
+            return
+        }
         classifyProgress = pending.count
         for (index, theme) in pending.enumerated() {
             // A re-bootstrap mid-classify swaps the provider; stop feeding a stale run
