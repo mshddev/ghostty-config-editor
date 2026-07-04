@@ -104,7 +104,19 @@ struct ProblemsView: View {
         HStack(alignment: .top, spacing: 8) {
             Image(systemName: "xmark.octagon.fill").foregroundStyle(.red)
             VStack(alignment: .leading, spacing: 2) {
-                Text(message.key ?? "Error").font(.body.bold())
+                // G5: when the validation `key` names a real catalog option, the title
+                // is a deep-link that jumps to that control (clears search, selects its
+                // category, scrolls it into view via the shared `focus(optionNamed:)`);
+                // otherwise it's plain text (unmapped keys keep the "line N" fallback).
+                if let key = message.key, model.hasOption(named: key) {
+                    Button { model.focus(optionNamed: key) } label: {
+                        Text(key).font(.body.bold())
+                    }
+                    .buttonStyle(.link)
+                    .accessibilityHint("Show this setting")
+                } else {
+                    Text(message.key ?? "Error").font(.body.bold())
+                }
                 Text(message.message).font(.callout).foregroundStyle(.secondary)
                 if let line = message.line {
                     Text("line \(line)").font(.caption.monospaced()).foregroundStyle(.tertiary)

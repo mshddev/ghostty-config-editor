@@ -937,6 +937,13 @@ public final class AppModel {
         }
     }
 
+    /// Whether the catalog carries an option with this name — gates the Problems
+    /// deep-link so only a validation `key` that resolves to a real control becomes a
+    /// button (G5); unmapped rows keep their "Reveal in editor" fallback.
+    public func hasOption(named name: String) -> Bool {
+        browser?.merged.option(named: name) != nil
+    }
+
     public func selectedOption() -> MergedOption? {
         guard let name = selectedOptionName else { return nil }
         return browser?.merged.option(named: name)
