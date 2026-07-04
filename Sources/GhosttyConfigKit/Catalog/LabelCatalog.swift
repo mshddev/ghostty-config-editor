@@ -53,12 +53,17 @@ public struct LabelCatalog: Sendable {
     /// A one-line description for an option. Curated summary wins, then the first
     /// non-title-echoing sentence of its docs, then empty (R1 is satisfied by the
     /// always-present title, so an empty summary is acceptable).
-    public func shortSummary(for name: String, documentation: String) -> String {
+    ///
+    /// `maxLength` caps the extracted doc sentence (the curated summary is authored to
+    /// length and never capped). The default suits tooltip-length uses; a row subtitle
+    /// that owns its own visual truncation (`lineLimit`) passes `.max` so the sentence
+    /// isn't ellipsized mid-word before the view can wrap it (CM-7).
+    public func shortSummary(for name: String, documentation: String, maxLength: Int = 120) -> String {
         if let summary = curated[name]?.summary, !summary.isEmpty { return summary }
         // A first sentence that merely restates the title adds nothing beneath a row
         // that already shows the title, so advance past it (CV-10/CM-5). The title is
         // only knowable here, not inside the pure `firstSentence`.
-        return Self.firstSentence(documentation, skippingTitleEcho: displayTitle(for: name))
+        return Self.firstSentence(documentation, skippingTitleEcho: displayTitle(for: name), maxLength: maxLength)
     }
 
     // MARK: - Fallbacks

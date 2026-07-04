@@ -111,6 +111,13 @@ public extension CatalogOption {
     /// empty). May be empty; the always-present `displayTitle` carries R1.
     var shortSummary: String { LabelCatalog.bundled.shortSummary(for: name, documentation: documentation) }
 
+    /// The same summary without the tooltip-length char cap, for row subtitles that own
+    /// their own visual truncation via `lineLimit(1...2)` (CM-7). Lets a real sentence
+    /// wrap to a second line instead of being ellipsized mid-word at 120 chars.
+    var subtitleSummary: String {
+        LabelCatalog.bundled.shortSummary(for: name, documentation: documentation, maxLength: .max)
+    }
+
     /// Curated range/step/unit/style for a numeric option, or `nil` when none is
     /// specified (the editor then uses a plain number field). (A4, CONTROLS-1.)
     var numericSpec: NumericSpec? { NumericSpecCatalog.bundled.spec(for: name) }

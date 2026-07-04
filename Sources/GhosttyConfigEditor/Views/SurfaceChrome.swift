@@ -52,6 +52,12 @@ enum DesignTokens {
     static let accentFill = Color.accentColor.opacity(0.15)
     /// The background lift a control gains on hover / keyboard focus (U12 consumes it).
     static let hoverLift = Color.primary.opacity(0.06)
+
+    /// The **non-accent** tint for the customized-state cue — the small row state dot
+    /// (U5). KTD4 keeps accent for selection/current/primary only, so a changed-from-
+    /// default value gets its own hue; this matches the in-repo "Replaces a default"
+    /// orange. A system dynamic color, so it stays legible in light and dark (GAP-1).
+    static let customizedTint = Color.orange
 }
 
 /// Named durations + curves for the app's small motion vocabulary (KTD5). Transitions

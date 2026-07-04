@@ -378,8 +378,9 @@ private struct CategoryOptionList: View {
 /// shown inline beneath the row while this option is the one being written.
 struct OptionRow: View {
     @Environment(AppModel.self) private var model
-    let option: MergedOption
     @State private var showingInfo = false
+    @State private var isHovering = false
+    let option: MergedOption
 
     var body: some View {
         VStack(alignment: .leading, spacing: 4) {
@@ -391,19 +392,24 @@ struct OptionRow: View {
                         // hover tooltip keeps it a keystroke away for power users.
                         .help(option.option.name)
                         // Speak the merged state (A5's one vocabulary) alongside the
-                        // name, so VoiceOver conveys what the pill shows sighted users.
+                        // name, so VoiceOver conveys what the state dot shows sighted
+                        // users — for every state, including the dot-less ones.
                         .accessibilityValue(Text(option.state.displayName))
                     if !subtitle.isEmpty {
                         Text(subtitle)
                             .font(RowMetrics.subtitleFont)
                             .foregroundStyle(.secondary)
-                            .lineLimit(1)
+                            // The row owns truncation now (CM-7): the summary arrives
+                            // uncapped and wraps to at most two lines rather than being
+                            // ellipsized mid-word by the kit.
+                            .lineLimit(1...2)
                             .help(subtitle)
                     }
                 }
-                if option.state == .setNonDefault {
-                    customizedAffordance
-                }
+                // `layoutPriority(1)` so the label claims its natural width first and a
+                // title never wraps to make room for the accessory (DS-9).
+                .layoutPriority(1)
+                stateAccessory
                 Spacer(minLength: 12)
                 editor
                 infoButton
@@ -411,27 +417,45 @@ struct OptionRow: View {
             feedback
         }
         .padding(.vertical, RowMetrics.rowVerticalPadding)
+        .onHover { isHovering = $0 }
     }
 
-    /// The redesigned state affordance (B5): a legible accent "Customized" pill —
-    /// replacing the illegible 7pt tri-state dot — paired with an inline reset glyph,
-    /// shown only on customized rows. A default/unset row shows nothing here.
-    private var customizedAffordance: some View {
-        HStack(spacing: 4) {
-            Pill(text: option.state.displayName, tint: .accentColor, style: .prominent)
-                .accessibilityHidden(true)   // the title already announces the state
-            Button {
-                Task { await model.applyEdit(option: option, values: []) }
-            } label: {
-                Image(systemName: "arrow.uturn.backward.circle")
-                    .imageScale(.medium)
-                    .foregroundStyle(.secondary)
-                    .frame(width: 28, height: 28)   // comfortable hit target (A11Y-10/11)
-                    .contentShape(Rectangle())
+    /// The customized-state cue (U5, DS-5/DS-9/DS-11) — replacing the accent
+    /// "Customized" pill + reset cluster that squeezed labels and repeated to noise.
+    /// A small **non-accent** state dot at rest (KTD4), in a fixed-width slot so it
+    /// never shifts the row (width-stable), that strengthens into an inline reset
+    /// glyph on hover. The dot is suppressed on the Customized surface — where every
+    /// row is customized, a per-row dot is redundant (IA-8) — but the hover reset
+    /// stays. Reset is *always* reachable without hovering via the ⓘ popover (a named
+    /// VoiceOver action), so hover reveals nothing otherwise-invisible: it only makes
+    /// the already-visible state actionable (KTD5). Rendered only on customized rows;
+    /// default/unset rows add no slot.
+    @ViewBuilder
+    private var stateAccessory: some View {
+        if option.state == .setNonDefault {
+            ZStack {
+                if isHovering {
+                    Button {
+                        Task { await model.applyEdit(option: option, values: []) }
+                    } label: {
+                        Image(systemName: "arrow.uturn.backward.circle")
+                            .imageScale(.medium)
+                            .foregroundStyle(.secondary)
+                            .frame(width: 22, height: 22)
+                            .contentShape(Rectangle())
+                    }
+                    .buttonStyle(.plain)
+                    .help("Reset to default")
+                    .accessibilityLabel("Reset \(option.option.displayTitle) to default")
+                } else if model.selection != .customized {
+                    Circle()
+                        .fill(DesignTokens.customizedTint)
+                        .frame(width: 8, height: 8)
+                        // The title already announces the state; the dot is its visual echo.
+                        .accessibilityHidden(true)
+                }
             }
-            .buttonStyle(.plain)
-            .help("Reset to default")
-            .accessibilityLabel("Reset \(option.option.displayTitle) to default")
+            .frame(width: 22, height: 22)   // width-stable: dot ↔ reset never shifts the row
         }
     }
 
@@ -540,9 +564,10 @@ struct OptionRow: View {
     /// default/value context that used to live here ("default: X" / "no default" /
     /// "default: default") now lives in the info popover, so the row reads as
     /// name + purpose. Empty when the catalog has no summary, and the line is then
-    /// hidden rather than showing filler.
+    /// hidden rather than showing filler. Uncapped (CM-7): the row's `lineLimit(1...2)`
+    /// owns truncation, so a real sentence wraps rather than ellipsizing mid-word.
     private var subtitle: String {
-        option.option.shortSummary
+        option.option.subtitleSummary
     }
 }
 
