@@ -30,6 +30,13 @@ struct KeyRecorderView: NSViewRepresentable {
         view.displayToken = token
         view.needsDisplay = true
     }
+
+    /// Size the capsule to its glyph content (U27), so short chords (⌘n) don't reserve a
+    /// fixed 108pt and squeeze the action title off a two-chord row at the minimum window
+    /// width. The height stays fixed at 30.
+    func sizeThatFits(_ proposal: ProposedViewSize, nsView: KeyRecorderNSView, context: Context) -> CGSize? {
+        CGSize(width: nsView.intrinsicContentSize.width, height: 30)
+    }
 }
 
 /// The AppKit control behind `KeyRecorderView`. Owns a local `NSEvent` monitor so
@@ -43,6 +50,7 @@ final class KeyRecorderNSView: NSView {
         didSet {
             guard oldValue != displayToken else { return }
             needsDisplay = true
+            invalidateIntrinsicContentSize()   // the chip sizes to its glyphs (U27)
             updateAccessibilityValue()
             updateToolTip()
         }
@@ -60,6 +68,7 @@ final class KeyRecorderNSView: NSView {
             // The focus ring is suppressed while recording (the accent border stands in),
             // so re-note the mask when recording toggles.
             noteFocusRingMaskChanged()
+            invalidateIntrinsicContentSize()   // recording shows a wider hint line (U27)
             updateAccessibilityValue()
             // MO-7: cross-fade the capsule's border/fill on the recording toggle (~120ms,
             // gated by Reduce Motion).
@@ -375,39 +384,37 @@ final class KeyRecorderNSView: NSView {
 
     // MARK: - Drawing
 
+    /// The text + font the capsule currently shows, shared by `draw` and
+    /// `intrinsicContentSize` so the capsule sizes to exactly what it renders (U27 — a
+    /// ⌘n chip is ~50pt, not a fixed 108, so two-chord rows stop truncating the action
+    /// title at the minimum window width).
+    private var displayedContent: (text: String, color: NSColor, font: NSFont) {
+        // The stored token is Ghostty's raw `super+…` spelling; show the macOS glyphs.
+        let shown = KeybindTrigger.displaySymbol(for: displayToken)
+        if isRecording {
+            return (displayToken.isEmpty ? "Press the keys…" : "Press the keys…  (\(shown))",
+                    .secondaryLabelColor, .systemFont(ofSize: NSFont.systemFontSize))
+        } else if displayToken.isEmpty {
+            // Names both affordances now that focus and recording are decoupled (A11Y-9).
+            return ("Click or press ⏎ to record", .secondaryLabelColor,
+                    .systemFont(ofSize: NSFont.systemFontSize))  // was tertiary — strict contrast (H3)
+        } else if KeybindTrigger.isPhysicalNamedKey(displayToken) {
+            // A physical hardware key (Copy/Paste): mono small-caps chip so a lone word
+            // doesn't read as prose beside the ⌘⌃⌥⇧ glyph chords (KB-3/CB-6).
+            return (shown.uppercased(), .labelColor,
+                    .monospacedSystemFont(ofSize: NSFont.smallSystemFontSize, weight: .medium))
+        } else {
+            // System font (not monospaced): the macOS shortcut glyphs (⌘⇧⌥⌃) render with
+            // correct spacing here — monospaced cells cram them together.
+            return (shown, .labelColor, .systemFont(ofSize: NSFont.systemFontSize))
+        }
+    }
+
     override func draw(_ dirtyRect: NSRect) {
         // The border/fill live on the layer now (so they can cross-fade, MO-7); `draw`
         // renders only the text, the recording hint, and the bound-state pencil.
         let bounds = self.bounds.insetBy(dx: 1, dy: 1)
-        let physical = KeybindTrigger.isPhysicalNamedKey(displayToken)
-        // The stored token is Ghostty's raw `super+…` spelling; show the macOS glyphs.
-        let shown = KeybindTrigger.displaySymbol(for: displayToken)
-        let text: String
-        let color: NSColor
-        let font: NSFont
-        if isRecording {
-            text = displayToken.isEmpty ? "Press the keys…" : "Press the keys…  (\(shown))"
-            color = .secondaryLabelColor
-            font = .systemFont(ofSize: NSFont.systemFontSize)
-        } else if displayToken.isEmpty {
-            // Names both affordances now that focus and recording are decoupled (A11Y-9).
-            text = "Click or press ⏎ to record"
-            color = .secondaryLabelColor   // was tertiary — strict contrast (H3)
-            font = .systemFont(ofSize: NSFont.systemFontSize)
-        } else if physical {
-            // A physical hardware key (Copy/Paste): mono small-caps chip so a lone word
-            // doesn't read as prose beside the ⌘⌃⌥⇧ glyph chords (KB-3/CB-6).
-            text = shown.uppercased()
-            color = .labelColor
-            font = .monospacedSystemFont(ofSize: NSFont.smallSystemFontSize, weight: .medium)
-        } else {
-            text = shown
-            // System font (not monospaced): the macOS shortcut glyphs (⌘⇧⌥⌃) render with
-            // correct spacing here — monospaced cells cram them together.
-            color = .labelColor
-            font = .systemFont(ofSize: NSFont.systemFontSize)
-        }
-
+        let (text, color, font) = displayedContent
         let attributes: [NSAttributedString.Key: Any] = [.font: font, .foregroundColor: color]
         let attributed = NSAttributedString(string: text, attributes: attributes)
         let size = attributed.size()
@@ -451,6 +458,13 @@ final class KeyRecorderNSView: NSView {
     }
 
     override var intrinsicContentSize: NSSize {
-        NSSize(width: NSView.noIntrinsicMetric, height: 30)
+        let content = displayedContent
+        let textWidth = (content.text as NSString).size(withAttributes: [.font: content.font]).width
+        // 10pt padding each side, plus room for the trailing pencil when a chord is bound.
+        let pencil: CGFloat = (!displayToken.isEmpty && !isRecording) ? 22 : 0
+        let width = ceil(textWidth) + 20 + pencil
+        // Floor so a lone glyph stays comfortably clickable; ceiling so a long sequence or
+        // the recording hint doesn't blow out the row.
+        return NSSize(width: min(max(width, 54), 220), height: 30)
     }
 }

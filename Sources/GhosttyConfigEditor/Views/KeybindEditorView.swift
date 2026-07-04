@@ -314,31 +314,28 @@ private struct KeybindRow: View {
             disabledCapsule(chord, readOnly: readOnly)
         case .unbound:
             // An unbound placeholder has no source, so it's never read-only.
-            recorder(for: chord, width: Self.emptyRecorderWidth)
+            recorder(for: chord)
         case .default, .userAdded, .userOverridesDefault:
             if readOnly { readOnlyCapsule(chord) } else { editableCapsule(chord) }
         }
     }
 
-    /// Fixed widths so an action's chords stay tidy: a bound recorder is compact (glyphs
-    /// are short), an empty one is wider to fit its "click or press ⏎" affordance.
-    private static let boundRecorderWidth: CGFloat = 108
-    private static let emptyRecorderWidth: CGFloat = 168
-
-    private func recorder(for chord: MergedKeybind, width: CGFloat) -> some View {
+    private func recorder(for chord: MergedKeybind) -> some View {
         KeyRecorderView(
             token: chord.trigger,
             onCapture: { capture($0, edit: .rebind(chord)) },
             onWarning: { warning = $0 }
         )
-        .frame(width: width, height: 30)
+        // Content-sized (U27): a ⌘n chip stays ~50pt (not a fixed 108) so two-chord rows
+        // keep the action title readable at the minimum window width. Height stays 30.
+        .frame(height: 30)
     }
 
     /// A default / user / override chord: an inline recorder to re-record it, plus a
     /// remove (default → turn off; user → delete) and a context menu for advanced grammar.
     private func editableCapsule(_ chord: MergedKeybind) -> some View {
         HStack(spacing: 2) {
-            recorder(for: chord, width: Self.boundRecorderWidth)
+            recorder(for: chord)
             removeButton(chord)
         }
         .contextMenu {
