@@ -149,8 +149,9 @@ public struct KeybindTrigger: Sendable, Equatable {
         let prefixPart = prefixes.joined()
         let chordPart = chords.map { chord -> String in
             // Thin spaces between the modifier glyphs and the key so the cluster
-            // breathes (⌘ ⇧ , rather than a cramped ⌘⇧,); the key token stays intact.
-            (chord.modifiers.map(\.symbol) + [Self.canonicalizeKey(chord.key)])
+            // breathes (⌘ ⇧ , rather than a cramped ⌘⇧,); the key token is prettified
+            // to its macOS glyph for display (↓, ⇞, ⌫, 1) but never for writing.
+            (chord.modifiers.map(\.symbol) + [Self.displayKey(chord.key)])
                 .joined(separator: "\u{2009}")
         }.joined(separator: ">")
         return prefixPart + chordPart
@@ -188,6 +189,29 @@ public struct KeybindTrigger: Sendable, Equatable {
         let trimmed = key.trimmingCharacters(in: .whitespaces)
         return trimmed.count == 1 ? trimmed.lowercased() : trimmed
     }
+
+    /// A **display-only** prettifying of a key token: Ghostty's named navigation and
+    /// editing keys become their standard macOS glyphs (`arrow_down` → ↓, `page_up` → ⇞,
+    /// `delete` → ⌫), so a shortcut reads like a Mac shortcut instead of a raw identifier.
+    /// Everything without a conventional glyph (letters, punctuation, function keys) falls
+    /// through to `canonicalizeKey`. **Never** used by `canonical()` — the raw token must
+    /// survive for matching and writing (RK4), so this lives only behind `displaySymbol()`.
+    ///
+    /// Physical digit keys (`digit_1`) are deliberately *not* mapped: Ghostty ships both
+    /// `super+digit_1` and `super+1` as defaults for `goto_tab:1`, so mapping `digit_1` → 1
+    /// would render two identical `⌘1` capsules that read as a duplication bug. Left raw,
+    /// the two chords at least stay visibly distinct.
+    static func displayKey(_ key: String) -> String {
+        let canonical = canonicalizeKey(key)
+        return displayGlyphs[canonical] ?? canonical
+    }
+
+    private static let displayGlyphs: [String: String] = [
+        "arrow_up": "↑", "arrow_down": "↓", "arrow_left": "←", "arrow_right": "→",
+        "page_up": "⇞", "page_down": "⇟", "home": "↖", "end": "↘",
+        "delete": "⌫", "forward_delete": "⌦", "escape": "⎋",
+        "return": "↩", "enter": "⌤", "tab": "⇥", "space": "␣",
+    ]
 }
 
 // MARK: - Captured key → token

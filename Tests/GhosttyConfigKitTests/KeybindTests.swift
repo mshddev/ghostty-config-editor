@@ -216,9 +216,29 @@ final class KeybindTests: XCTestCase {
         let s = "\u{2009}"
         XCTAssertEqual(KeybindTrigger.displaySymbol(for: "global:super+t"), "global:⌘\(s)t")
         XCTAssertEqual(KeybindTrigger.displaySymbol(for: "ctrl+a>n"), "⌃\(s)a>n")
-        // A bare key with no modifiers has nothing to separate.
-        XCTAssertEqual(KeybindTrigger.displaySymbol(for: "arrow_left"), "arrow_left")
+        // A bare key with no modifiers has nothing to separate (and is glyph-mapped).
+        XCTAssertEqual(KeybindTrigger.displaySymbol(for: "arrow_left"), "←")
         XCTAssertEqual(KeybindTrigger.displaySymbol(for: ""), "")
+    }
+
+    // MARK: - Named-key glyph mapping (display-only, U18 E2E follow-up)
+
+    func testDisplaySymbolPrettifiesNamedNavigationKeys() {
+        let s = "\u{2009}"
+        XCTAssertEqual(KeybindTrigger.displaySymbol(for: "shift+arrow_down"), "⇧\(s)↓")
+        XCTAssertEqual(KeybindTrigger.displaySymbol(for: "super+arrow_left"), "⌘\(s)←")
+        XCTAssertEqual(KeybindTrigger.displaySymbol(for: "ctrl+page_up"), "⌃\(s)⇞")
+        XCTAssertEqual(KeybindTrigger.displaySymbol(for: "super+delete"), "⌘\(s)⌫")
+        // Digit keys are intentionally left raw (Ghostty ships super+digit_1 AND super+1;
+        // mapping both to ⌘1 would look like a duplicated capsule).
+        XCTAssertEqual(KeybindTrigger.displaySymbol(for: "super+digit_1"), "⌘\(s)digit_1")
+    }
+
+    func testGlyphMappingIsDisplayOnlyAndNeverAffectsCanonical() {
+        // The raw token must survive for matching/writing (RK4) — mapping is display-only.
+        XCTAssertEqual(KeybindTrigger.parse("shift+arrow_down").canonical(), "shift+arrow_down")
+        XCTAssertEqual(KeybindTrigger.parse("ctrl+page_up").canonical(), "ctrl+page_up")
+        XCTAssertEqual(KeybindTrigger.parse("super+delete").canonical(), "super+delete")
     }
 
     // MARK: - Physical named-key detection (KB-3/CB-6, U18)
