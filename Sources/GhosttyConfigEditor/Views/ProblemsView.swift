@@ -22,7 +22,7 @@ struct ProblemsView: View {
                 if isClean(report) {
                     ContentUnavailableView("No problems",
                                            systemImage: "checkmark.seal",
-                                           description: Text("Your config validates cleanly and has no known footguns."))
+                                           description: Text("Your config validates cleanly with no known problems."))
                 } else {
                     List {
                         if case .unavailable(let reason) = report.validation {
@@ -44,7 +44,9 @@ struct ProblemsView: View {
                             }
                         }
                         if !report.findings.isEmpty {
-                            Section("Footguns") {
+                            // "Footgun" is our internal term (kept in CONCEPTS.md/code); the
+                            // surface says it in plain language (CM-9).
+                            Section("Potential problems") {
                                 ForEach(report.findings) { finding in
                                     findingRow(finding)
                                 }
@@ -80,7 +82,7 @@ struct ProblemsView: View {
                 .accessibilityLabel("Warning")
             VStack(alignment: .leading, spacing: 2) {
                 Text("Couldn't run ghostty +validate-config").font(.body.bold())
-                Text("Static footguns are still listed, but live validation didn't run: \(reason)")
+                Text("Known problems are still listed, but live validation didn't run: \(reason)")
                     .font(.callout).foregroundStyle(.secondary)
                     .fixedSize(horizontal: false, vertical: true)
             }

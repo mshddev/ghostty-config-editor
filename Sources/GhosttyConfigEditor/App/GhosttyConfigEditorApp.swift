@@ -148,6 +148,46 @@ private struct ToolbarChip: View {
     }
 }
 
+/// A full-pane status/failure surface at pass-2 parity (GAP-6): the app's own icon as
+/// the identity moment, a state glyph + surface-title, a plain-language message, and
+/// recovery actions — so a not-found / unverified / load-failed screen looks like the
+/// same product as the happy path, not a bare system empty-state. Tints come from the
+/// caller (token-relative), so light mode stays legible (U25 re-checks).
+private struct StatusScreen<Actions: View>: View {
+    var stateIcon: String? = nil
+    var stateTint: Color = .secondary
+    let title: String
+    let message: String
+    @ViewBuilder var actions: () -> Actions
+
+    var body: some View {
+        VStack(spacing: 14) {
+            Image(nsImage: NSApplication.shared.applicationIconImage)
+                .resizable().frame(width: 52, height: 52)
+                .accessibilityHidden(true)
+            if let stateIcon {
+                Image(systemName: stateIcon)
+                    .font(.system(size: 26))
+                    .foregroundStyle(stateTint)
+                    .accessibilityHidden(true)
+            }
+            VStack(spacing: 6) {
+                Text(title)
+                    .font(.surfaceTitle)
+                    .multilineTextAlignment(.center)
+                Text(message)
+                    .font(.callout).foregroundStyle(.secondary)
+                    .multilineTextAlignment(.center)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+            actions().padding(.top, 2)
+        }
+        .frame(maxWidth: 420)
+        .padding(40)
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+    }
+}
+
 /// Without an `.app` bundle (e.g. when launched via `swift run`), macOS treats
 /// the process as a background agent and never shows a window. Promote it to a
 /// regular foreground app and bring it to the front. Inside a real bundle this
@@ -298,38 +338,32 @@ struct RootView: View {
     var body: some View {
         switch model.environmentState {
         case .loading:
-            statusView(ProgressView("Locating Ghostty…"))
+            statusView(loadingScreen("Locating Ghostty…"))
         case .notFound:
-            statusView(ContentUnavailableView {
-                Label("Ghostty not found", systemImage: "exclamationmark.triangle")
-            } description: {
-                Text("Install Ghostty, or choose the binary yourself.\nSearched the app bundle, Homebrew, and your login shell.")
-            } actions: {
-                recoveryButtons()
-            })
+            statusView(StatusScreen(
+                stateIcon: "exclamationmark.triangle.fill", stateTint: .orange,
+                title: "Ghostty not found",
+                message: "Install Ghostty, or choose the binary yourself. Searched the app bundle, Homebrew, and your login shell."
+            ) { recoveryButtons() })
         case .unsupported(let detail):
-            statusView(ContentUnavailableView {
-                Label("Couldn't verify Ghostty", systemImage: "questionmark.diamond")
-            } description: {
-                Text(detail)
-            } actions: {
-                recoveryButtons()
-            })
+            statusView(StatusScreen(
+                stateIcon: "questionmark.diamond.fill", stateTint: .orange,
+                title: "Couldn't verify Ghostty",
+                message: detail
+            ) { recoveryButtons() })
         case .ready(let environment):
             // Ghostty is located; now reflect catalog/config loading so a load
             // failure surfaces instead of an empty browser (it was previously
             // tracked in contentState but never rendered).
             switch model.contentState {
             case .failed(let detail):
-                statusView(ContentUnavailableView {
-                    Label("Couldn't load options", systemImage: "exclamationmark.triangle")
-                } description: {
-                    Text("Ghostty was found, but reading its option catalog failed.\n\(detail)")
-                } actions: {
-                    recoveryButtons()
-                })
+                statusView(StatusScreen(
+                    stateIcon: "exclamationmark.triangle.fill", stateTint: .orange,
+                    title: "Couldn't load options",
+                    message: "Ghostty was found, but reading its option catalog failed.\n\(detail)"
+                ) { recoveryButtons() })
             case .idle, .loading:
-                statusView(ProgressView("Loading options…"))
+                statusView(loadingScreen("Loading options…"))
             case .loaded:
                 browser(environment)
                     // The first-run welcome overlays the loaded app (F2), animating in/out.
@@ -343,6 +377,18 @@ struct RootView: View {
 
     private func statusView(_ content: some View) -> some View {
         content.frame(minWidth: WindowMetrics.minWidth, minHeight: WindowMetrics.minHeight)
+    }
+
+    /// A loading pane that carries the app-icon identity moment (GAP-6), so even the
+    /// transient "locating/loading" states read as this product rather than a bare spinner.
+    private func loadingScreen(_ title: String) -> some View {
+        VStack(spacing: 16) {
+            Image(nsImage: NSApplication.shared.applicationIconImage)
+                .resizable().frame(width: 52, height: 52)
+                .accessibilityHidden(true)
+            ProgressView(title)
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
 
     /// Recovery actions on the not-found/unsupported/load-failed screens (G1): choose
