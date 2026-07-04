@@ -22,14 +22,21 @@ public struct NumericSpec: Sendable, Codable, Equatable {
     /// (KTD3). An explicit per-option opt-in, never inferred from `.slider`: a 1–21
     /// contrast slider carries no scale, so it is never shown as "2100%" (DS-1).
     public let displayScale: Double?
+    /// Optional captions under a slider's low/high ends, for the sliders whose
+    /// *direction* is otherwise ambiguous — e.g. opacity: "Transparent" at 0%,
+    /// "Opaque" at 100%, so the reader doesn't have to guess which way is solid (DS-1).
+    public let minLabel: String?
+    public let maxLabel: String?
     public let style: Style
 
-    public init(min: Double? = nil, max: Double? = nil, step: Double? = nil, unit: String? = nil, displayScale: Double? = nil, style: Style) {
+    public init(min: Double? = nil, max: Double? = nil, step: Double? = nil, unit: String? = nil, displayScale: Double? = nil, minLabel: String? = nil, maxLabel: String? = nil, style: Style) {
         self.min = min
         self.max = max
         self.step = step
         self.unit = unit
         self.displayScale = displayScale
+        self.minLabel = minLabel
+        self.maxLabel = maxLabel
         self.style = style
     }
 }

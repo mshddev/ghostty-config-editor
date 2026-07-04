@@ -565,7 +565,7 @@ private struct OptionRowFeedback: View {
         case .succeeded(let headline, _, _, _):
             succeeded(headline: headline)
                 .transition(.opacity.combined(with: .move(edge: .top)))
-        case .failed(let message, let offersReload):
+        case .failed(_, let offersReload):
             HStack(alignment: .firstTextBaseline, spacing: 8) {
                 ApplyFeedbackContent(state: model.applyState)
                 // Stale-on-disk is the one failure a reload fixes — offer it inline right
@@ -833,17 +833,19 @@ private struct InlineOptionEditor: View {
         option.isSet ? (option.userValues.first ?? "") : option.option.defaultValue
     }
 
-    /// A hint for an empty free-text field. For untyped/text options, prefer a
-    /// concrete example mined from the docs (CONTROLS-17) so the field hints at the
-    /// *shape* of a valid value; otherwise fall back to the option's default value,
-    /// then a neutral "value". Replaces the old generic "value" placeholder (CONTROLS-15).
+    /// A hint for an empty field, via the shared kit fallback (CV-7): a docs example for
+    /// untyped/text options → the default value → a title-derived "Enter a …" prompt —
+    /// never a bare "value". Example-mining is limited to untyped/text options so a
+    /// number field doesn't borrow a stray backtick token.
     private var fieldPlaceholder: String {
-        if option.option.valueType == .unknown || option.option.valueType == .string {
-            let example = LabelCatalog.exampleValue(from: option.option.documentation, excluding: option.option.name)
-            if !example.isEmpty { return example }
-        }
-        let def = option.option.defaultValue.strippingConfigQuotes
-        return def.isEmpty ? "value" : def
+        let mine = option.option.valueType == .unknown || option.option.valueType == .string
+        return LabelCatalog.fieldPlaceholder(
+            name: option.option.name,
+            title: option.option.displayTitle,
+            documentation: option.option.documentation,
+            defaultValue: option.option.defaultValue,
+            mineExample: mine
+        )
     }
 
     private var isApplyingThis: Bool {
@@ -1089,18 +1091,35 @@ private struct NumericOptionEditor: View {
     }
 
     private func sliderEditor(_ spec: NumericSpec, range: ClosedRange<Double>) -> some View {
-        HStack(spacing: 8) {
-            Slider(value: $live, in: range, step: spec.step ?? 0.05) { editing in
-                if !editing { commitSlider(spec) }
+        VStack(alignment: .leading, spacing: 2) {
+            HStack(spacing: 8) {
+                Slider(value: $live, in: range, step: spec.step ?? 0.05) { editing in
+                    if !editing { commitSlider(spec) }
+                }
+                .frame(width: 120)
+                // Read-out via the spec's display transform: a 0–1 opacity reads "85%",
+                // a contrast slider stays a plain number (no scale) (DS-1/U3).
+                Text(spec.displayString(for: spec.clamp(live)))
+                    .font(.caption.monospaced())
+                    .foregroundStyle(.secondary)
+                    .frame(width: 44, alignment: .trailing)
+                    .accessibilityHidden(true)
             }
-            .frame(width: 120)
-            Text(numberString(spec.clamp(live), decimals: decimals(for: spec)))
-                .font(.caption.monospaced())
-                .foregroundStyle(.secondary)
-                .frame(width: 36, alignment: .trailing)
+            if let minLabel = spec.minLabel, let maxLabel = spec.maxLabel {
+                // Endpoint captions resolve an ambiguous direction (which way is solid?),
+                // aligned under the 120pt track (DS-1).
+                HStack(spacing: 4) {
+                    Text(minLabel)
+                    Spacer(minLength: 4)
+                    Text(maxLabel)
+                }
+                .font(.caption2)
+                .foregroundStyle(.tertiary)
+                .frame(width: 120)
                 .accessibilityHidden(true)
+            }
         }
-        .accessibilityValue(Text(numberString(spec.clamp(live), decimals: decimals(for: spec))))
+        .accessibilityValue(Text(spec.displayString(for: spec.clamp(live))))
         .onAppear { live = seed(spec) }
         .onChange(of: draft) { _, _ in live = seed(spec) }
     }
@@ -1137,11 +1156,39 @@ private struct NumericOptionEditor: View {
             if let unit = spec.unit {
                 Text(unit).font(.caption).foregroundStyle(.secondary)
             }
+            boundedStepper(spec)
+        }
+    }
+
+    /// A bounded `Stepper(value:in:step:)` so +/- dim at the spec's range ends (CV-6) —
+    /// the old callback stepper stayed lit past the boundary. Its binding routes through
+    /// the same debounced commit as the field, so a key-repeat burst still collapses to
+    /// one write (KTD8 single write path). Falls back to the callback stepper when a
+    /// `.field` spec somehow lacks a finite range.
+    @ViewBuilder
+    private func boundedStepper(_ spec: NumericSpec) -> some View {
+        if let lo = spec.min, let hi = spec.max, lo < hi {
+            Stepper("", value: stepperBinding(spec), in: lo...hi, step: spec.step ?? 1)
+                .labelsHidden()
+        } else {
             Stepper("",
                     onIncrement: { stepField(spec, by: 1) },
                     onDecrement: { stepField(spec, by: -1) })
                 .labelsHidden()
         }
+    }
+
+    /// The stepper's value as a Double, read from the current draft (clamped) and written
+    /// back through the debounced commit path so it never diverges from the text field.
+    private func stepperBinding(_ spec: NumericSpec) -> Binding<Double> {
+        Binding(
+            get: { seed(spec) },
+            set: { newValue in
+                let text = numberString(spec.clamp(newValue), decimals: decimals(for: spec))
+                draft = text
+                scheduleStepCommit(text)
+            }
+        )
     }
 
     private func commitField(_ spec: NumericSpec) {
@@ -1169,19 +1216,28 @@ private struct NumericOptionEditor: View {
     // MARK: Size
 
     private var sizeEditor: some View {
-        VStack(alignment: .trailing, spacing: 2) {
+        let bytes = Double(draft.trimmingCharacters(in: .whitespaces)) ?? 0
+        let formatted = bytes > 0 ? NumericSpec.formatBytes(bytes) : ""
+        return VStack(alignment: .trailing, spacing: 1) {
+            // Primary: the human-readable size — the way a storage limit is actually
+            // spoken ("10 MB"), not a wall of digits (CB-5). Hidden from VoiceOver here
+            // because it's folded into the editable field's value below (CM-8).
+            if !formatted.isEmpty {
+                Text(formatted)
+                    .font(.callout)
+                    .foregroundStyle(.primary)
+                    .accessibilityHidden(true)
+            }
+            // The exact byte count stays editable, demoted to a small mono caption.
             TextField("", text: $draft, prompt: Text(placeholder))
                 .labelsHidden()
                 .textFieldStyle(.roundedBorder)
+                .font(.caption.monospaced())
                 .frame(width: 120)
                 .focused($fieldFocused)
                 .onSubmit { fieldFocused = false }   // resign → commit-on-blur; ⌘Z targets config (review #2)
-            if let bytes = Double(draft.trimmingCharacters(in: .whitespaces)), bytes > 0 {
-                Text(NumericSpec.formatBytes(bytes))
-                    .font(.caption2.monospaced())
-                    .foregroundStyle(.secondary)
-                    .accessibilityHidden(true)
-            }
+                // VoiceOver announces the friendly size, not the raw digits (CM-8).
+                .accessibilityValue(Text(formatted.isEmpty ? draft : formatted))
         }
     }
 
@@ -1891,8 +1947,12 @@ private struct ListValueEditor: View {
 
     private var placeholder: String {
         if option.option.name == "env" { return "KEY=VALUE" }
-        let example = LabelCatalog.exampleValue(from: option.option.documentation, excluding: option.option.name)
-        return example.isEmpty ? "value" : example
+        return LabelCatalog.fieldPlaceholder(
+            name: option.option.name,
+            title: option.option.displayTitle,
+            documentation: option.option.documentation,
+            defaultValue: option.option.defaultValue
+        )
     }
 
     private func add() {

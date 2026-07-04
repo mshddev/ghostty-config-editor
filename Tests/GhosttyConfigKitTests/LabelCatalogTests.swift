@@ -146,6 +146,48 @@ final class LabelCatalogTests: XCTestCase {
         }
     }
 
+    // MARK: - U7 field placeholder fallback (CV-7)
+
+    // A concrete docs example wins — the field hints at the *shape* of a valid value
+    // (the first balanced backtick token, mirroring `exampleValue`).
+    func testFieldPlaceholderPrefersDocsExample() {
+        let placeholder = LabelCatalog.fieldPlaceholder(
+            name: "term", title: "Terminal type",
+            documentation: "The terminal type to advertise, e.g. `xterm-256color`.", defaultValue: "")
+        XCTAssertEqual(placeholder, "xterm-256color")
+    }
+
+    // No example → the default value hints instead (surrounding quotes stripped).
+    func testFieldPlaceholderFallsBackToStrippedDefault() {
+        let placeholder = LabelCatalog.fieldPlaceholder(
+            name: "font-family", title: "Font", documentation: "No backticked value here.",
+            defaultValue: "\"Menlo\"")
+        XCTAssertEqual(placeholder, "Menlo")
+    }
+
+    // No example and no default → a title-derived prompt, never a bare "value" (CV-7).
+    func testFieldPlaceholderFallsBackToTitlePrompt() {
+        let placeholder = LabelCatalog.fieldPlaceholder(
+            name: "background-image", title: "Background image", documentation: "", defaultValue: "")
+        XCTAssertEqual(placeholder, "Enter a background image")
+    }
+
+    // The article agrees with the title's first letter.
+    func testTitlePromptUsesAnForVowelInitialTitles() {
+        let placeholder = LabelCatalog.fieldPlaceholder(
+            name: "adjustment", title: "Adjustment", documentation: "", defaultValue: "")
+        XCTAssertEqual(placeholder, "Enter an adjustment")
+    }
+
+    // A typed field opts out of example mining, so a stray backtick token in the docs
+    // never becomes a number field's placeholder — it falls straight through to default.
+    func testFieldPlaceholderSkipsExampleWhenMiningDisabled() {
+        let placeholder = LabelCatalog.fieldPlaceholder(
+            name: "font-size", title: "Font size", documentation: "Defaults to `13`.",
+            defaultValue: "13", mineExample: false)
+        XCTAssertEqual(placeholder, "13")
+    }
+
     private func referenceCatalog() throws -> OptionCatalog {
         CatalogParser.parse(try Fixture.text("show-config-default-docs", "txt"))
     }

@@ -68,8 +68,24 @@ final class NumericSpecTests: XCTestCase {
     func testFormatBytesUnitBoundaries() {
         XCTAssertEqual(NumericSpec.formatBytes(999), "999 bytes")        // just under 1 KB
         XCTAssertEqual(NumericSpec.formatBytes(1_000), "1 KB")          // exactly 1 KB
+        XCTAssertEqual(NumericSpec.formatBytes(999_000), "999 KB")      // just under 1 MB (U7)
         XCTAssertEqual(NumericSpec.formatBytes(1_000_000), "1 MB")      // exactly 1 MB
         XCTAssertEqual(NumericSpec.formatBytes(1_000_000_000), "1 GB")  // exactly 1 GB
+    }
+
+    // U7: a slider whose direction is ambiguous carries endpoint captions; an ordinary
+    // slider does not. Display transform is unchanged by their presence.
+    func testOpacitySliderCarriesEndpointCaptions() {
+        let spec = NumericSpecCatalog.bundled.spec(for: "background-opacity")
+        XCTAssertEqual(spec?.minLabel, "Transparent")
+        XCTAssertEqual(spec?.maxLabel, "Opaque")
+        XCTAssertEqual(spec?.displayString(for: 1.0), "100%")
+    }
+
+    func testContrastSliderHasNoEndpointCaptions() {
+        let spec = NumericSpecCatalog.bundled.spec(for: "minimum-contrast")
+        XCTAssertNil(spec?.minLabel)
+        XCTAssertNil(spec?.maxLabel)
     }
 
     func testInferredStepFromDefault() {

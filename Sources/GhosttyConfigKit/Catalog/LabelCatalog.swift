@@ -168,6 +168,40 @@ public struct LabelCatalog: Sendable {
         return ""
     }
 
+    /// A text-field placeholder for an option whose value is empty, in priority order:
+    /// a concrete example mined from the docs (`exampleValue`), then the option's own
+    /// default, then a title-derived prompt ("Enter a background image") — never the bare
+    /// "value" the old fields showed (CV-7). Callers with a site-specific hint (e.g.
+    /// `env` → "KEY=VALUE") short-circuit before calling this. `mineExample` is off for
+    /// typed fields (a number field shouldn't borrow a stray backtick token as its hint).
+    public static func fieldPlaceholder(name: String, title: String, documentation: String,
+                                        defaultValue: String, mineExample: Bool = true) -> String {
+        if mineExample {
+            let example = exampleValue(from: documentation, excluding: name)
+            if !example.isEmpty { return example }
+        }
+        let def = strippedDefault(defaultValue)
+        if !def.isEmpty { return def }
+        return titlePrompt(title)
+    }
+
+    /// The option's default value trimmed of whitespace and one layer of surrounding
+    /// double-quotes, so a quoted default like `"Menlo"` hints as `Menlo`.
+    private static func strippedDefault(_ value: String) -> String {
+        var t = value.trimmingCharacters(in: .whitespaces)
+        if t.count >= 2, t.hasPrefix("\""), t.hasSuffix("\"") { t = String(t.dropFirst().dropLast()) }
+        return t.trimmingCharacters(in: .whitespaces)
+    }
+
+    /// "Enter a background image" / "Enter an option" — article chosen from the title's
+    /// first letter, the title lower-cased so it reads as a sentence fragment.
+    private static func titlePrompt(_ title: String) -> String {
+        let t = title.trimmingCharacters(in: .whitespaces).lowercased()
+        guard let first = t.first else { return "Enter a value" }
+        let article = "aeiou".contains(first) ? "an" : "a"
+        return "Enter \(article) \(t)"
+    }
+
     // MARK: - Bundled resource
 
     private struct File: Codable { let labels: [String: Label] }

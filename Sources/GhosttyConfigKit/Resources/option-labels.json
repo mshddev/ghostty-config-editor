@@ -4,7 +4,7 @@
     "font-family": { "title": "Font", "summary": "The typeface used for terminal text." },
     "font-size": { "title": "Font size", "summary": "Text size, in points." },
     "font-feature": { "title": "Ligatures", "summary": "Turn font ligatures and stylistic sets on or off." },
-    "background-opacity": { "title": "Window transparency", "summary": "How see-through the window background is." },
+    "background-opacity": { "title": "Window opacity", "summary": "How see-through the window background is — 100% is solid." },
     "background-blur": { "title": "Background blur", "summary": "Blur whatever shows through a transparent window." },
     "background": { "title": "Background color" },
     "foreground": { "title": "Text color" },
