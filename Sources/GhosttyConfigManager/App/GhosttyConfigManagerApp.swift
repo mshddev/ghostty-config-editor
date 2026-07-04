@@ -252,9 +252,12 @@ struct GhosttyConfigManagerApp: App {
 /// inline in the list, so there is no separate detail column.
 struct RootView: View {
     @Environment(AppModel.self) private var model
-    /// Last-visited surface, persisted per-window so the app reopens where you left off
-    /// (G2). Trivial now that there's a single `Window` (G6) — one window's state to keep.
-    @SceneStorage("lastSelection") private var lastSelectionRaw = ""
+    /// Last-visited surface so the app reopens where you left off (G2). `@AppStorage`
+    /// (UserDefaults), not `@SceneStorage`: with a single `Window` (G6) it's app-wide
+    /// state, and unlike scene restoration it doesn't depend on the OS "close windows on
+    /// quit" setting — so "reopen where you left off" is deterministic (KTD8 sanctions
+    /// either; AppStorage is the reliable one here).
+    @AppStorage("lastSelection") private var lastSelectionRaw = ""
 
     var body: some View {
         switch model.environmentState {
