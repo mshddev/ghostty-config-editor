@@ -145,6 +145,8 @@ private struct ThemeRow: View {
     /// the appearance badge — so "Light mode" (the slot) never collides visually with
     /// the "Light" appearance badge (the theme's own color).
     var roleCaption: String? = nil
+    /// Drives the light/dark pairing dialog (U11 — replaces the two-click borderless menu).
+    @State private var showingPairing = false
 
     var body: some View {
         let colors = model.themeColors[theme.name]
@@ -272,28 +274,32 @@ private struct ThemeRow: View {
         .accessibilityLabel(starred ? "Unstar \(theme.name)" : "Star \(theme.name)")
     }
 
-    /// A left-click menu (not a right-click context menu — the app runs at
-    /// computer-use "click" tier, and a plain menu stays testable) to set this theme
-    /// as the light and/or dark member of a `light:…,dark:…` pairing.
+    /// A left-click button opening a pairing dialog to set this theme as the light
+    /// and/or dark member of a `light:…,dark:…` pairing. **Not** a borderless `Menu`:
+    /// an `NSMenu` runs a nested modal event loop that *consumes* the click dismissing
+    /// it, so applying a different theme while it was open took two clicks (U11/MO-1).
+    /// A `confirmationDialog` dismisses cleanly and each action applies on one click.
     private var pairingMenu: some View {
-        Menu {
-            Button("Use for both (single theme)") {
-                Task { await model.applyTheme(theme.name) }
-            }
-            Divider()
-            Button("Use for Light mode") {
-                Task { await model.applyThemeInPair(theme.name, as: .light) }
-            }
-            Button("Use for Dark mode") {
-                Task { await model.applyThemeInPair(theme.name, as: .dark) }
-            }
+        Button {
+            showingPairing = true
         } label: {
             Image(systemName: "ellipsis.circle").foregroundStyle(.secondary)
         }
-        .menuStyle(.borderlessButton)
-        .menuIndicator(.hidden)
-        .fixedSize()
+        .buttonStyle(.plain)
         .accessibilityLabel("Theme options for \(theme.name)")
+        .confirmationDialog("Use \(theme.name) for…",
+                            isPresented: $showingPairing,
+                            titleVisibility: .visible) {
+            Button("Both light and dark") {
+                Task { await model.applyTheme(theme.name) }
+            }
+            Button("Light mode only") {
+                Task { await model.applyThemeInPair(theme.name, as: .light) }
+            }
+            Button("Dark mode only") {
+                Task { await model.applyThemeInPair(theme.name, as: .dark) }
+            }
+        }
     }
 
     private func accessibilityLabel(isCurrent: Bool, colors: ThemeColors?) -> String {

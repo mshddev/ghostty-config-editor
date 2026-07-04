@@ -507,6 +507,9 @@ struct OptionRow: View {
         .popover(isPresented: $showingInfo, arrowEdge: .trailing) {
             OptionInfoPopover(option: option)
         }
+        // One click to close-and-act: dismissing the popover by clicking elsewhere (a
+        // sidebar row, another control) shouldn't cost a wasted first click (U11/MO-1).
+        .passthroughPopoverDismiss(isPresented: $showingInfo)
     }
 
     private var docHelp: String {
@@ -1502,6 +1505,9 @@ private struct FontFamilyEditor: View {
             // load, so the other font-family rows don't reload it.
             .task { await model.loadFontsIfNeeded() }
             .popover(isPresented: $showingPicker, arrowEdge: .bottom) { picker }
+            // Close-and-act: clicking the sidebar (or a control) right after the picker
+            // opens shouldn't be eaten by the popover's dismiss (U11/MO-1).
+            .passthroughPopoverDismiss(isPresented: $showingPicker)
     }
 
     // MARK: Button label
