@@ -1,4 +1,4 @@
-# Ghostty Config Manager
+# Ghostty Config Editor
 
 A native macOS app (SwiftUI) that gives the [Ghostty](https://ghostty.org) terminal a GUI for
 managing its configuration — browse every option with its docs, search by intent, edit safely with
@@ -21,7 +21,7 @@ This is a Swift Package, not an `.xcodeproj`:
 
 - `GhosttyConfigKit` — library target with all the logic (CLI, catalog, config read/write, lint,
   search, themes). Fully unit-tested.
-- `GhosttyConfigManager` — thin SwiftUI executable shell.
+- `GhosttyConfigEditor` — thin SwiftUI executable shell.
 - `GhosttyConfigKitTests` — tests, grounded in real captured Ghostty CLI output.
 
 ## Build, test, run
@@ -29,10 +29,10 @@ This is a Swift Package, not an `.xcodeproj`:
 ```bash
 swift build            # debug build
 swift test             # run the test suite
-swift run GhosttyConfigManager   # launch the app
+swift run GhosttyConfigEditor   # launch the app
 ```
 
-To work in Xcode: `xed .` then select the **GhosttyConfigManager** scheme, destination **My Mac**,
+To work in Xcode: `xed .` then select the **GhosttyConfigEditor** scheme, destination **My Mac**,
 and press ⌘R. (macOS apps run natively — there is no simulator.)
 
 ## Package a double-clickable app
@@ -40,7 +40,7 @@ and press ⌘R. (macOS apps run natively — there is no simulator.)
 To produce a self-contained `.app` you can launch from Spotlight or the Dock without the terminal:
 
 ```bash
-scripts/package-app.sh             # builds dist/GhosttyConfigManager.app
+scripts/package-app.sh             # builds dist/GhosttyConfigEditor.app
 scripts/package-app.sh --install   # also copies it to /Applications
 ```
 

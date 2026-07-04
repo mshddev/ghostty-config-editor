@@ -2,7 +2,7 @@
 #
 # Package the SwiftPM executable into a double-clickable macOS .app bundle.
 #
-# Produces dist/GhosttyConfigManager.app — a self-contained, ad-hoc-signed app
+# Produces dist/GhosttyConfigEditor.app — a self-contained, ad-hoc-signed app
 # you can drop in /Applications and launch from Spotlight or the Dock. No
 # terminal or Xcode needed to use it day-to-day.
 #
@@ -17,9 +17,9 @@ set -euo pipefail
 cd "$(dirname "$0")/.."
 ROOT="$(pwd)"
 
-APP_NAME="GhosttyConfigManager"
-DISPLAY_NAME="Ghostty Config Manager"
-BUNDLE_ID="com.mshddev.GhosttyConfigManager"
+APP_NAME="GhosttyConfigEditor"
+DISPLAY_NAME="Ghostty Config Editor"
+BUNDLE_ID="com.mshddev.GhosttyConfigEditor"
 SHORT_VERSION="1.0"
 BUILD_VERSION="1"
 MIN_MACOS="14.0"

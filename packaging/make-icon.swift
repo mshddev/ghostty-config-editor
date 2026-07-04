@@ -1,4 +1,4 @@
-// Generates AppIcon.iconset PNGs for Ghostty Config Manager — no external image
+// Generates AppIcon.iconset PNGs for Ghostty Config Editor — no external image
 // asset needed. Draws a rounded-squircle with an indigo→violet gradient and a
 // bold white ">_" terminal prompt, rendered crisply at every macOS icon size.
 //

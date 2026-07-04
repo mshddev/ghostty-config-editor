@@ -3,7 +3,7 @@ date: 2026-06-16
 topic: ghostty-config-manager
 ---
 
-# Ghostty Config Manager — Requirements
+# Ghostty Config Editor — Requirements
 
 ## Summary
 

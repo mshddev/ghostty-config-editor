@@ -10,7 +10,7 @@ title: "feat: Keybindings editor (merged list, action picker, key-capture record
 
 ## Summary
 
-Add a dedicated **Keybindings** editor surface to GhosttyConfigManager. It shows Ghostty's
+Add a dedicated **Keybindings** editor surface to GhosttyConfigEditor. It shows Ghostty's
 default keybinds merged with the user's overrides, lets the user assign an action from
 Ghostty's action list, and provides a **key-capture recorder** — press the real hotkey to set
 the trigger, exactly like a system shortcut field. Edits are written back as `keybind` lines
@@ -114,7 +114,7 @@ flowchart TD
         MODEL["U2 Keybind / KeybindTrigger<br/>parse TRIGGER=ACTION (action-set aware)<br/>canonical serialize · validation<br/>CapturedKey → token mapper · keyCode table"]
         MERGE["U3 KeybindMerge<br/>defaults ⋈ user bindings → [MergedKeybind]<br/>add/edit/remove/unbind → write-list"]
     end
-    subgraph App["GhosttyConfigManager (thin, untested)"]
+    subgraph App["GhosttyConfigEditor (thin, untested)"]
         REC["U4 KeyRecorderView<br/>local NSEvent monitor → CapturedKey"]
         AM["U5 AppModel keybind orchestration<br/>lazy load · merged list · ops"]
         EDIT["U6 KeybindEditorView<br/>list · action picker · recorder · raw field · inline lint"]
@@ -165,7 +165,7 @@ Sources/GhosttyConfigKit/Keybind/
   KeybindReference.swift     # U1: CLI wiring + parse defaults/actions
   Keybind.swift              # U2: model, parse/serialize, capture→token, validation
   KeybindMerge.swift         # U3: merge + write-list + edit operations
-Sources/GhosttyConfigManager/Views/
+Sources/GhosttyConfigEditor/Views/
   KeyRecorderView.swift      # U4: NSViewRepresentable capture control
   KeybindEditorView.swift    # U6: editor surface (+ action picker subview)
 Tests/GhosttyConfigKitTests/
@@ -176,8 +176,8 @@ Tests/GhosttyConfigKitTests/
   Fixtures/list-actions.txt
 ```
 
-Modified: `Sources/GhosttyConfigManager/App/AppModel.swift` (U5),
-`Sources/GhosttyConfigManager/App/GhosttyConfigManagerApp.swift` (U6 routing).
+Modified: `Sources/GhosttyConfigEditor/App/AppModel.swift` (U5),
+`Sources/GhosttyConfigEditor/App/GhosttyConfigEditorApp.swift` (U6 routing).
 
 ---
 
@@ -310,7 +310,7 @@ AppKit-resolved `resolvedCharacter` (KTD5), never from the table. Everything dow
 **Dependencies:** U2.
 
 **Files:**
-- `Sources/GhosttyConfigManager/Views/KeyRecorderView.swift` (new)
+- `Sources/GhosttyConfigEditor/Views/KeyRecorderView.swift` (new)
 
 **Approach:**
 - `NSViewRepresentable` wrapping an `NSView`/`NSControl` subclass that owns a local monitor started in `becomeFirstResponder()` and torn down in `resignFirstResponder` / `viewWillMove(toWindow:)` (KTD6). Monitor `[.keyDown]` only.
@@ -335,7 +335,7 @@ AppKit-resolved `resolvedCharacter` (KTD5), never from the table. Everything dow
 **Dependencies:** U1, U2, U3.
 
 **Files:**
-- `Sources/GhosttyConfigManager/App/AppModel.swift` (modify)
+- `Sources/GhosttyConfigEditor/App/AppModel.swift` (modify)
 
 **Approach:**
 - Add lazy `loadKeybindReferenceIfNeeded()` mirroring `loadThemesIfNeeded()` — runs `KeybindReference.live(environment)`, caches `defaults` + `actions`; cancel/clear on `bootstrap()` re-entry like the theme caches.
@@ -361,8 +361,8 @@ AppKit-resolved `resolvedCharacter` (KTD5), never from the table. Everything dow
 **Dependencies:** U4, U5.
 
 **Files:**
-- `Sources/GhosttyConfigManager/Views/KeybindEditorView.swift` (new; action-picker subview inline or as a sibling)
-- `Sources/GhosttyConfigManager/App/GhosttyConfigManagerApp.swift` (modify — route the Keybindings category)
+- `Sources/GhosttyConfigEditor/Views/KeybindEditorView.swift` (new; action-picker subview inline or as a sibling)
+- `Sources/GhosttyConfigEditor/App/GhosttyConfigEditorApp.swift` (modify — route the Keybindings category)
 
 **Approach:**
 - In `RootView.browser(_:)`, branch `model.selection`: when it is `.category("Keybindings")`, render `KeybindEditorView` (content) instead of `OptionListView`; the detail column shows the selected binding's editor (recorder + action picker + raw field) or a hint, mirroring the `.themes` branch. (Implementer may collapse the edit form into a sheet if the split feels cramped — see origin design sensibility; the list-as-content / edit-as-detail split is the recommended default.)

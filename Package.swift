@@ -1,7 +1,7 @@
 // swift-tools-version: 6.0
 import PackageDescription
 
-// Ghostty Config Manager — a native macOS (SwiftUI) configuration tool for Ghostty.
+// Ghostty Config Editor — a native macOS (SwiftUI) configuration tool for Ghostty.
 //
 // Structured as a SwiftPM package rather than a hand-rolled .xcodeproj so every
 // logic layer has real `swift test` coverage and the package still opens natively
@@ -11,10 +11,10 @@ import PackageDescription
 //
 // Floor is macOS 14 (KTD9) to enable @Observable and NavigationSplitView.
 let package = Package(
-    name: "GhosttyConfigManager",
+    name: "GhosttyConfigEditor",
     platforms: [.macOS(.v14)],
     products: [
-        .executable(name: "GhosttyConfigManager", targets: ["GhosttyConfigManager"]),
+        .executable(name: "GhosttyConfigEditor", targets: ["GhosttyConfigEditor"]),
         .library(name: "GhosttyConfigKit", targets: ["GhosttyConfigKit"]),
     ],
     targets: [
@@ -25,7 +25,7 @@ let package = Package(
         ),
         // Thin SwiftUI shell over GhosttyConfigKit.
         .executableTarget(
-            name: "GhosttyConfigManager",
+            name: "GhosttyConfigEditor",
             dependencies: ["GhosttyConfigKit"]
         ),
         .testTarget(

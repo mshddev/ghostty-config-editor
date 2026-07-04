@@ -1,5 +1,5 @@
 ---
-title: "feat: Newcomer-first UI/UX overhaul of Ghostty Config Manager"
+title: "feat: Newcomer-first UI/UX overhaul of Ghostty Config Editor"
 date: 2026-07-02
 type: feat
 status: ready
@@ -9,7 +9,7 @@ origin: "Firsthand app exploration + 8-agent UX audit (115 findings) — see scr
 direction: "newcomers-first · include high-value new features · open to a refreshed layout"
 ---
 
-# feat: Newcomer-first UI/UX overhaul of Ghostty Config Manager
+# feat: Newcomer-first UI/UX overhaul of Ghostty Config Editor
 
 ## Summary
 
@@ -192,7 +192,7 @@ Adopt this sidebar order and per-category **Common** set (everything else → **
 
 ## Implementation Phases
 
-Each unit lists **Resolves** (audit finding IDs — the authoritative detail lives in `scratchpad/audit-digest.md`), **Depends**, **Files**, **Approach**, **Test scenarios**, and **Verification**. Kit logic is unit-tested in `Tests/GhosttyConfigKitTests/`; the app target (SwiftUI views) has no harness by design, so view-only units specify manual verification against the packaged app (`scripts/package-app.sh` → `open dist/GhosttyConfigManager.app`).
+Each unit lists **Resolves** (audit finding IDs — the authoritative detail lives in `scratchpad/audit-digest.md`), **Depends**, **Files**, **Approach**, **Test scenarios**, and **Verification**. Kit logic is unit-tested in `Tests/GhosttyConfigKitTests/`; the app target (SwiftUI views) has no harness by design, so view-only units specify manual verification against the packaged app (`scripts/package-app.sh` → `open dist/GhosttyConfigEditor.app`).
 
 ---
 
@@ -222,8 +222,8 @@ Pure, testable kit work that every UI phase depends on. Most of it is invisible 
 
 **Resolves:** IA-1, IA-3, IA-4, IA-7, IA-13, CONTENT-12, ONBOARD-11, FEATURES-5.
 **Depends:** none.
-**Files:** `Sources/GhosttyConfigKit/Resources/option-tiers.json` (new — per-option `{tier: common|advanced, rank}`), `Sources/GhosttyConfigKit/Catalog/OptionCatalog.swift` (**this file already contains `OptionCategorizer` — there is no separate `OptionCategorizer.swift`**; extend its `nameOverrides`/`prefixMap` to the [target taxonomy](#target-taxonomy-reference-for-u3), **redirect the `category(for:)` catch-all fallback from "General" to "Advanced"** and add "Advanced" to `displayOrder` — otherwise an unmapped option resurfaces "General" via `orderedCategories`' append-unknown step — drop "General", reorder to newcomer-frequency, and add a shared `keybindingsCategory` constant), `Sources/GhosttyConfigKit/Catalog/OptionOrdering.swift` (new — single comparator), `Sources/GhosttyConfigKit/Search/IntentSearch.swift` (route `CatalogBrowser.options(in:)` through the comparator), `Sources/GhosttyConfigManager/Views/SidebarView.swift` (`icon(for:)` cases for the new category names), `Sources/GhosttyConfigManager/App/GhosttyConfigManagerApp.swift` + `Sources/GhosttyConfigManager/Views/KeybindEditorView.swift` (route the keybind editor by the shared constant, not the literal — see Approach), `Tests/GhosttyConfigKitTests/OptionOrderingTests.swift`, `OptionCategorizerTests.swift`.
-**Approach:** Centralize ordering in `OptionOrdering.compare` sorting by `(isCommon desc, curatedRank asc, name asc)`; route both `OptionCatalog.options(in:)` (`OptionCatalog.swift:111-113`) and `CatalogBrowser.options(in:)` (`IntentSearch.swift:124-126`) through it so **category lists and search agree** (the flat Customized list keeps name-order — common-first ranking is irrelevant there — so this unit does *not* reorder Customized). Reassign every current "General" member explicitly (bell→Notifications, command/env→Startup & Shell, alpha-blending/custom-shader→Appearance advanced, …) **and** redirect the fallback to "Advanced" so "General" disappears with no orphan resurfacing. **P1 routing coupling:** `GhosttyConfigManagerApp.swift:99` selects the dedicated keybind editor via `case .category("Keybindings")` — renaming that category to "Keyboard Shortcuts" without updating this literal silently drops users into the generic option list (which renders no editor for the repeatable `keybind`). Introduce one shared `keybindingsCategory` constant used by the categorizer, the `mainColumn` switch, `SidebarView.icon(for:)`, and `KeybindEditorView`'s title so a rename can't desync. Add a golden-file test pinning ~25 headline options to expected `(category, tier)`.
+**Files:** `Sources/GhosttyConfigKit/Resources/option-tiers.json` (new — per-option `{tier: common|advanced, rank}`), `Sources/GhosttyConfigKit/Catalog/OptionCatalog.swift` (**this file already contains `OptionCategorizer` — there is no separate `OptionCategorizer.swift`**; extend its `nameOverrides`/`prefixMap` to the [target taxonomy](#target-taxonomy-reference-for-u3), **redirect the `category(for:)` catch-all fallback from "General" to "Advanced"** and add "Advanced" to `displayOrder` — otherwise an unmapped option resurfaces "General" via `orderedCategories`' append-unknown step — drop "General", reorder to newcomer-frequency, and add a shared `keybindingsCategory` constant), `Sources/GhosttyConfigKit/Catalog/OptionOrdering.swift` (new — single comparator), `Sources/GhosttyConfigKit/Search/IntentSearch.swift` (route `CatalogBrowser.options(in:)` through the comparator), `Sources/GhosttyConfigEditor/Views/SidebarView.swift` (`icon(for:)` cases for the new category names), `Sources/GhosttyConfigEditor/App/GhosttyConfigEditorApp.swift` + `Sources/GhosttyConfigEditor/Views/KeybindEditorView.swift` (route the keybind editor by the shared constant, not the literal — see Approach), `Tests/GhosttyConfigKitTests/OptionOrderingTests.swift`, `OptionCategorizerTests.swift`.
+**Approach:** Centralize ordering in `OptionOrdering.compare` sorting by `(isCommon desc, curatedRank asc, name asc)`; route both `OptionCatalog.options(in:)` (`OptionCatalog.swift:111-113`) and `CatalogBrowser.options(in:)` (`IntentSearch.swift:124-126`) through it so **category lists and search agree** (the flat Customized list keeps name-order — common-first ranking is irrelevant there — so this unit does *not* reorder Customized). Reassign every current "General" member explicitly (bell→Notifications, command/env→Startup & Shell, alpha-blending/custom-shader→Appearance advanced, …) **and** redirect the fallback to "Advanced" so "General" disappears with no orphan resurfacing. **P1 routing coupling:** `GhosttyConfigEditorApp.swift:99` selects the dedicated keybind editor via `case .category("Keybindings")` — renaming that category to "Keyboard Shortcuts" without updating this literal silently drops users into the generic option list (which renders no editor for the repeatable `keybind`). Introduce one shared `keybindingsCategory` constant used by the categorizer, the `mainColumn` switch, `SidebarView.icon(for:)`, and `KeybindEditorView`'s title so a rename can't desync. Add a golden-file test pinning ~25 headline options to expected `(category, tier)`.
 **Test scenarios:** `font-family` sorts above `adjust-box-thickness` in Font; every catalog option resolves to a real category and none to "General" (the fallback lands in "Advanced"); the golden pinned set maps to expected `(category, tier, rank)`; comparator is stable and total; **every key in `option-tiers.json` resolves against a reference catalog** (orphan-key guard, KTD1). Covers R2.
 **Verification:** kit suite green; sidebar shows the target sections (no "General") with correct icons; **clicking "Keyboard Shortcuts" renders `KeybindEditorView`** (recorder/conflict UI), not the generic list.
 **Uncertainty:** exact "General"/tier membership depends on the installed Ghostty version — enumerate against the target binary and reconcile before finalizing the JSON.
@@ -266,7 +266,7 @@ The heart of the newcomer experience. Consumes Phase A; lands inside the current
 
 **Resolves:** IA-2, LAYOUT-13.
 **Depends:** A3.
-**Files:** `Sources/GhosttyConfigManager/App/AppModel.swift` (`visibleOptions` → `commonOptions(in:)`/`advancedOptions(in:)` or a `{common, advanced}` split), `Sources/GhosttyConfigManager/Views/OptionListView.swift` (render a "Common" section and a collapsible "Advanced (N)" section), `Sources/GhosttyConfigKit/Search/IntentSearch.swift` (`CatalogBrowser` split helpers).
+**Files:** `Sources/GhosttyConfigEditor/App/AppModel.swift` (`visibleOptions` → `commonOptions(in:)`/`advancedOptions(in:)` or a `{common, advanced}` split), `Sources/GhosttyConfigEditor/Views/OptionListView.swift` (render a "Common" section and a collapsible "Advanced (N)" section), `Sources/GhosttyConfigKit/Search/IntentSearch.swift` (`CatalogBrowser` split helpers).
 **Approach:** Put the split in the **model** — add `commonOptions(in:)`/`advancedOptions(in:)` to `CatalogBrowser`, driven by `option-tiers.json` (A3) — so it's authored once and reused by both this List and the C2 Form (only the *rendering* differs between B1 and C2; no double-invested logic). Render Advanced under an explicit **collapsible** affordance — `Section(_:isExpanded:)` in the List here (macOS 14+); C2 swaps to a `DisclosureGroup`/custom collapsible header, since plain grouped-Form `Section`s don't collapse natively — collapsed by default with state in `@AppStorage` keyed by category. A search query bypasses the split (show all ranked hits). Auto-promote any *customized* advanced option into the Common section so a changed setting is never hidden.
 **Test scenarios (kit):** `commonOptions(in: "Font")` leads with `font-family`/`font-size`; a customized advanced option appears in the common set; search ignores the split. Covers R2.
 **Verification:** launch → Font shows font-family/font-size first, adjust-* under "Advanced".
@@ -275,7 +275,7 @@ The heart of the newcomer experience. Consumes Phase A; lands inside the current
 
 **Resolves:** CONTENT-2, CONTENT-4, CONTENT-5, CONTENT-15, CONTENT-16, CONTROLS-15.
 **Depends:** A1, A5.
-**Files:** `Sources/GhosttyConfigManager/Views/OptionListView.swift` (OptionRow title/subtitle, `:80-87,180-186`), a shared quote-strip helper promoted from `FontFamilyEditor.displayName`.
+**Files:** `Sources/GhosttyConfigEditor/Views/OptionListView.swift` (OptionRow title/subtitle, `:80-87,180-186`), a shared quote-strip helper promoted from `FontFamilyEditor.displayName`.
 **Approach:** Primary line = `displayTitle`; secondary line = `shortSummary` (description), replacing the "default: X"/"no default"/"default: default" noise (move default/value context into the info popover). Demote the raw key to a small monospaced caption or the popover only. Suppress the redundant font-family subtitle (the picker button is the single source of truth) and strip leaking quotes everywhere a value renders as text. Replace generic "value" placeholders with `defaultValue`-derived examples.
 **Test expectation:** none — view composition over A1/A5 logic (already tested). **Verification:** launch → rows read as "Font size — Terminal font size", no `"quoted"` leaks, no "default: default".
 
@@ -283,7 +283,7 @@ The heart of the newcomer experience. Consumes Phase A; lands inside the current
 
 **Resolves:** CONTROLS-4, CONTROLS-5.
 **Depends:** A4.
-**Files:** `Sources/GhosttyConfigManager/Views/OptionListView.swift` (`InlineOptionEditor` `.number`), optional `Sources/GhosttyConfigKit/Catalog/NumericSpec.swift` (clamp helper for testability).
+**Files:** `Sources/GhosttyConfigEditor/Views/OptionListView.swift` (`InlineOptionEditor` `.number`), optional `Sources/GhosttyConfigKit/Catalog/NumericSpec.swift` (clamp helper for testability).
 **Approach:** When a `NumericSpec` exists, render a labeled `Slider` (+ compact numeric field) for bounded/fractional values and a unit-aware size field for byte values; clamp the binding to `[min,max]` so no out-of-range write fires; derive `get` from the saved value (not mid-edit `draft`) to kill the `?? 0` jump. Debounce continuous input — update the visible value live, commit (validate+write+reload) only on slider `onEditingChanged(false)`; for ± stepping, use a short trailing debounce (~400ms coalesce) or +/- buttons that commit on release — SwiftUI `Stepper` fires per increment with **no** editing-ended callback, so a real debounce is required, not a "mouse-up" event that doesn't exist. No spec → text field, drop the step-1 stepper (or infer step from a fractional default).
 **Test scenarios (kit):** clamp helper maps out-of-range to the boundary; byte formatter renders `320000000`→"320 MB"; step derivation for a fractional default. Covers R4.
 **Verification:** launch → `background-opacity` slides to 0.5 in one gesture; the live terminal reloads once on release, not per tick.
@@ -292,7 +292,7 @@ The heart of the newcomer experience. Consumes Phase A; lands inside the current
 
 **Resolves:** CONTROLS-3, CONTROLS-12, CONTROLS-13, CONTROLS-17.
 **Depends:** A4.
-**Files:** `Sources/GhosttyConfigManager/Views/OptionListView.swift` (`InlineOptionEditor` `.boolean`/`.enumeration`/`.string`/default), `Sources/GhosttyConfigKit/Config/ConfigReader.swift` (`enumChoices` label ← `enum-value-labels.json`).
+**Files:** `Sources/GhosttyConfigEditor/Views/OptionListView.swift` (`InlineOptionEditor` `.boolean`/`.enumeration`/`.string`/default), `Sources/GhosttyConfigKit/Config/ConfigReader.swift` (`enumChoices` label ← `enum-value-labels.json`).
 **Approach:** Boolean-ish (impostor/open-valued that accept true/false) render a real `Toggle` plus a trailing disclosure for extra states (e.g. `background-blur`: On/Off + enabled-only radius stepper) — deleting the "text box showing `false`" anti-pattern. **Value round-trip (explicit, to avoid silent data loss — R8):** On writes `true` *or* restores the last non-boolean value the user had set (client-cached across the toggle); Off writes `false` **while preserving** that cached extra-state value so re-enabling restores it (e.g. a custom blur radius of 30 survives an off/on cycle), falling back to a documented default only if none exists. Bump the boolean toggle from `.mini` to `.small` to match siblings. Enum picker shows friendly labels (writes the raw token); let the long "Not set…" lead row truncate instead of `.fixedSize` overflow. `.unknown`-typed fields get a doc-derived example placeholder.
 **Test scenarios (kit):** `enumChoices` uses friendly labels while `value` stays the raw token; example-placeholder extraction from a doc string. Covers R4.
 **Verification:** launch → `background-blur` shows a switch, not a "false" text box; `confirm-close-surface` and real toggles look identical.
@@ -301,7 +301,7 @@ The heart of the newcomer experience. Consumes Phase A; lands inside the current
 
 **Resolves:** FEATURES-4, CONTROLS-16, LAYOUT-3.
 **Depends:** A5.
-**Files:** `Sources/GhosttyConfigManager/Views/OptionListView.swift` (OptionInfoPopover actions `:823`; OptionRow state dot `:76-79,188-202`).
+**Files:** `Sources/GhosttyConfigEditor/Views/OptionListView.swift` (OptionInfoPopover actions `:823`; OptionRow state dot `:76-79,188-202`).
 **Approach:** Add "Reset to default" to the info-popover actions (and an optional inline revert glyph on customized rows), shown only when `option.isSet`, calling `model.applyEdit(option:, values: [])` (the writer already treats `[]` as unset — no kit change). Replace the illegible 7pt tri-state dot with a text-backed affordance: show a small accent "Customized" pill only on non-default rows, nothing otherwise; expose the state to VoiceOver (feed A5's `displayName`).
 **Test expectation:** none — reuses the tested unset write path; view-only affordance. **Verification:** launch → change `cursor-style`, "Reset to default" appears and reverts it (live terminal follows).
 
@@ -309,7 +309,7 @@ The heart of the newcomer experience. Consumes Phase A; lands inside the current
 
 **Resolves:** CONTROLS-6, CONTROLS-7, CONTROLS-14.
 **Depends:** none.
-**Files:** `Sources/GhosttyConfigManager/Views/OptionListView.swift` (`InlineOptionEditor` swatch + `colorEditor` `:263-418`).
+**Files:** `Sources/GhosttyConfigEditor/Views/OptionListView.swift` (`InlineOptionEditor` swatch + `colorEditor` `:263-418`).
 **Approach:** Add a SwiftUI `ColorPicker`/`NSColorWell` (system wheel + eyedropper + opacity) alongside the existing hex/name field and 16 presets; picker changes update the hex draft and vice-versa. Keep the text field for values a wheel can't express (X11 names, `cell-foreground`/`cell-background`) — and render those as a *labeled* chip (token text or resolved-RGB + "name" badge) instead of the same neutral gray used for "no value". Make hex entry live-preview and commit on blur/close as well as Return/Set so it's as forgiving as clicking a preset.
 **Test expectation:** none — view over existing write path. **Verification:** launch → pick a background color with the wheel/eyedropper; a `cell-foreground` swatch reads as set, not empty.
 
@@ -317,7 +317,7 @@ The heart of the newcomer experience. Consumes Phase A; lands inside the current
 
 **Resolves:** CONTROLS-9, GAP-7.
 **Depends:** none.
-**Files:** `Sources/GhosttyConfigManager/Views/OptionListView.swift` (`InlineOptionEditor` `.string`/`.unknown`/`.number` fields, subtitle tooltip).
+**Files:** `Sources/GhosttyConfigEditor/Views/OptionListView.swift` (`InlineOptionEditor` `.string`/`.unknown`/`.number` fields, subtitle tooltip).
 **Approach:** Commit free-text on focus-loss as well as Return (a blurred dirty field saves, not silently reverts), with a subtle "Return to save" hint while dirty. For genuinely long **scalar** values (`command`, `initial-command`, `working-directory`, `custom-shader`), replace the fixed 80/160pt field with an "Edit…" button opening a popover with a wide, monospaced, multi-line-tolerant field showing the full value; add `.help(currentValue)` on the truncated subtitle. (`config-file` and `font-feature` are *repeatable* — they have no scalar inline field and belong to U14, not here.)
 **Test expectation:** none — view interaction over existing write path. **Verification:** launch → type a font value and tab away; it saves. A `command` value is fully visible/editable in its popover.
 
@@ -325,7 +325,7 @@ The heart of the newcomer experience. Consumes Phase A; lands inside the current
 
 **Resolves:** CONTROLS-8, FEATURES-7.
 **Depends:** B6 (reuses the color editor).
-**Files:** `Sources/GhosttyConfigManager/Views/OptionListView.swift` (new `PaletteEditor`, `ListValueEditor`), `Sources/GhosttyConfigManager/App/AppModel.swift` (seed palette from current theme).
+**Files:** `Sources/GhosttyConfigEditor/Views/OptionListView.swift` (new `PaletteEditor`, `ListValueEditor`), `Sources/GhosttyConfigEditor/App/AppModel.swift` (seed palette from current theme).
 **Approach:** Mirror the proven `FontFamilyEditor` pattern with an "Edit…" popover. **Palette:** a 16-swatch grid (ANSI names) each reusing B6's color popover, rebuilding the `index=#hex` repeatable list and routing through `applyEdit(values:)`; seed unset slots from the current theme's palette — resolve the current `ThemeRef` (`loadThemesIfNeeded`) and trigger `ensureColors` for it on open, with a graceful fallback (blank slots + a "open Themes to load palette" hint) when its colors aren't yet available, since `themeColors` is populated lazily only after a theme's swatch has rendered. **env / font-feature:** an add/remove list of text rows. **`config-file` stays plain advanced text** — it's the structural include mechanism, and a generic list editor would let users add arbitrary includes the reader follows (out of scope vs. the deferred config-file chooser). Repeatable non-font options currently render no editor (`OptionListView.swift:104-111`).
 **Test scenarios (kit):** palette value-list builder produces valid `N=#hex` lines for edited/unedited slots. Covers R5.
 **Verification:** launch → edit palette slot 4; `palette = 4=#…` is written and the live terminal updates.
@@ -340,7 +340,7 @@ Reshapes the container Phase B fills. Ordering matters: cap width (C1) before en
 
 **Resolves:** LAYOUT-1, LAYOUT-4, LAYOUT-14.
 **Depends:** none.
-**Files:** `Sources/GhosttyConfigManager/App/GhosttyConfigManagerApp.swift` (`mainColumn`, WindowGroup sizing; new `CappedContentColumn`, `WindowMetrics`), all list views.
+**Files:** `Sources/GhosttyConfigEditor/App/GhosttyConfigEditorApp.swift` (`mainColumn`, WindowGroup sizing; new `CappedContentColumn`, `WindowMetrics`), all list views.
 **Approach:** Wrap every detail surface in a centered `CappedContentColumn` (`maxWidth ~680`) applied once in `mainColumn` (not per-view), so Options/Themes/Keybindings/Problems all cap. Then raise the default window to ~900×700 and add `.defaultPosition(.center)`; reconcile min/default via a single `WindowMetrics` constant used by both the WindowGroup frame and `statusView`. Remove the "open compact as a workaround" comment.
 **Test expectation:** none — layout-only. **Verification:** launch → maximize; labels stay next to their controls; first launch is centered.
 
@@ -352,7 +352,7 @@ Reshapes the container Phase B fills. Ordering matters: cap width (C1) before en
 
 **Resolves:** LAYOUT-2, IA-11.
 **Depends:** C1, B1 (needs the common/advanced tiers as section data).
-**Files:** `Sources/GhosttyConfigManager/Views/OptionListView.swift` (replace flat `List` with `Form { Section("Common") … Section("Advanced") … }`, `.formStyle(.grouped)`).
+**Files:** `Sources/GhosttyConfigEditor/Views/OptionListView.swift` (replace flat `List` with `Form { Section("Common") … Section("Advanced") … }`, `.formStyle(.grouped)`).
 **Approach:** Render each option as a Form row (LabeledContent shape: friendly label + description leading, control trailing, info button accessory) inside inset section cards. This is the visual vessel for B1's model-level split (reuse `commonOptions`/`advancedOptions` + the `@AppStorage` collapse state) and natively removes the width/gap problem. Advanced is a collapsible `DisclosureGroup` (or custom collapsible section header) — grouped-Form `Section`s don't collapse natively. **Not a drop-in reuse of Phase-B controls:** audit each control's sizing for the constrained trailing slot — drop `.fixedSize()` where it overflows (enum picker `:254`), swap fixed 80/160pt fields for flexible frames, decide truncate-vs-wrap for long enum lead rows — or the label↔control gap C1 killed reappears.
 **Test expectation:** none — layout-only. **Verification:** launch → each category reads as grouped cards with "Common"/"Advanced" headers.
 
@@ -368,7 +368,7 @@ Reshapes the container Phase B fills. Ordering matters: cap width (C1) before en
 
 **Resolves:** LAYOUT-5, LAYOUT-6, LAYOUT-7, CONTENT-11, A11Y-14.
 **Depends:** none.
-**Files:** `Sources/GhosttyConfigManager/App/GhosttyConfigManagerApp.swift` (statusChip/healthChip/customizedChip `:140-218`; new `ToolbarChip`).
+**Files:** `Sources/GhosttyConfigEditor/App/GhosttyConfigEditorApp.swift` (statusChip/healthChip/customizedChip `:140-218`; new `ToolbarChip`).
 **Approach:** Extract one `ToolbarChip(icon, tint, title, isActive, action?)`. Drop the green seal from the identity chip (version is a label, not a status); give the health chip the only status glyph — quiet when clean, tinted+count when not — with visible button chrome (border/chevron/hover) so it reads as tappable; separate identity and health with a divider so they stop reading as one redundant pair. Fold "no config file yet" into the health chip. Hide/label the stray seal for VoiceOver.
 **Test expectation:** none — view-only. **Verification:** launch → the two chips are visually distinct; the health chip looks clickable and opens Problems.
 
@@ -380,7 +380,7 @@ Reshapes the container Phase B fills. Ordering matters: cap width (C1) before en
 
 **Resolves:** IA-5, IA-6, LAYOUT-12, ONBOARD-13, IA-14.
 **Depends:** A3 (taxonomy/renames).
-**Files:** `Sources/GhosttyConfigManager/Views/SidebarView.swift`, `Sources/GhosttyConfigManager/App/GhosttyConfigManagerApp.swift` (move Customized/Problems out of the toolbar), `Sources/GhosttyConfigManager/App/AppModel.swift` (add the shared `focus(optionNamed:)` navigation helper).
+**Files:** `Sources/GhosttyConfigEditor/Views/SidebarView.swift`, `Sources/GhosttyConfigEditor/App/GhosttyConfigEditorApp.swift` (move Customized/Problems out of the toolbar), `Sources/GhosttyConfigEditor/App/AppModel.swift` (add the shared `focus(optionNamed:)` navigation helper).
 **Approach:** `List` with sections — **Get started** (Recommended, Themes), **Settings** (renamed categories in newcomer order), **Status** (Customized, Problems with a health badge). Making Customized/Problems real tagged rows fixes the lost-selection bug for free. Keep the identity chip in the toolbar; the health badge moves onto the Problems row. Add a one-line cross-link between Themes and Appearance ("Colors come from your theme — set one in Themes. Override individual colors here."). Introduce here the shared `func focus(optionNamed:)` — clears search, sets `selection = .category(OptionCategorizer.category(for: name))`, sets `selectedOptionName`, scrolls into view — since it's the common navigation primitive consumed by U27 (Customized deep-links) and U34 (Problems deep-link).
 **Test expectation:** none — nav view. **Verification:** launch → the sidebar always shows a selected row (incl. on Problems/Customized); sections are labeled.
 
@@ -388,7 +388,7 @@ Reshapes the container Phase B fills. Ordering matters: cap width (C1) before en
 
 **Resolves:** GAP-6.
 **Depends:** A6, C3.
-**Files:** `Sources/GhosttyConfigManager/App/GhosttyConfigManagerApp.swift` (search at split-view level / ⌘F), `Sources/GhosttyConfigKit/Search/IntentSearch.swift` (`CatalogBrowser.searchHits` preserving `SearchHit`), `OptionListView.swift` (results list).
+**Files:** `Sources/GhosttyConfigEditor/App/GhosttyConfigEditorApp.swift` (search at split-view level / ⌘F), `Sources/GhosttyConfigKit/Search/IntentSearch.swift` (`CatalogBrowser.searchHits` preserving `SearchHit`), `OptionListView.swift` (results list).
 **Approach:** Two clearly-separated search tiers (resolves the "one field can't mean two things" contradiction). **(1) Local filter** — the shared header field (C3) filters the *current* surface, bound to `query` on option surfaces (intent + name + doc results, as today), `themeQuery` on Themes, the action filter on Keybindings; no single property carries two meanings. **(2) Global Find (⌘F)** — a distinct entry that searches *all* options (intent + name + docs) and shows ranked results as an option-list overlay **regardless of the current surface** — this is where `mainColumn` switches to a results view when a global query is active. The Find field is a **custom `TextField` driven by `@FocusState`** (not `.searchable`, which exposes no programmatic-focus API), so ⌘F can deterministically focus it. Preserve provenance in the results: `searchHits(_:)` returns `(hit, option)` so results show a count ("7 results"), a per-row category pill, and a "matches: transparent background" badge for `.intent` hits. **See Open Question #6** if you'd rather collapse both tiers into a single always-global field.
 **Test scenarios (kit):** `searchHits("opacity")` returns options with their `matchKind` and category preserved; intent hits are tagged `.intent`. Covers R5.
 **Verification:** launch → ⌘F from Themes, type "transparent" → an option-results overlay appears, labeled by category with an intent badge; typing in the Themes header field filters *themes*, not options.
@@ -401,7 +401,7 @@ Reshapes the container Phase B fills. Ordering matters: cap width (C1) before en
 
 **Resolves:** IA-8, FEATURES-1, ONBOARD-5.
 **Depends:** C3 (header slot).
-**Files:** `Sources/GhosttyConfigManager/Views/ThemeBrowserView.swift`, `Sources/GhosttyConfigManager/App/AppModel.swift` (`themeQuery`, filtered list).
+**Files:** `Sources/GhosttyConfigEditor/Views/ThemeBrowserView.swift`, `Sources/GhosttyConfigEditor/App/AppModel.swift` (`themeQuery`, filtered list).
 **Approach:** Filter over `model.themes` by name (case/diacritic-insensitive), bound to `themeQuery` in the shared header. Optional All/Dark/Light segmentation from each theme's background luminance — but colors load **lazily** per visible row (`ensureColors`), so classify **incrementally** (a theme joins its Dark/Light group only once its swatch has loaded; counts update as files arrive; unclassified-yet themes stay in "All") rather than eagerly reading all 300+ theme files up front, which would defeat the lazy-load design.
 **Test scenarios (kit):** theme filter matches case-insensitively on name; light/dark classification from background luminance. Covers R5.
 **Verification:** launch → type "tokyo" → the list filters to Tokyo Night variants.
@@ -410,7 +410,7 @@ Reshapes the container Phase B fills. Ordering matters: cap width (C1) before en
 
 **Resolves:** LAYOUT-9, CONTENT-14, A11Y-7, FEATURES-9.
 **Depends:** E1.
-**Files:** `Sources/GhosttyConfigManager/Views/ThemeBrowserView.swift` (ThemeRow, list).
+**Files:** `Sources/GhosttyConfigEditor/Views/ThemeBrowserView.swift` (ThemeRow, list).
 **Approach:** Add an explicit "Current" pill / `checkmark.circle.fill` on the active row (non-color signal); drop the full accent fill that mimics selection (keep a subtle preview border). Pin the current theme as a sticky "Current theme" section at the top (visible even while filtering) and/or scroll it into view on appear via `ScrollViewReader`. **When `currentTheme` parses (via `ThemeParser.parseThemeSetting`) to a `.lightDark` pair, mark BOTH the light and dark rows as current and drive the pin from the parsed selection, not string equality** — `currentTheme` returns the whole `light:…,dark:…` string, which matches no single row, so a naive `currentTheme == theme.name` check would mark neither (this is the E4 interaction the reviewers flagged).
 **Test expectation:** none — view; state from tested `currentTheme`. **Verification:** launch → the active theme is labeled "Current" and pinned; it's no longer confusable with row selection.
 
@@ -418,7 +418,7 @@ Reshapes the container Phase B fills. Ordering matters: cap width (C1) before en
 
 **Resolves:** LAYOUT-8, CONTENT-13, GAP-4.
 **Depends:** C3.
-**Files:** `Sources/GhosttyConfigManager/Views/ThemeBrowserView.swift`, `Sources/GhosttyConfigManager/App/AppModel.swift` (expose `previewFailed(_:)` from `failedThemes`), `Sources/GhosttyConfigKit/Themes/ThemeParser.swift` (reuse/shorten the **existing** `previewFidelityDisclaimer` at `:156-158` — add a `previewFidelityShort` if a condensed line is wanted; do not author a new string).
+**Files:** `Sources/GhosttyConfigEditor/Views/ThemeBrowserView.swift`, `Sources/GhosttyConfigEditor/App/AppModel.swift` (expose `previewFailed(_:)` from `failedThemes`), `Sources/GhosttyConfigKit/Themes/ThemeParser.swift` (reuse/shorten the **existing** `previewFidelityDisclaimer` at `:156-158` — add a `previewFidelityShort` if a condensed line is wanted; do not author a new string).
 **Approach:** Move the permanent fidelity disclaimer into a header info-popover (or a shortened one-time-dismissible line). Render a distinct non-spinning "preview unavailable" placeholder for themes in `failedThemes` (they currently spin forever because `themeColors[name]` stays nil).
 **Test expectation:** none — view over the existing `failedThemes` set. **Verification:** launch → the disclaimer no longer occupies a permanent row; a broken theme shows a placeholder, not an infinite spinner.
 
@@ -426,7 +426,7 @@ Reshapes the container Phase B fills. Ordering matters: cap width (C1) before en
 
 **Resolves:** FEATURES-10, FEATURES-11.
 **Depends:** E2.
-**Files:** `Sources/GhosttyConfigManager/Views/ThemeBrowserView.swift`, `Sources/GhosttyConfigManager/App/AppModel.swift` (`favoriteThemes` persisted like `autoReloadEnabled`).
+**Files:** `Sources/GhosttyConfigEditor/Views/ThemeBrowserView.swift`, `Sources/GhosttyConfigEditor/App/AppModel.swift` (`favoriteThemes` persisted like `autoReloadEnabled`).
 **Approach:** A star toggle per row persisting a `Set<String>` to `UserDefaults`; a "Favorites" section under the pinned Current row. A "Set as Light / Dark / Both" affordance writes a `light:…,dark:…` value via `ThemeParser.serialize(.lightDark(…))` through `applyTheme` (kit already models the pair; only the UI is missing). Show the current pairing in the pinned section.
 **Test scenarios (kit):** serialize/parse round-trip of a `light:…,dark:…` selection (guards the existing `ThemeParser` path the UI now exercises). Covers R5.
 **Verification:** launch → star two themes; set a light/dark pair; the terminal follows system appearance. *(Lower priority — see [Open Questions](#open-questions--decisions-for-you).)*
@@ -439,7 +439,7 @@ Reshapes the container Phase B fills. Ordering matters: cap width (C1) before en
 
 **Resolves:** ONBOARD-3, IA-10.
 **Depends:** A1, A3, B-phase controls.
-**Files:** `Sources/GhosttyConfigManager/App/AppModel.swift` (`SidebarSelection.recommended`, launch default), new `RecommendedView`, `Sources/GhosttyConfigKit/Resources/recommended-settings.json`.
+**Files:** `Sources/GhosttyConfigEditor/App/AppModel.swift` (`SidebarSelection.recommended`, launch default), new `RecommendedView`, `Sources/GhosttyConfigKit/Resources/recommended-settings.json`.
 **Approach:** A "Recommended" (sparkles) row pinned at the top of the sidebar, made the launch selection instead of Themes. Render ~12–18 curated high-value options grouped into a few sections (Appearance: theme/font/size/opacity; Behavior: cursor-style/copy-on-select/confirm-close/window-save-state/macos-option-as-alt/scrollback), each reusing the Phase B rows with friendly labels. Data from a single bundled `recommended-settings.json` (chosen over a flag on the tiers file — a separately-authorable curation list is cleaner), loaded like `IntentMap.bundled`, with an orphan-key guard test (KTD1).
 **Test scenarios (kit):** the recommended list loads, references only real option names, and groups into the declared sections. Covers R2.
 **Verification:** launch → the app opens on a curated "Recommended" surface, not the 300-item theme wall.
@@ -448,7 +448,7 @@ Reshapes the container Phase B fills. Ordering matters: cap width (C1) before en
 
 **Resolves:** ONBOARD-1, ONBOARD-7, ONBOARD-9, ONBOARD-10.
 **Depends:** F1.
-**Files:** new `WelcomeView`, `Sources/GhosttyConfigManager/App/AppModel.swift` (`hasSeenWelcome` persisted), `GhosttyConfigManagerApp.swift` (render when appropriate; Help menu re-open).
+**Files:** new `WelcomeView`, `Sources/GhosttyConfigEditor/App/AppModel.swift` (`hasSeenWelcome` persisted), `GhosttyConfigEditorApp.swift` (render when appropriate; Help menu re-open).
 **Approach:** A non-modal welcome pane. **Show rule (explicit):** display iff `!hasSeenWelcome || configMissing`; set `hasSeenWelcome = true` on first *dismiss* (not on first edit); always re-openable from Help. So a pre-overhaul user with an existing config sees it once, and deleting the config later (configMissing → true) re-surfaces it. Contents: one-line value prop, a **safety reassurance strip** ("Changes are checked by Ghostty before saving, applied to your live terminals automatically, and can be undone — turn auto-reload off in Settings"), and three jump-in cards (Pick a theme / Recommended settings / Describe a change). A clear first-run banner ("No Ghostty config yet — your first change will create `~/.config/ghostty/config`") replaces the 4-word chip whisper.
 **Test expectation:** none — view + persisted flag. **Verification:** launch with no config → welcome + banner appear; re-openable from Help; the safety story is visible *before* the first edit.
 
@@ -456,7 +456,7 @@ Reshapes the container Phase B fills. Ordering matters: cap width (C1) before en
 
 **Resolves:** ONBOARD-6, GAP-9.
 **Depends:** D1, F1.
-**Files:** `Sources/GhosttyConfigManager/Views/OptionListView.swift` (Customized empty state + special rows).
+**Files:** `Sources/GhosttyConfigEditor/Views/OptionListView.swift` (Customized empty state + special rows).
 **Approach:** Turn the empty Customized state into a springboard (buttons: Browse recommended / Pick a theme / Describe a change). Route the two flagship Customized rows to their real editors instead of dead-ends: `theme` → an "Edit in Themes →" deep-link (chosen over an inline picker — cheaper and consistent with the keybind row); `keybind` → "N shortcuts customized — Edit in Keyboard Shortcuts →" (deep-link sets `selection`). Uses the shared `focus(optionNamed:)` helper introduced in U19 (D1). **R8 coupling:** today the Customized raw `theme` text field is the *only* in-app path to a `light:…,dark:…` pair (`AppModel:507-508`); replacing it with a deep-link removes that path unless U24 (light/dark pairing UI) has shipped — so either sequence U24 with U27, or keep `theme` editable as a raw value via the global Find / Advanced so no power-user capability is lost. Real cross-phase dependency, flagged not implicit.
 **Test expectation:** none — view; deep-link sets tested selection. **Verification:** launch → empty Customized offers next steps; the theme/keybind rows deep-link rather than showing raw tokens.
 
@@ -464,7 +464,7 @@ Reshapes the container Phase B fills. Ordering matters: cap width (C1) before en
 
 **Resolves:** CONTROLS-10, CONTROLS-11, A11Y-9.
 **Depends:** none.
-**Files:** `Sources/GhosttyConfigManager/Views/KeybindEditorView.swift` (setTrigger), `KeyRecorderView.swift` (draw/focus).
+**Files:** `Sources/GhosttyConfigEditor/Views/KeybindEditorView.swift` (setTrigger), `KeyRecorderView.swift` (draw/focus).
 **Approach:** At capture, look up the chord in `mergedKeybinds`; if already bound to a different action, surface an inline "⌘C is used by Copy — replace / keep both / cancel" via the existing `warning` channel (before the after-the-fact lint bar). Add recorder hints ("⌫ clear · esc cancel"). Decouple focus from recording — focus shows an idle state; Return/Space starts recording — so keyboard traversal of the ~140-row list doesn't hijack keys per row.
 **Test scenarios (kit):** conflict lookup returns the colliding action for an already-bound chord and nil otherwise. Covers R5/R7.
 **Verification:** launch → rebinding onto ⌘C warns immediately; Tab-ing the list no longer seizes the keyboard.
@@ -473,7 +473,7 @@ Reshapes the container Phase B fills. Ordering matters: cap width (C1) before en
 
 **Resolves:** CONTENT-9, CONTENT-10.
 **Depends:** A2.
-**Files:** `Sources/GhosttyConfigManager/Views/KeybindEditorView.swift` (action column, header count, origin badges).
+**Files:** `Sources/GhosttyConfigEditor/Views/KeybindEditorView.swift` (action column, header count, origin badges).
 **Approach:** Render the friendly action title (A2) as the primary line with a one-line summary; demote the raw id + params to a caption. Fix the count ("140 actions, 90 with a shortcut") so it matches the visible rows. Standardize badge copy to the shared vocabulary ("Default" / "Customized" / "Replaces a default" / "Turned off" / "No shortcut"), dropping the embedded raw action id.
 **Test expectation:** none — view over A2 labels. **Verification:** launch → shortcuts read "Copy to clipboard", not `copy_to_clipboard:mixed`; the count matches the list.
 
@@ -485,9 +485,9 @@ Reshapes the container Phase B fills. Ordering matters: cap width (C1) before en
 
 **Resolves:** FEATURES-2, FEATURES-3, FEATURES-13, ONBOARD-2, ONBOARD-12, A11Y-15, ONBOARD-8, IA-12.
 **Depends:** none.
-**Files:** `Sources/GhosttyConfigManager/Views/SettingsView.swift` (now rendered in-window), `Sources/GhosttyConfigManager/Views/SidebarView.swift` (new **Settings** entry), `Sources/GhosttyConfigManager/App/AppModel.swift` (new `.settings` `SidebarSelection` case; persist `binaryOverride`; `reloadFromDisk`), `Sources/GhosttyConfigManager/App/GhosttyConfigManagerApp.swift` (delete the `Settings { }` scene; add the `.settings` branch to `mainColumn`; `CommandGroup(replacing: .appSettings)` routes ⌘, to select it; `.notFound`/`.unsupported`/`.failed` branches).
+**Files:** `Sources/GhosttyConfigEditor/Views/SettingsView.swift` (now rendered in-window), `Sources/GhosttyConfigEditor/Views/SidebarView.swift` (new **Settings** entry), `Sources/GhosttyConfigEditor/App/AppModel.swift` (new `.settings` `SidebarSelection` case; persist `binaryOverride`; `reloadFromDisk`), `Sources/GhosttyConfigEditor/App/GhosttyConfigEditorApp.swift` (delete the `Settings { }` scene; add the `.settings` branch to `mainColumn`; `CommandGroup(replacing: .appSettings)` routes ⌘, to select it; `.notFound`/`.unsupported`/`.failed` branches).
 **Approach:** **Relocate app-settings into the main window (product decision — see [Open Questions](#open-questions--decisions-all-resolved) #7).** Add a `.settings` case to `SidebarSelection` and a gear-icon **Settings** row at the foot of the sidebar (grouped with Customized), rendered by `mainColumn`. The near-empty ⌘, Preferences *window* is removed entirely — the `Settings { SettingsView() }` scene is deleted, which also drops the cross-scene `.environment` injection SettingsView needed (it now inherits the WindowGroup's environment normally). Preserve the macOS affordance: `CommandGroup(replacing: .appSettings)` maps ⌘, / "App menu → Settings…" to `model.selection = .settings`, so muscle memory still works — it just navigates in-window now. This coheres with the single-window decision (#1): one window holds everything. Then, as before, structure the pane into grouped Sections: **Ghostty** (resolved binary path + "Choose…" NSOpenPanel + "Use auto-detected"), **Config file** (resolved path + "Reveal in Finder" + create-if-missing, list includes read-only), **Behavior** (auto-reload + "Show advanced options"). Add the same "Choose Ghostty…" + "Try again" buttons directly on the not-found/unsupported/failed screens (closing the "set the binary path" dead-end). Persist `binaryOverride` to `UserDefaults` (read in `init`) so the fix survives relaunch; on change call `bootstrap()`. Render as a standard grouped `Form` in the detail column — drop the old fixed 460pt window width; size to the pane like every other surface.
-**Auto-reload status chip (added 2026-07-03 — not from the audit; surfaces a control users otherwise only meet in the pane).** The canonical toggle stays in the pane's **Behavior** section, but also surface it as a clickable **"Auto-reload: On/Off"** chip in the window chrome, alongside the existing status/health chips (`RootView` in `GhosttyConfigManagerApp.swift`). Build it from the same `HStack(spacing: 6)` icon+text button pattern as `healthChip`/`customizedChip`: an `arrow.clockwise` glyph tinted accent when on / secondary when off, tapping flips `model.autoReloadEnabled` (the pane and chip stay in sync — both bind the one stored property). This gives at-a-glance state plus a one-click toggle without spending a permanent raw checkbox on the main surface. **A11y:** expose it as a switch to VoiceOver — `.accessibilityLabel("Auto-reload")`, `.accessibilityValue(on ? "On" : "Off")`, `.accessibilityAddTraits(.isToggle)` — not a bare button (per KTD7).
+**Auto-reload status chip (added 2026-07-03 — not from the audit; surfaces a control users otherwise only meet in the pane).** The canonical toggle stays in the pane's **Behavior** section, but also surface it as a clickable **"Auto-reload: On/Off"** chip in the window chrome, alongside the existing status/health chips (`RootView` in `GhosttyConfigEditorApp.swift`). Build it from the same `HStack(spacing: 6)` icon+text button pattern as `healthChip`/`customizedChip`: an `arrow.clockwise` glyph tinted accent when on / secondary when off, tapping flips `model.autoReloadEnabled` (the pane and chip stay in sync — both bind the one stored property). This gives at-a-glance state plus a one-click toggle without spending a permanent raw checkbox on the main surface. **A11y:** expose it as a switch to VoiceOver — `.accessibilityLabel("Auto-reload")`, `.accessibilityValue(on ? "On" : "Off")`, `.accessibilityAddTraits(.isToggle)` — not a bare button (per KTD7).
 **Test scenarios (kit):** a small extracted `BinaryOverrideStore` round-trips the path through `UserDefaults` (moved into the kit so persistence is genuinely unit-testable — the app-target `AppModel.init` read stays manual verification); `discover(userOverride:)` prefers the override (already wired). **Also update the `AppModel:79-82` comment** that currently documents `binaryOverride` as "in-memory only" — it now persists. Covers R5.
 **Verification:** launch with a bogus auto-detect → "Choose Ghostty…" on the not-found screen recovers; the **Settings** pane opens from the sidebar *and* via ⌘, (no separate window appears) and shows both paths; the toolbar **Auto-reload** chip reflects the setting and toggling either the chip or the pane keeps both in sync.
 
@@ -495,7 +495,7 @@ Reshapes the container Phase B fills. Ordering matters: cap width (C1) before en
 
 **Resolves:** GAP-1, GAP-10.
 **Depends:** G3 (reload target); the `@SceneStorage` restoration piece depends on the **U35 window decision** (KTD8) — the Undo/Reload/Find/Help commands do not.
-**Files:** `Sources/GhosttyConfigManager/App/GhosttyConfigManagerApp.swift` (`.commands { … }`), `Sources/GhosttyConfigManager/Views/OptionListView.swift` (stop `resetApplyState` from discarding a still-valid undo).
+**Files:** `Sources/GhosttyConfigEditor/App/GhosttyConfigEditorApp.swift` (`.commands { … }`), `Sources/GhosttyConfigEditor/Views/OptionListView.swift` (stop `resetApplyState` from discarding a still-valid undo).
 **Approach:** Add a `Commands` block. **⌘Z must not blanket-replace `.undoRedo`** — that would hijack Undo from every text field (hex, search, free-text values), so a user fixing a typo would instead revert their last *saved config write* (a data-surprising footgun). Instead, the ⌘Z command **defers to the focused first responder's `undoManager` when a text editor has focus** and fires `undoLastApply()` (gated on `canUndo`) only when no field-level undo is available — or put config-undo on a distinct menu item. Add ⌘R Reload; ⌘F Find (focuses the custom Find field via `@FocusState`, D2); a Help/About item that re-opens the welcome. Persist the last `selection` via `@SceneStorage` (**gated on U35** — per-window restoration requires selection to be per-window). Decouple "clear the row's Saved badge" from "the last write is still undoable" so navigating away doesn't strand a valid undo (the capability persists in `lastReceipt`; only the button vanishes today).
 **Test expectation:** none — command wiring over tested `undoLastApply`/`reloadFromDisk`. **Verification:** launch → apply a theme, ⌘Z reverts it (and the live terminal); the menu bar has Undo/Reload/Find/Help.
 
@@ -503,7 +503,7 @@ Reshapes the container Phase B fills. Ordering matters: cap width (C1) before en
 
 **Resolves:** GAP-2, GAP-3.
 **Depends:** none.
-**Files:** `Sources/GhosttyConfigManager/App/AppModel.swift` (public `reloadFromDisk()`; tri-state theme/font load; optional file watcher), `ThemeBrowserView.swift`, `OptionListView.swift` (font picker), feedback bar.
+**Files:** `Sources/GhosttyConfigEditor/App/AppModel.swift` (public `reloadFromDisk()`; tri-state theme/font load; optional file watcher), `ThemeBrowserView.swift`, `OptionListView.swift` (font picker), feedback bar.
 **Approach:** Expose `func reloadFromDisk() async` calling the private `refreshConfig` with the retained environment/catalog; surface it as a toolbar/⌘R action and as an inline "Reload" button when a `.staleOnDisk` failure shows (the message says "reload" but nothing did). Optionally re-sync on `didBecomeActive` after external editing (the app's own "Reveal in editor" invites drift). Give theme/font loads a tri-state (`loading`/`loaded`/`failed`) so a failed `+list-themes` shows a ContentUnavailableView + "Try again" instead of an eternal spinner on the launch surface.
 **Test scenarios (kit):** a load helper surfaces a distinct failed state (not empty) when the provider throws. Covers R5.
 **Verification:** launch → edit the file externally, come back, hit a stale-on-disk error → "Reload" recovers; simulate a theme-list failure → error + retry, not an infinite spinner.
@@ -512,7 +512,7 @@ Reshapes the container Phase B fills. Ordering matters: cap width (C1) before en
 
 **Resolves:** FEATURES-6, FEATURES-12.
 **Depends:** B5 (per-option unset primitive), G1 (Config-file section home), and the **additive batched write primitive (KTD5)** — this unit introduces it.
-**Files:** `Sources/GhosttyConfigKit/Config/ConfigWriter.swift` (new batched `editedFile`/commit primitive + whole-file import validate/commit), `Sources/GhosttyConfigManager/App/GhosttyConfigManagerApp.swift` (File menu), `SettingsView.swift`, `Sources/GhosttyConfigManager/Views/OptionListView.swift` (Customized reset), `Sources/GhosttyConfigManager/App/AppModel.swift` (batch helpers), `Tests/GhosttyConfigKitTests/BatchWriteTests.swift` (new).
+**Files:** `Sources/GhosttyConfigKit/Config/ConfigWriter.swift` (new batched `editedFile`/commit primitive + whole-file import validate/commit), `Sources/GhosttyConfigEditor/App/GhosttyConfigEditorApp.swift` (File menu), `SettingsView.swift`, `Sources/GhosttyConfigEditor/Views/OptionListView.swift` (Customized reset), `Sources/GhosttyConfigEditor/App/AppModel.swift` (batch helpers), `Tests/GhosttyConfigKitTests/BatchWriteTests.swift` (new).
 **Approach:** "Copy full config" (pasteboard from `model.primary`) and "Export…" (NSSavePanel) are trivial reads. **Import** and **Reset-all/category** are NOT a loop of the per-option write (that yields N backups/validations/reloads and a depth-1 undo that reverts only the last option) — they use the KTD5 batched primitive: **Import** = `ConfigLinter.validate(wholeText)` → `ConfigWriter.commit(newFile)` with a correct `FileIdentity`/stale stamp for the imported bytes, so a bad paste is rejected over one backup; **Reset** = a multi-op `editedFile` that unsets every `customizedOptions` line and commits **once** (one backup, one validate, one reload, one receipt) so a single ⌘Z reverts the whole reset. Both behind a confirmation; the timestamped backup keeps them recoverable.
 **Test scenarios (kit):** the batched `editedFile` applies N unset ops and commits one file yielding one receipt; import validation rejects an invalid config before writing; the whole-file commit stamps imported bytes with the current on-disk identity so the stale guard doesn't misfire. Covers R5.
 **Verification:** launch → export, edit, re-import a bad file (rejected), then reset-all (confirmed) returns to defaults in one undoable step.
@@ -521,7 +521,7 @@ Reshapes the container Phase B fills. Ordering matters: cap width (C1) before en
 
 **Resolves:** FEATURES-8.
 **Depends:** D1 (the shared `focus(optionNamed:)` helper).
-**Files:** `Sources/GhosttyConfigManager/Views/ProblemsView.swift`.
+**Files:** `Sources/GhosttyConfigEditor/Views/ProblemsView.swift`.
 **Approach:** When a validation message `key` (or finding location) maps to a catalog option, render the row as a button that calls the shared `focus(optionNamed:)` helper from U19 (D1) — clears search, sets the option's category selection + `selectedOptionName`, scrolls it into view. Keep "Reveal in editor" as the fallback when unmapped.
 **Test scenarios (kit):** `focus(optionNamed:)` resolves the right category and sets selection; unmapped keys fall back. Covers R5.
 **Verification:** launch → a Problems row for `background-opacity` jumps to that control.
@@ -530,7 +530,7 @@ Reshapes the container Phase B fills. Ordering matters: cap width (C1) before en
 
 **Resolves:** GAP-5.
 **Depends:** decision (see [Open Questions](#open-questions--decisions-for-you)).
-**Files:** `Sources/GhosttyConfigManager/App/GhosttyConfigManagerApp.swift` (WindowGroup → Window, or per-window state).
+**Files:** `Sources/GhosttyConfigEditor/App/GhosttyConfigEditorApp.swift` (WindowGroup → Window, or per-window state).
 **Approach:** Two windows currently share one `AppModel`, so `selection`/`query`/`applyState` are global and two windows interfere (and can drive each other into stale-on-disk). **Recommended:** switch to a single `Window` scene (one-line change matching a settings-editor's mental model). If multi-window is wanted instead, move per-view navigation state into per-window `@State`/`@SceneStorage`, keeping only the catalog/config/write engine shared. **This is a product call — not decided.**
 **Test expectation:** none until the decision is made. **Verification:** deferred.
 
@@ -544,7 +544,7 @@ Closes the systemic a11y items the per-control units start. Every Phase B/C/D/E/
 
 **Resolves:** A11Y-1, A11Y-2, A11Y-17, A11Y-10, A11Y-11.
 **Depends:** A5, B-phase controls.
-**Files:** `Sources/GhosttyConfigManager/Views/OptionListView.swift`.
+**Files:** `Sources/GhosttyConfigEditor/Views/OptionListView.swift`.
 **Approach:** Give every inline control an explicit `.accessibilityLabel(displayTitle)` + `.accessibilityValue(currentValue)` (do **not** wrap the whole row in `.combine` — that would swallow the control). Fold the option state into the control's a11y text ("Font size, default 13, customized, text field, 15") and add a non-color state backup (text pill/shape). Bump the info button's tap target to ~28pt.
 **Test expectation:** none — verify with VoiceOver. **Verification:** VoiceOver reads each control as its named setting + value + state; the info button is comfortably hittable.
 
@@ -552,7 +552,7 @@ Closes the systemic a11y items the per-control units start. Every Phase B/C/D/E/
 
 **Resolves:** A11Y-3, A11Y-8.
 **Depends:** none.
-**Files:** `Sources/GhosttyConfigManager/Views/KeybindEditorView.swift`, `ProblemsView.swift`.
+**Files:** `Sources/GhosttyConfigEditor/Views/KeybindEditorView.swift`, `ProblemsView.swift`.
 **Approach:** Remove `.combine` from `KeybindRow` (it flattens the recorder + `⋯` menu out of VoiceOver's reach); label the action text via `.contain` on just the action column, leaving the recorder/menu first-class. Give severity icons `.accessibilityLabel("Error"/"Warning"/"Info")` and group each Problems finding's title+message (keep the file:line link separately actionable). *(ThemeRow's `.combine` is correct — its only interaction is the row Button.)*
 **Test expectation:** none — verify with VoiceOver. **Verification:** VoiceOver can reach and operate the key recorder and the row menu; severity is announced as words.
 
@@ -661,4 +661,4 @@ Every one of the 115 audit findings (105 lens findings + 10 critic gaps) maps to
 
 - **Firsthand walkthrough** of the packaged app (computer-use): Themes, all option categories, Keybindings, Customized, Problems, Settings, the font/color pickers, keybind recorder + row menu, and the wide-window layout — the ground-truth observations seeded and validated the audit.
 - **8-agent UX audit** (`scratchpad/audit-digest.md`): 7 newcomer-first lenses (Information Architecture, Layout & Visual System, Interaction Design & Controls, Content & Microcopy, Onboarding & Discoverability, Missing Capabilities, Accessibility & HIG) + a completeness critic. 115 findings (27 P1 / 55 P2 / 33 P3; 26 simplifications, 32 net-new features), each grounded in the Swift source with `file:line` evidence.
-- **Code grounding:** `Sources/GhosttyConfigManager/**` (views + `AppModel`) and `Sources/GhosttyConfigKit/**` (catalog ordering `OptionCatalog.swift`/`OptionCategorizer`, `CatalogBrowser`/`IntentSearch`, `ConfigWriter`/`ConfigReader`, `ThemeParser`), plus `CONCEPTS.md` (Boolean Impostor, Open-Valued Option, Config Health, Auto-Reload) and `README.md`.
+- **Code grounding:** `Sources/GhosttyConfigEditor/**` (views + `AppModel`) and `Sources/GhosttyConfigKit/**` (catalog ordering `OptionCatalog.swift`/`OptionCategorizer`, `CatalogBrowser`/`IntentSearch`, `ConfigWriter`/`ConfigReader`, `ThemeParser`), plus `CONCEPTS.md` (Boolean Impostor, Open-Valued Option, Config Health, Auto-Reload) and `README.md`.

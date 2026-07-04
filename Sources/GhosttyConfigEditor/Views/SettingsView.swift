@@ -4,7 +4,7 @@ import GhosttyConfigKit
 
 /// The in-window app-settings surface (G1). Replaces the removed near-empty ⌘,
 /// Preferences *window* — ⌘, now selects this pane in the sidebar (see
-/// `GhosttyConfigManagerApp`), cohering with the single-window model (G6).
+/// `GhosttyConfigEditorApp`), cohering with the single-window model (G6).
 ///
 /// Closes the "the not-found screen says set the binary path, but no UI sets it"
 /// dead-end (FEATURES-2/3, ONBOARD-2/8/12): a **Ghostty** section chooses the binary

@@ -2,7 +2,7 @@
 title: "Packaging a SwiftPM SwiftUI Executable into a Signable macOS .app"
 date: 2026-06-16
 category: docs/solutions/tooling-decisions/
-module: GhosttyConfigManager
+module: GhosttyConfigEditor
 problem_type: tooling_decision
 component: tooling
 severity: high
@@ -34,7 +34,7 @@ tags:
 
 ## Context
 
-`GhosttyConfigManager` is a native macOS SwiftUI app built as a **Swift Package**, not an `.xcodeproj`: a library target `GhosttyConfigKit` holds all logic and ships `intent-map.json` via `resources: [.process("Resources")]`, and a thin executable target `GhosttyConfigManager` is the SwiftUI shell (swift-tools 6.0, macOS 14 floor).
+`GhosttyConfigEditor` is a native macOS SwiftUI app built as a **Swift Package**, not an `.xcodeproj`: a library target `GhosttyConfigKit` holds all logic and ships `intent-map.json` via `resources: [.process("Resources")]`, and a thin executable target `GhosttyConfigEditor` is the SwiftUI shell (swift-tools 6.0, macOS 14 floor).
 
 Turning that executable into a distributable, double-clickable `.app` — launchable from Spotlight/Dock without `swift run` or Xcode — hits three connected, non-obvious walls that must be solved together:
 
@@ -60,7 +60,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 }
 
 @main
-struct GhosttyConfigManagerApp: App {
+struct GhosttyConfigEditorApp: App {
     @NSApplicationDelegateAdaptor(AppDelegate.self) private var appDelegate
     var body: some Scene { /* WindowGroup { … } */ }
 }
@@ -69,28 +69,28 @@ struct GhosttyConfigManagerApp: App {
 **2. Assemble the bundle with the resource bundle in `Resources/`, never `MacOS/`:**
 
 ```
-GhosttyConfigManager.app/
+GhosttyConfigEditor.app/
   Contents/
     Info.plist
     PkgInfo
     MacOS/
-      GhosttyConfigManager                              # the executable binary
+      GhosttyConfigEditor                              # the executable binary
     Resources/
-      GhosttyConfigManager_GhosttyConfigKit.bundle      # flat SwiftPM resource bundle
+      GhosttyConfigEditor_GhosttyConfigKit.bundle      # flat SwiftPM resource bundle
 ```
 
 **3. Sign and verify WITHOUT `--deep`,** so the flat resource bundle is sealed as ordinary resource data into `_CodeSignature/CodeResources` instead of being treated as nested code:
 
 ```bash
-codesign --force --sign - GhosttyConfigManager.app
-codesign --verify --strict GhosttyConfigManager.app
+codesign --force --sign - GhosttyConfigEditor.app
+codesign --verify --strict GhosttyConfigEditor.app
 ```
 
 **4. Write an `Info.plist` that makes a bare executable behave as a proper app:**
 
 | Key | Value |
 | --- | --- |
-| `CFBundleExecutable` | `GhosttyConfigManager` |
+| `CFBundleExecutable` | `GhosttyConfigEditor` |
 | `CFBundleIdentifier` | app identifier |
 | `CFBundlePackageType` | `APPL` |
 | `LSMinimumSystemVersion` | `14.0` |
@@ -120,25 +120,25 @@ The cost of getting any of these wrong is a silent failure (no window; launch cr
 
 ```bash
 # WRONG: bundle in MacOS/, signing with --deep
-cp -R .build/release/GhosttyConfigManager_GhosttyConfigKit.bundle GhosttyConfigManager.app/Contents/MacOS/
-codesign --force --deep --sign - GhosttyConfigManager.app
-# => GhosttyConfigManager.app: bundle format unrecognized, invalid, or unsuitable
-#    In subcomponent: .../Contents/MacOS/GhosttyConfigManager_GhosttyConfigKit.bundle
+cp -R .build/release/GhosttyConfigEditor_GhosttyConfigKit.bundle GhosttyConfigEditor.app/Contents/MacOS/
+codesign --force --deep --sign - GhosttyConfigEditor.app
+# => GhosttyConfigEditor.app: bundle format unrecognized, invalid, or unsuitable
+#    In subcomponent: .../Contents/MacOS/GhosttyConfigEditor_GhosttyConfigKit.bundle
 ```
 
 **After — bundle in `Resources/`, signed shallow:**
 
 ```bash
 # RIGHT: bundle in Resources/, no --deep
-cp -R .build/release/GhosttyConfigManager_GhosttyConfigKit.bundle GhosttyConfigManager.app/Contents/Resources/
-codesign --force --sign - GhosttyConfigManager.app
-codesign --verify --strict GhosttyConfigManager.app          # signature verified
+cp -R .build/release/GhosttyConfigEditor_GhosttyConfigKit.bundle GhosttyConfigEditor.app/Contents/Resources/
+codesign --force --sign - GhosttyConfigEditor.app
+codesign --verify --strict GhosttyConfigEditor.app          # signature verified
 ```
 
 **Automation pitfall — window-server owner name vs process name.** When scripting screenshots or UI automation against the packaged app, the app is identified two different ways:
 
-- `CGWindowListCopyWindowInfo`'s `kCGWindowOwnerName` is the **`CFBundleDisplayName`** (e.g. `"Ghostty Config Manager"`, with spaces).
-- AppleScript System Events `application process "<name>"` uses the **executable name** (`"GhosttyConfigManager"`, no spaces).
+- `CGWindowListCopyWindowInfo`'s `kCGWindowOwnerName` is the **`CFBundleDisplayName`** (e.g. `"Ghostty Config Editor"`, with spaces).
+- AppleScript System Events `application process "<name>"` uses the **executable name** (`"GhosttyConfigEditor"`, no spaces).
 
 Filtering by the wrong one silently returns nothing. For robust per-window capture, match `owner == display name` to get the `CGWindowID`, then:
 

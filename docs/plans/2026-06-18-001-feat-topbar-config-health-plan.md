@@ -11,7 +11,7 @@ status: ready
 
 ## Summary
 
-Two coupled UI changes to the GhosttyConfigManager explorer:
+Two coupled UI changes to the GhosttyConfigEditor explorer:
 
 1. **Remove the "All Options" and "Not Using Yet" rows** from the sidebar's *Discover* section — they are redundant with category browsing + search, and "Not Using Yet" duplicates the per-option "not using yet" state badge.
 2. **Move config health (the *Problems* surface) out of the sidebar and into the window top bar** — a health chip sits next to the existing "Ghostty {version}" status chip, reflects clean / warning / error / unknown state, and clicking it opens the full Problems list.
@@ -80,7 +80,7 @@ flowchart LR
     subgraph Kit["GhosttyConfigKit (tested)"]
         LR["LintReport"] -->|new| H["health: Health\nproblemCount: Int"]
     end
-    subgraph App["GhosttyConfigManager (view layer)"]
+    subgraph App["GhosttyConfigEditor (view layer)"]
         AM["AppModel\nselection: .all default\nproblemCount delegates to LintReport"]
         TB["Top bar toolbar\n• Ghostty version chip\n• NEW health chip (Button)"]
         SB["Sidebar\nDiscover: Customized\nAppearance: Themes\nCategories: …"]
@@ -147,8 +147,8 @@ problemCount = (completed && !isValid ? messages.count : 0)
 **Requirements:** R15, R16. Backs KTD4, KTD5. Implements user request #2.
 **Dependencies:** U1.
 **Files:**
-- `Sources/GhosttyConfigManager/App/GhosttyConfigManagerApp.swift` (toolbar + `healthChip`)
-- `Sources/GhosttyConfigManager/App/AppModel.swift` (delegate `problemCount` to `lintReport?.problemCount ?? 0`)
+- `Sources/GhosttyConfigEditor/App/GhosttyConfigEditorApp.swift` (toolbar + `healthChip`)
+- `Sources/GhosttyConfigEditor/App/AppModel.swift` (delegate `problemCount` to `lintReport?.problemCount ?? 0`)
 
 **Approach:**
 - In `RootView.browser(_:)`, add a second `ToolbarItem(placement: .status)` (after the existing version `statusChip`) rendering a new `healthChip()`.
@@ -158,7 +158,7 @@ problemCount = (completed && !isValid ? messages.count : 0)
 
 **Patterns to follow:** the existing `statusChip` (HStack + SF Symbol + `.font(.caption)`); `ProblemsView` icon/color choices for severity.
 
-**Test scenarios:** `Test expectation: none` — view-layer change in the `GhosttyConfigManager` target, which has no unit-test harness. The branching logic it renders is `LintReport.health`/`problemCount`, covered by U1. Verified via `swift build` + visual check (clean, warnings, errors, unknown, checking states; tap opens Problems).
+**Test scenarios:** `Test expectation: none` — view-layer change in the `GhosttyConfigEditor` target, which has no unit-test harness. The branching logic it renders is `LintReport.health`/`problemCount`, covered by U1. Verified via `swift build` + visual check (clean, warnings, errors, unknown, checking states; tap opens Problems).
 
 **Verification:** App builds and runs; chip appears beside the version badge; tapping it shows `ProblemsView`; chip color/text matches config state.
 
@@ -170,7 +170,7 @@ problemCount = (completed && !isValid ? messages.count : 0)
 **Requirements:** R3, R6 (discovery surfaces). Implements user request #1 and the sidebar half of #2.
 **Dependencies:** U2 (health chip must exist before Problems leaves the sidebar, so the surface is never absent).
 **Files:**
-- `Sources/GhosttyConfigManager/Views/SidebarView.swift`
+- `Sources/GhosttyConfigEditor/Views/SidebarView.swift`
 
 **Approach:**
 - In the *Discover* section, delete the `All Options` (`.all` tag) and `Not Using Yet` (`.unused` tag) labels and the entire `Problems` label/badge block (`.problems` tag).
@@ -189,9 +189,9 @@ problemCount = (completed && !isValid ? messages.count : 0)
 **Requirements:** R3, R6, R15, R16. Backs KTD3.
 **Dependencies:** U1 (health), U3 (sidebar no longer references `.unused`).
 **Files:**
-- `Sources/GhosttyConfigManager/App/AppModel.swift` (remove `.unused` from `SidebarSelection` + `visibleOptions`)
-- `Sources/GhosttyConfigManager/Views/OptionListView.swift` (remove `.unused` from `title`)
-- `Sources/GhosttyConfigManager/Views/ProblemsView.swift` (refactor `isClean` to use `report.health == .clean`)
+- `Sources/GhosttyConfigEditor/App/AppModel.swift` (remove `.unused` from `SidebarSelection` + `visibleOptions`)
+- `Sources/GhosttyConfigEditor/Views/OptionListView.swift` (remove `.unused` from `title`)
+- `Sources/GhosttyConfigEditor/Views/ProblemsView.swift` (refactor `isClean` to use `report.health == .clean`)
 - `Sources/GhosttyConfigKit/Catalog/OptionCatalog.swift` (fix stale doc comment referencing removed surfaces)
 
 **Approach:**
@@ -209,7 +209,7 @@ problemCount = (completed && !isValid ? messages.count : 0)
 
 - **Build-green per commit.** Ordering (U1 → U2 → U3 → U4) keeps every commit compiling and runnable: Problems lives in both sidebar and toolbar transiently (U2→U3), and the `.unused` enum case is removed only after its last reference is gone (U3→U4). Don't reorder U3 before U2 (Problems would briefly vanish from both) or U4 before U3 (build break on the dangling `.tag(.unused)`).
 - **`unusedOptions` is shared kit API.** It stays — removing it would break `IntentSearchTests`/`ConfigReaderTests`. Only the app's `.unused` *selection* is removed.
-- **No app-target tests.** The `GhosttyConfigManager` target is view-only with no test harness; this is why health logic moves to the kit. View changes are verified by build + manual inspection, consistent with the existing project.
+- **No app-target tests.** The `GhosttyConfigEditor` target is view-only with no test harness; this is why health logic moves to the kit. View changes are verified by build + manual inspection, consistent with the existing project.
 - **Toolbar placement.** The health chip reuses the existing `.status` placement that already renders the version chip where the screenshot shows it; no placement experimentation needed.
 
 ---
@@ -217,5 +217,5 @@ problemCount = (completed && !isValid ? messages.count : 0)
 ## Sources & Research
 
 - Origin requirements: `docs/brainstorms/2026-06-16-ghostty-config-manager-requirements.md` (R3, R6 discovery; R15 validation; R16 footguns) — referenced via the existing plan `docs/plans/2026-06-16-001-feat-ghostty-config-manager-plan.md`.
-- Local code recon (this session): `SidebarView.swift`, `GhosttyConfigManagerApp.swift`, `AppModel.swift`, `ProblemsView.swift`, `OptionListView.swift`, `OptionDetailView.swift`, `ConfigLinter.swift`; reference scan confirming `unusedOptions` is tested kit API and `OptionCatalog.swift:211` carries a now-stale UI reference.
+- Local code recon (this session): `SidebarView.swift`, `GhosttyConfigEditorApp.swift`, `AppModel.swift`, `ProblemsView.swift`, `OptionListView.swift`, `OptionDetailView.swift`, `ConfigLinter.swift`; reference scan confirming `unusedOptions` is tested kit API and `OptionCatalog.swift:211` carries a now-stale UI reference.
 - No external research required: this is a self-contained SwiftUI/SwiftPM reorganization with strong local patterns.

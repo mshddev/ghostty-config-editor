@@ -310,15 +310,15 @@ the option and theme surfaces; `applyTheme` inherits the trigger via `applyEdit`
 **Dependencies:** U1.
 
 **Files:**
-- `Sources/GhosttyConfigManager/App/AppModel.swift` (modify: add the stored `autoReloadEnabled`
+- `Sources/GhosttyConfigEditor/App/AppModel.swift` (modify: add the stored `autoReloadEnabled`
   (`UserDefaults`-backed via `init` + `didSet`, default-true registered explicitly per KTD7); own a
   `GhosttyReloader` defaulting to `.live` whose lister maps `NSRunningApplication.runningApplications(withBundleIdentifier:)`
   to `(pid, confirmable version)` applying the `launchDate >= bundle mtime` check (KTD4); call
   `reload(enabled: autoReloadEnabled)` in `applyEdit` after `validateAndApply` succeeds and in
   `undoLastApply` after `restore` succeeds; extend `ApplyState.succeeded` with the `ReloadOutcome`)
-- `Sources/GhosttyConfigManager/Views/OptionDetailView.swift` (modify: render `outcome.message` in
+- `Sources/GhosttyConfigEditor/Views/OptionDetailView.swift` (modify: render `outcome.message` in
   `OptionEditorView.feedback` as a line stacked beneath the existing new-surface/restart notice)
-- `Sources/GhosttyConfigManager/Views/ThemeBrowserView.swift` (modify: render the `.succeeded` reload
+- `Sources/GhosttyConfigEditor/Views/ThemeBrowserView.swift` (modify: render the `.succeeded` reload
   caption too — today it renders only `.failed`, so a theme-apply reload outcome would otherwise be
   invisible on the Themes surface)
 - `Sources/GhosttyConfigKit/Catalog/OptionCatalog.swift` (modify: companion wording change — make the
@@ -369,8 +369,8 @@ real-lister verification, not the kit suite).
 **Dependencies:** U2 (the `autoReloadEnabled` property and persistence already exist).
 
 **Files:**
-- `Sources/GhosttyConfigManager/Views/SettingsView.swift` (new: the toggle)
-- `Sources/GhosttyConfigManager/App/GhosttyConfigManagerApp.swift` (modify: add a `Settings` scene
+- `Sources/GhosttyConfigEditor/Views/SettingsView.swift` (new: the toggle)
+- `Sources/GhosttyConfigEditor/App/GhosttyConfigEditorApp.swift` (modify: add a `Settings` scene
   that injects the shared model)
 
 **Approach:** Add a SwiftUI `Settings { SettingsView().environment(model) }` scene (gives the standard
@@ -488,13 +488,13 @@ on takes effect immediately (no relaunch) and resumes; the setting survives rela
   https://github.com/ghostty-org/ghostty/discussions/3563
 - Bundle id `com.mitchellh.ghostty` — verified locally at
   `/Applications/Ghostty.app/Contents/Info.plist`.
-- Codebase anchors: `Sources/GhosttyConfigManager/App/AppModel.swift` (`applyEdit`,
+- Codebase anchors: `Sources/GhosttyConfigEditor/App/AppModel.swift` (`applyEdit`,
   `undoLastApply`, `ApplyState`); `Sources/GhosttyConfigKit/Config/ConfigWriter.swift`
   (`validateAndApply`, `WriteReceipt`, `rename`/`strerror(errno)` idiom); `Sources/GhosttyConfigKit/CLI/GhosttyCLI.swift`
   and `BinaryLocator.swift` (`kill` precedent, injected-probe pattern, `parseVersion` returning a raw
   token such as `1.4.0-pre`); `Sources/GhosttyConfigKit/Catalog/OptionCatalog.swift`
-  (`changeScope`/`applyNotice`); `Sources/GhosttyConfigManager/Views/OptionDetailView.swift`
-  (`OptionEditorView.feedback`); `Sources/GhosttyConfigManager/Views/ThemeBrowserView.swift`
+  (`changeScope`/`applyNotice`); `Sources/GhosttyConfigEditor/Views/OptionDetailView.swift`
+  (`OptionEditorView.feedback`); `Sources/GhosttyConfigEditor/Views/ThemeBrowserView.swift`
   (`.failed`-only feedback today).
 - Related learning: `docs/solutions/tooling-decisions/packaging-swiftpm-executable-as-macos-app.md`
   (non-sandboxed, ad-hoc-signed — no entitlement wall for `kill`/`NSWorkspace`).

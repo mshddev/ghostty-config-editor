@@ -1,12 +1,12 @@
 ---
-title: "feat: Ghostty Config Manager (native macOS SwiftUI)"
+title: "feat: Ghostty Config Editor (native macOS SwiftUI)"
 type: feat
 date: 2026-06-16
 deepened: 2026-06-16
 origin: docs/brainstorms/2026-06-16-ghostty-config-manager-requirements.md
 ---
 
-# feat: Ghostty Config Manager (native macOS SwiftUI)
+# feat: Ghostty Config Editor (native macOS SwiftUI)
 
 ## Summary
 
@@ -70,9 +70,9 @@ Prose is authoritative; the diagram is an on-ramp. The dashed M2 path (writer) i
 Greenfield. Expected shape (per-unit `Files` are authoritative; the implementer may adjust):
 
 ```text
-GhosttyConfigManager.xcodeproj
+GhosttyConfigEditor.xcodeproj
 App/
-  GhosttyConfigManagerApp.swift      # @main, entitlements wiring
+  GhosttyConfigEditorApp.swift      # @main, entitlements wiring
   AppModel.swift                     # @Observable root state
 CLI/
   GhosttyCLI.swift                   # subcommand runner (async)
@@ -132,7 +132,7 @@ Phased: **M1 = U1–U5** (shippable read-only Explorer), **M2 = U6–U8** (editi
 - **Goal:** SwiftUI app skeleton (`NavigationSplitView` shell, `@Observable` `AppModel`), non-sandboxed + Hardened Runtime project config, and a `GhosttyCLI` service that locates the binary and runs subcommands capturing stdout/stderr asynchronously.
 - **Requirements:** R18, R19 (foundation for all CLI-driven units).
 - **Dependencies:** none.
-- **Files:** `App/GhosttyConfigManagerApp.swift`, `App/AppModel.swift`, `CLI/GhosttyCLI.swift`, `CLI/BinaryLocator.swift`, `Tests/BinaryLocatorTests.swift`.
+- **Files:** `App/GhosttyConfigEditorApp.swift`, `App/AppModel.swift`, `CLI/GhosttyCLI.swift`, `CLI/BinaryLocator.swift`, `Tests/BinaryLocatorTests.swift`.
 - **Approach:** Binary discovery per KTD3 (ordered probe + `+version` verify). Subprocess per KTD4. Surface a clear "Ghostty not found / unsupported" state rather than crashing (R19). Configure the target as non-sandboxed, Developer-ID, Hardened Runtime (KTD1) — no special exec entitlement is needed to spawn an independently signed binary.
 - **Test scenarios:** probe picks the app-bundle path when present; user override outranks all; all candidates missing → explicit not-found state (R19); `+version` output parses to a version; a verbose subprocess (simulated large stdout) is captured without deadlock.
 - **Verification:** launching the app on this machine discovers Ghostty 1.3.1 and reports its version; removing/renaming the binary yields the not-found state.

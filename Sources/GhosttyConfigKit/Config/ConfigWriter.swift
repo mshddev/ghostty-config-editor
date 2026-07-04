@@ -52,7 +52,7 @@ public struct ConfigWriter: Sendable {
     public static var defaultBackupDirectory: URL {
         let base = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask).first
             ?? URL(fileURLWithPath: NSTemporaryDirectory())
-        return base.appendingPathComponent("GhosttyConfigManager/Backups", isDirectory: true)
+        return base.appendingPathComponent("GhosttyConfigEditor/Backups", isDirectory: true)
     }
 
     // MARK: - Content layer (pure)

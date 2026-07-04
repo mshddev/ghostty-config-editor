@@ -102,10 +102,10 @@ now-empty "Discover" section) from the sidebar.
 **Dependencies:** none
 
 **Files:**
-- `Sources/GhosttyConfigManager/App/GhosttyConfigManagerApp.swift` — add a
+- `Sources/GhosttyConfigEditor/App/GhosttyConfigEditorApp.swift` — add a
   `customizedChip()` (or inline `ToolbarItem`) to the existing `.toolbar` in
   `browser(_:)`, mirroring `healthChip()`.
-- `Sources/GhosttyConfigManager/Views/SidebarView.swift` — remove the
+- `Sources/GhosttyConfigEditor/Views/SidebarView.swift` — remove the
   `Section("Discover")` block containing the Customized `Label`.
 
 **Approach:**
@@ -125,7 +125,7 @@ now-empty "Discover" section) from the sidebar.
   `Customized` label entirely.
 
 **Patterns to follow:** `healthChip()` in
-`Sources/GhosttyConfigManager/App/GhosttyConfigManagerApp.swift` — same
+`Sources/GhosttyConfigEditor/App/GhosttyConfigEditorApp.swift` — same
 `ToolbarItem` → `Button` → set-`model.selection` shape, styling, and help/a11y
 strings.
 
@@ -152,7 +152,7 @@ no longer shows a "Customized" row or a "Discover" header.
 **Dependencies:** U1 (the "Discover" section/Customized row is already gone)
 
 **Files:**
-- `Sources/GhosttyConfigManager/Views/SidebarView.swift` — remove the
+- `Sources/GhosttyConfigEditor/Views/SidebarView.swift` — remove the
   `Section("Appearance")` and `Section("Categories")` wrappers; render the
   Themes `Label` and the `ForEach(model.categories…)` directly in the `List`.
   Update the view's doc comment, which currently describes "discovery shortcuts
@@ -207,7 +207,7 @@ as before.
 ## Verification (whole plan)
 
 1. `swift build` succeeds with no new warnings in the two touched files.
-2. `swift run GhosttyConfigManager` launches the app.
+2. `swift run GhosttyConfigEditor` launches the app.
 3. Top bar shows a "Customized" control next to the version and health chips;
    clicking it switches the middle column to the customized-options view and the
    control reflects its active state.

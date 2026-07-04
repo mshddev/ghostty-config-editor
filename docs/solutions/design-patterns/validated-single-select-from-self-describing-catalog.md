@@ -15,7 +15,7 @@ applies_when:
 related_components:
   - "Sources/GhosttyConfigKit/Catalog/CatalogParser.swift"
   - "Sources/GhosttyConfigKit/Config/ConfigReader.swift"
-  - "Sources/GhosttyConfigManager/Views/OptionDetailView.swift"
+  - "Sources/GhosttyConfigEditor/Views/OptionDetailView.swift"
 tags:
   - self-describing-catalog
   - cli-derived-options
@@ -31,7 +31,7 @@ tags:
 
 ## Context
 
-GhosttyConfigManager is a native macOS SwiftUI editor for Ghostty's config. Its option catalog is **self-describing**: at runtime it parses `ghostty +show-config --default --docs` into a catalog, so the app stays correct across Ghostty versions without a hand-maintained schema. The editor already rendered a SwiftUI `Picker` for any option typed `.enumeration` — the gap being closed was **detection**: deciding *which* options have a known, finite, single-select value set, and producing a dropdown whose rows are both complete (no legal value missing) and safe (no value silently dropped).
+GhosttyConfigEditor is a native macOS SwiftUI editor for Ghostty's config. Its option catalog is **self-describing**: at runtime it parses `ghostty +show-config --default --docs` into a catalog, so the app stays correct across Ghostty versions without a hand-maintained schema. The editor already rendered a SwiftUI `Picker` for any option typed `.enumeration` — the gap being closed was **detection**: deciding *which* options have a known, finite, single-select value set, and producing a dropdown whose rows are both complete (no legal value missing) and safe (no value silently dropped).
 
 That gap turned out to sit on top of a quieter SwiftUI failure mode. A `Picker(selection:)` whose bound selection has no matching row tag renders blank and, on the next interaction, overwrites the user's real value — silent data loss. So the work spans two layers that are easy to conflate: a **kit-side detection-and-resolution** layer (pure, unit-tested) and a **view** layer that must be a thin, dumb consumer of it. The architecture forces this split: the kit target (`GhosttyConfigKit`) has XCTest; the SwiftUI app target has **no test harness** *(auto memory [claude]: SPM kit/app split — pure logic belongs in the kit, which is tested; the app target is not)*.
 
@@ -86,7 +86,7 @@ Picker("Value", selection: $draft) {
 }
 ```
 
-**After — safe.** Rows come from the kit resolver, seeded from the *saved* value, guaranteeing a matching tag (`Sources/GhosttyConfigManager/Views/OptionDetailView.swift`):
+**After — safe.** Rows come from the kit resolver, seeded from the *saved* value, guaranteeing a matching tag (`Sources/GhosttyConfigEditor/Views/OptionDetailView.swift`):
 
 ```swift
 case .enumeration:
