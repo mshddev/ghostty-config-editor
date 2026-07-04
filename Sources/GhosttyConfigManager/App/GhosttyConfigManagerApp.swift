@@ -184,6 +184,25 @@ struct GhosttyConfigManagerApp: App {
         }
         .windowStyle(.titleBar)
         .commands {
+            // Smart context-aware ⌘Z (G2): a focused text field's own undo wins (so
+            // fixing a typo in the hex/search/value field undoes *that*, not the last
+            // saved config write — the data-surprising footgun of blanket-replacing
+            // `.undoRedo`); with no field-level undo, ⌘Z reverts the last applied write.
+            // Redo only applies to the focused field (config-undo has no redo).
+            CommandGroup(replacing: .undoRedo) {
+                Button("Undo") { smartUndo() }
+                    .keyboardShortcut("z", modifiers: .command)
+                Button("Redo") { smartRedo() }
+                    .keyboardShortcut("z", modifiers: [.command, .shift])
+            }
+            // Reload from disk (⌘R, G3) and Find (⌘F, D2) in the View menu, so both are
+            // discoverable in the menu bar, not just via the toolbar/keyboard.
+            CommandGroup(after: .sidebar) {
+                Button("Reload from Disk") { Task { await model.reloadFromDisk() } }
+                    .keyboardShortcut("r", modifiers: .command)
+                Button("Find…") { model.beginFind() }
+                    .keyboardShortcut("f", modifiers: .command)
+            }
             // Re-open the first-run welcome any time (F2). Replaces the app's
             // (help-book-less) default Help menu with the one entry that's useful here.
             CommandGroup(replacing: .help) {
@@ -204,6 +223,28 @@ struct GhosttyConfigManagerApp: App {
         .defaultSize(width: WindowMetrics.defaultWidth, height: WindowMetrics.defaultHeight)
         .defaultPosition(.center)
     }
+
+    /// ⌘Z: prefer the focused text field's own undo (typo fixes in the hex / search /
+    /// value fields), falling back to reverting the last applied config write. Checking
+    /// the first responder first is what makes ⌘Z context-aware instead of a blanket
+    /// hijack of every field's undo (G2).
+    private func smartUndo() {
+        if let textView = NSApp.keyWindow?.firstResponder as? NSTextView,
+           let undoManager = textView.undoManager, undoManager.canUndo {
+            undoManager.undo()
+            return
+        }
+        Task { await model.undoLastApply() }  // guarded — a no-op when nothing is undoable
+    }
+
+    /// ⇧⌘Z: redo applies only to the focused text field — a reverted config write has no
+    /// redo (re-applying it is a fresh edit).
+    private func smartRedo() {
+        if let textView = NSApp.keyWindow?.firstResponder as? NSTextView,
+           let undoManager = textView.undoManager, undoManager.canRedo {
+            undoManager.redo()
+        }
+    }
 }
 
 /// Top-level shell. Until Ghostty is located it shows a status view; once ready
@@ -211,6 +252,9 @@ struct GhosttyConfigManagerApp: App {
 /// inline in the list, so there is no separate detail column.
 struct RootView: View {
     @Environment(AppModel.self) private var model
+    /// Last-visited surface, persisted per-window so the app reopens where you left off
+    /// (G2). Trivial now that there's a single `Window` (G6) — one window's state to keep.
+    @SceneStorage("lastSelection") private var lastSelectionRaw = ""
 
     var body: some View {
         switch model.environmentState {
@@ -327,9 +371,20 @@ struct RootView: View {
         // "Saved" from the previous one (C3), and dismisses the global Find overlay so
         // picking a sidebar row leaves Find (D2). Centralized here since every surface
         // can surface feedback now, not just the option list.
-        .onChange(of: model.selection) { _, _ in
+        // Restore the last-visited surface once, on first appearance of the browser
+        // (G2). Guarded to the launch default so it only restores before the user
+        // navigates — never overriding a live selection on a later layout pass.
+        .onAppear {
+            if model.selection == .themes,
+               let restored = SidebarSelection(storageString: lastSelectionRaw) {
+                model.selection = restored
+            }
+        }
+        .onChange(of: model.selection) { _, newValue in
             model.resetApplyState()
             model.endFind()
+            // Persist the surface for next launch (G2).
+            if let newValue { lastSelectionRaw = newValue.storageString }
         }
         // On-activate re-sync (G3): coming back to the app after editing the config
         // externally ("Reveal in editor" invites exactly this) reloads from disk — but
@@ -359,10 +414,11 @@ struct RootView: View {
     /// own local filter — it searches *all* options regardless of the current surface
     /// and opens a results overlay. Clickable (for pointer users) with a ⌘F equivalent.
     private func findButton() -> some View {
+        // ⌘F lives on the View-menu Find command now (G2), so the shortcut isn't
+        // declared twice; this stays a click affordance for pointer users.
         Button { model.beginFind() } label: {
             Label("Find", systemImage: "magnifyingglass")
         }
-        .keyboardShortcut("f", modifiers: .command)
         .help("Find any setting (⌘F)")
         .accessibilityLabel("Find settings")
     }

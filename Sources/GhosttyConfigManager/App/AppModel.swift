@@ -21,6 +21,36 @@ public enum SidebarSelection: Hashable {
     case settings
 }
 
+extension SidebarSelection {
+    /// A stable string encoding for `@SceneStorage` last-surface restoration (G2). The
+    /// associated-value `.category` case makes the enum non-`RawRepresentable`, so the
+    /// codec is hand-rolled: a `category:` prefix carries the category name.
+    var storageString: String {
+        switch self {
+        case .recommended: return "recommended"
+        case .customized: return "customized"
+        case .problems: return "problems"
+        case .themes: return "themes"
+        case .settings: return "settings"
+        case .category(let name): return "category:\(name)"
+        }
+    }
+
+    init?(storageString raw: String) {
+        switch raw {
+        case "recommended": self = .recommended
+        case "customized": self = .customized
+        case "problems": self = .problems
+        case "themes": self = .themes
+        case "settings": self = .settings
+        default:
+            let prefix = "category:"
+            guard raw.hasPrefix(prefix) else { return nil }
+            self = .category(String(raw.dropFirst(prefix.count)))
+        }
+    }
+}
+
 /// Root application state (KTD9: `@Observable`, macOS 14+).
 ///
 /// Owns the discovered Ghostty environment, the loaded catalog + merged config,
