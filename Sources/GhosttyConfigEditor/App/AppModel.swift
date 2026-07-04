@@ -593,6 +593,11 @@ public final class AppModel {
         return browser.customizedOptions.filter { isPrimaryResident($0) }.count
     }
 
+    /// Total options that deviate from their defaults — the set the Customized surface
+    /// lists, and the number the sidebar's Customized badge shows (IA-9). Distinct from
+    /// `resettableCount`, which counts only the primary-file subset a batch reset clears.
+    public var customizedCount: Int { browser?.customizedOptions.count ?? 0 }
+
     /// True when a customized option is defined in the primary config file, so the
     /// primary-only batch reset will actually unset it (canonical-path compared, matching
     /// how the writer resolves targets).
