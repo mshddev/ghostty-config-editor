@@ -173,7 +173,7 @@ struct GhosttyConfigEditorApp: App {
         // global — the windows interfered and could drive each other into stale-on-disk.
         // One window matches the mental model and makes `@SceneStorage` restoration (G2)
         // unambiguous (there's exactly one window's state to persist).
-        Window("Ghostty Config Editor", id: "main") {
+        Window(AppInfo.productName, id: "main") {
             RootView()
                 .environment(model)
                 .frame(minWidth: WindowMetrics.minWidth, minHeight: WindowMetrics.minHeight)
@@ -219,7 +219,7 @@ struct GhosttyConfigEditorApp: App {
             // Re-open the first-run welcome any time (F2). Replaces the app's
             // (help-book-less) default Help menu with the one entry that's useful here.
             CommandGroup(replacing: .help) {
-                Button("Welcome to Ghostty Config Editor") { model.openWelcome() }
+                Button(AppInfo.welcomeTitle) { model.openWelcome() }
             }
             // ⌘, still works, but there's no Preferences *window* anymore (G1/G6):
             // it selects the in-window Settings pane instead, preserving the macOS

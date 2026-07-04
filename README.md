@@ -1,5 +1,7 @@
 # Ghostty Config Editor
 
+> An unofficial config editor for Ghostty.
+
 A native macOS app (SwiftUI) that gives the [Ghostty](https://ghostty.org) terminal a GUI for
 managing its configuration — browse every option with its docs, search by intent, edit safely with
 validate-before-write, and preview/apply themes.

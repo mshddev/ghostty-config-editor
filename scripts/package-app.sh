@@ -69,7 +69,7 @@ cat > "${APP_DIR}/Contents/Info.plist" <<PLIST
 <plist version="1.0">
 <dict>
     <key>CFBundleName</key>
-    <string>${APP_NAME}</string>
+    <string>${DISPLAY_NAME}</string>
     <key>CFBundleDisplayName</key>
     <string>${DISPLAY_NAME}</string>
     <key>CFBundleIdentifier</key>

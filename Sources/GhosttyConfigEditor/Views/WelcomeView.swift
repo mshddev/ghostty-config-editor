@@ -70,7 +70,7 @@ struct WelcomeView: View {
                     .font(.title)
                     .foregroundStyle(Color.accentColor)
                     .accessibilityHidden(true)
-                Text("Welcome to Ghostty Config Editor")
+                Text(AppInfo.welcomeTitle)
                     .font(.title2.weight(.semibold))
             }
             Text("Configure Ghostty visually — every setting in one place, no config-file syntax to learn.")
