@@ -224,44 +224,32 @@ private struct ThemeRow: View {
                     style: .prominent)
     }
 
-    // MARK: - Preview swatch
+    // MARK: - Preview swatch (U14: a miniature terminal, not a chip grid)
 
     @ViewBuilder
     private func preview(colors: ThemeColors?, failed: Bool) -> some View {
-        if let colors {
-            ZStack {
-                Color(hex: colors.background) ?? Color.black
-                VStack(spacing: 2) {
-                    HStack(spacing: 0) {
-                        ForEach(Array(colors.orderedPalette.prefix(8).enumerated()), id: \.offset) { _, hex in
-                            (Color(hex: hex) ?? .gray)
-                        }
-                    }
-                    HStack(spacing: 0) {
-                        ForEach(Array(colors.orderedPalette.suffix(8).enumerated()), id: \.offset) { _, hex in
-                            (Color(hex: hex) ?? .gray)
-                        }
-                    }
-                }
-                .padding(6)
-                Text("Aa")
-                    .font(.system(size: 13, design: .monospaced))
-                    .foregroundStyle(Color(hex: colors.foreground) ?? .white)
-            }
-        } else if failed {
-            // E3: a distinct, non-spinning placeholder — a failed theme file used to
-            // spin forever because `themeColors[name]` stays nil.
-            ZStack {
-                Rectangle().fill(.quaternary)
-                VStack(spacing: 2) {
-                    Image(systemName: "exclamationmark.triangle")
-                    Text("Preview unavailable").font(.caption2)
-                }
-                .foregroundStyle(.secondary)
-            }
+        if let model = colors.flatMap(ThemePreviewModel.resolve) {
+            TerminalMockup(model: model)
+        } else if failed || colors != nil {
+            // A failed load, *or* colors that loaded but lack background/foreground: the
+            // U14 nil-fallback contract renders the placeholder, never an empty cell.
+            unavailablePreview
         } else {
             Rectangle().fill(.quaternary)
                 .overlay(ProgressView().controlSize(.small))
+        }
+    }
+
+    /// E3/U14: a distinct, non-spinning placeholder — a failed (or bg/fg-less) theme file
+    /// used to spin forever because `themeColors[name]` stays nil.
+    private var unavailablePreview: some View {
+        ZStack {
+            Rectangle().fill(.quaternary)
+            VStack(spacing: 2) {
+                Image(systemName: "exclamationmark.triangle")
+                Text("Preview unavailable").font(.caption2)
+            }
+            .foregroundStyle(.secondary)
         }
     }
 
@@ -317,6 +305,88 @@ private struct ThemeRow: View {
         if isCurrent { parts.append("current theme") }
         if let appearance = colors?.appearance { parts.append(appearance == .dark ? "dark" : "light") }
         return parts.joined(separator: ", ")
+    }
+}
+
+/// A miniature terminal that previews a theme's *actual* colors (U14 / TH-2, CB-2): a
+/// prompt line in a palette accent, an output line carrying a selected token, and — when
+/// enlarged — a foreground sample, over the theme background with a 16-color ANSI footer
+/// strip. Flat composition (no material, no shadow) so 400+ of them scroll smoothly (the
+/// U27 gate). The row's Button owns the accessibility label, so the mockup is decorative.
+private struct TerminalMockup: View {
+    let model: ThemePreviewModel
+    /// The enlarged form — the grid card (U15) and the hover preview (U16): bigger type,
+    /// a third foreground line, a taller footer.
+    var large: Bool = false
+
+    private var fontSize: CGFloat { large ? 12 : 8 }
+    private var lineSpacing: CGFloat { large ? 5 : 2 }
+    private var pad: CGFloat { large ? 12 : 6 }
+
+    var body: some View {
+        let bg = Color(hex: model.background) ?? .black
+        let fg = Color(hex: model.foreground) ?? .white
+        ZStack {
+            bg
+            VStack(alignment: .leading, spacing: lineSpacing) {
+                promptLine(fg: fg)
+                outputLine(fg: fg)
+                if large {
+                    Text("The quick brown fox").foregroundStyle(fg).opacity(0.85)
+                }
+                Spacer(minLength: 0)
+                footerStrip
+            }
+            .font(.system(size: fontSize, design: .monospaced))
+            .lineLimit(1)
+            .padding(pad)
+            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+        }
+        // Decorative: the row/card Button carries the real "name, appearance, current" label.
+        .accessibilityHidden(true)
+    }
+
+    /// `~ $ ` in the prompt accent, a command in foreground, then the cursor block.
+    private func promptLine(fg: Color) -> some View {
+        let prompt = Color(hex: model.prompt) ?? fg
+        let cursor = Color(hex: model.cursor) ?? fg
+        return HStack(spacing: 0) {
+            Text("~ $ ").foregroundStyle(prompt)
+            Text("ghostty").foregroundStyle(fg)
+            cursor
+                .frame(width: fontSize * 0.55, height: fontSize)
+                .padding(.leading, 1)
+        }
+    }
+
+    /// An output arrow in the second ANSI color, a *selected* token (selection bg/fg),
+    /// then foreground — so cursor, selection, prompt, output, and foreground all show.
+    private func outputLine(fg: Color) -> some View {
+        let output = Color(hex: model.output) ?? fg
+        let selBg = Color(hex: model.selectionBackground) ?? fg
+        let selFg = Color(hex: model.selectionForeground) ?? (Color(hex: model.background) ?? .black)
+        return HStack(spacing: 0) {
+            Text("▸ ").foregroundStyle(output)
+            Text("Themes")
+                .foregroundStyle(selFg)
+                .padding(.horizontal, 1)
+                .background(selBg)
+            Text(" ready").foregroundStyle(fg)
+        }
+    }
+
+    /// The 16-dot ANSI palette strip, a thin secondary footer. Hidden for a theme with
+    /// no palette (nothing to show) rather than rendering an empty bar.
+    @ViewBuilder private var footerStrip: some View {
+        if !model.palette.isEmpty {
+            HStack(spacing: 0.5) {
+                ForEach(Array(model.palette.prefix(16).enumerated()), id: \.offset) { _, hex in
+                    (Color(hex: hex) ?? .gray)
+                }
+            }
+            .frame(height: large ? 5 : 3)
+            .clipShape(RoundedRectangle(cornerRadius: 1))
+        }
     }
 }
 

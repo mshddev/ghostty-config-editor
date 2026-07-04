@@ -182,6 +182,66 @@ final class ThemeParserTests: XCTestCase {
         XCTAssertTrue(disclaimer.contains("ligature") || disclaimer.contains("font"))
     }
 
+    // MARK: - Terminal preview model (U14 / TH-2)
+
+    func testPreviewModelUsesStatedColorsWhenPresent() {
+        let colors = ThemeColors(
+            palette: [2: "#00ff00", 4: "#0000ff"],
+            background: "#101010", foreground: "#f0f0f0",
+            cursorColor: "#ff00ff",
+            selectionBackground: "#333333", selectionForeground: "#eeeeee"
+        )
+        let model = ThemePreviewModel.resolve(from: colors)
+        XCTAssertEqual(model?.background, "#101010")
+        XCTAssertEqual(model?.foreground, "#f0f0f0")
+        XCTAssertEqual(model?.prompt, "#00ff00", "prompt uses palette green (2) when present")
+        XCTAssertEqual(model?.output, "#0000ff", "output uses palette blue (4) when present")
+        XCTAssertEqual(model?.cursor, "#ff00ff")
+        XCTAssertEqual(model?.selectionBackground, "#333333")
+        XCTAssertEqual(model?.selectionForeground, "#eeeeee")
+    }
+
+    func testPreviewModelResolvesEveryColorThroughFallbackChainForPaletteOnlyTheme() {
+        // A theme that states only background/foreground and a partial palette — the
+        // common upstream case where Ghostty derives cursor/selection at runtime.
+        let colors = ThemeColors(background: "#1a1b26", foreground: "#c0caf5")
+        let model = ThemePreviewModel.resolve(from: colors)
+        XCTAssertNotNil(model, "background + foreground alone must resolve, never nil out")
+        // cursor → foreground; selectionBackground → foreground; selectionForeground → background.
+        XCTAssertEqual(model?.cursor, "#c0caf5")
+        XCTAssertEqual(model?.selectionBackground, "#c0caf5")
+        XCTAssertEqual(model?.selectionForeground, "#1a1b26")
+        // No palette 2/4 → prompt and output both fall through to foreground.
+        XCTAssertEqual(model?.prompt, "#c0caf5")
+        XCTAssertEqual(model?.output, "#c0caf5")
+    }
+
+    func testPreviewModelPrefersBrightPaletteWhenNormalSlotMissing() {
+        // Palette states only the bright slots (10 = bright green, 12 = bright blue).
+        let colors = ThemeColors(palette: [10: "#5fff5f", 12: "#5f5fff"],
+                                 background: "#000000", foreground: "#ffffff")
+        let model = ThemePreviewModel.resolve(from: colors)
+        XCTAssertEqual(model?.prompt, "#5fff5f", "prompt falls back to bright green (10)")
+        XCTAssertEqual(model?.output, "#5f5fff", "output falls back to bright blue (12)")
+    }
+
+    func testPreviewModelReturnsNilWhenBackgroundOrForegroundMissing() {
+        XCTAssertNil(ThemePreviewModel.resolve(from: ThemeColors(background: "#101010")),
+                     "no foreground → placeholder, not an empty cell")
+        XCTAssertNil(ThemePreviewModel.resolve(from: ThemeColors(foreground: "#f0f0f0")),
+                     "no background → placeholder, not an empty cell")
+        XCTAssertNil(ThemePreviewModel.resolve(from: ThemeColors(palette: [0: "#123456"])),
+                     "palette alone can't render a terminal")
+    }
+
+    func testPreviewModelIsDeterministic() {
+        let colors = ThemeColors(palette: [2: "#00ff00", 4: "#0000ff"],
+                                 background: "#101010", foreground: "#f0f0f0")
+        XCTAssertEqual(ThemePreviewModel.resolve(from: colors),
+                       ThemePreviewModel.resolve(from: colors),
+                       "same colors must yield the same model — no per-render randomness")
+    }
+
     // MARK: - ThemeProvider concurrency (review G4 #11)
 
     func testConcurrentColorLoadsDoNotSerializeOnTheActor() async throws {

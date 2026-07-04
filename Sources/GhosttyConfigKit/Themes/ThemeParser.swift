@@ -65,6 +65,66 @@ public enum ThemeAppearance: Sendable, Equatable {
     case dark
 }
 
+/// The resolved colors a miniature terminal preview renders (U14 / TH-2, CB-2). Built
+/// from a theme's `ThemeColors` by applying Ghostty's own nil-fallback rules, because
+/// `cursorColor`/`selection*` are optional and *commonly absent* — Ghostty derives them
+/// at runtime, so most theme files never state them (KTD6: the four parsed-but-unused
+/// fields finally earn their keep). Pure and deterministic: the same `ThemeColors` always
+/// yields the same model, so a preview never assigns colors at random and the fallback
+/// chain is unit-testable. `resolve` returns `nil` when `background` or `foreground` is
+/// missing, so the caller shows the failed-preview placeholder rather than an empty cell.
+public struct ThemePreviewModel: Sendable, Equatable {
+    /// Terminal background (required — the mockup's fill).
+    public let background: String
+    /// Default text (required).
+    public let foreground: String
+    /// A palette accent for the prompt glyph: green (2), else bright green (10), else
+    /// foreground — so a prompt reads as a prompt even on a palette-light theme.
+    public let prompt: String
+    /// A second ANSI color for an output line: blue (4), else bright blue (12), else fg.
+    public let output: String
+    /// The cursor block — `cursor-color`, falling back to foreground.
+    public let cursor: String
+    /// Selection fill — `selection-background`, falling back to foreground (Ghostty's own
+    /// inverted default: selected text is background-on-foreground).
+    public let selectionBackground: String
+    /// Selected text — `selection-foreground`, falling back to background.
+    public let selectionForeground: String
+    /// Palette 0–15 in order (missing omitted), for the footer ANSI strip.
+    public let palette: [String]
+
+    public init(background: String, foreground: String, prompt: String, output: String,
+                cursor: String, selectionBackground: String, selectionForeground: String,
+                palette: [String]) {
+        self.background = background
+        self.foreground = foreground
+        self.prompt = prompt
+        self.output = output
+        self.cursor = cursor
+        self.selectionBackground = selectionBackground
+        self.selectionForeground = selectionForeground
+        self.palette = palette
+    }
+
+    /// Resolve a preview model from a theme's colors, applying the nil-fallback contract.
+    /// `nil` when background or foreground is absent (the caller renders the placeholder).
+    public static func resolve(from colors: ThemeColors) -> ThemePreviewModel? {
+        guard let background = colors.background, let foreground = colors.foreground else {
+            return nil
+        }
+        return ThemePreviewModel(
+            background: background,
+            foreground: foreground,
+            prompt: colors.palette[2] ?? colors.palette[10] ?? foreground,
+            output: colors.palette[4] ?? colors.palette[12] ?? foreground,
+            cursor: colors.cursorColor ?? foreground,
+            selectionBackground: colors.selectionBackground ?? foreground,
+            selectionForeground: colors.selectionForeground ?? background,
+            palette: colors.orderedPalette
+        )
+    }
+}
+
 /// How a `theme = …` value selects a theme (R12 supports light/dark).
 public enum ThemeSelection: Sendable, Equatable {
     case single(String)
