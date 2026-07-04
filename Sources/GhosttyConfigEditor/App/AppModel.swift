@@ -167,6 +167,12 @@ public final class AppModel {
     private var catalog: OptionCatalog?
     private var lastReceipt: WriteReceipt?
 
+    /// Serializes every disk write — single-option applies, batch import/reset, and
+    /// undo — so only one is ever in flight (U1/GAP-8). Coalesces a same-option burst
+    /// to its latest value; queues everything else FIFO. The public write methods keep
+    /// their signatures; enqueuing is an internal detail. See `SerialWriteQueue`.
+    private let writeQueue = SerialWriteQueue()
+
     /// Signals the running Ghostty to reload after a successful write (R1). The kit
     /// owns the whole decision + safety policy; the app supplies only the AppKit
     /// instance enumeration (KTD3) — so this is `.live` with the app-side lister.
@@ -328,14 +334,33 @@ public final class AppModel {
 
     /// Validate a proposed change against the live binary, write it safely (U6),
     /// then reload so the UI reflects disk. Surfaces explicit feedback (R17).
+    ///
+    /// Enqueues onto `writeQueue` (U1) keyed by the option name, so a rapid burst of
+    /// edits to the same option serializes to one in-flight write and coalesces to the
+    /// latest value. `await` returns only when this write — or the coalescing successor
+    /// that supersedes it — has fully applied, preserving the contract that a caller may
+    /// inspect `applyState` afterwards (e.g. to snap a rejected field back).
     public func applyEdit(option: MergedOption, values: [String]) async {
-        guard let environment, let browser else { return }
-        applyingOptionName = option.option.name
+        let name = option.option.name
+        await writeQueue.submit(key: name) { [weak self] in
+            await self?.performApplyEdit(optionName: name, values: values)
+        }
+    }
+
+    /// The actual single-option write, run serially by `writeQueue`. Re-resolves the
+    /// option and reads `browser.merged.model` **fresh at execution time** (never
+    /// captured at enqueue): the model must reflect the previous write's `refreshConfig`
+    /// so the stale-on-disk guard stays meaningful, and coalescing may have skipped the
+    /// intervening states the enqueue-time value belonged to.
+    private func performApplyEdit(optionName: String, values: [String]) async {
+        guard let environment, let browser,
+              let option = browser.merged.option(named: optionName) else { return }
+        applyingOptionName = optionName
         applyState = .applying
         let writer = ConfigWriter()
         do {
             let receipt = try await writer.validateAndApply(
-                optionName: option.option.name,
+                optionName: optionName,
                 values: values,
                 isRepeatable: option.option.isRepeatable,
                 in: browser.merged.model,
@@ -360,8 +385,19 @@ public final class AppModel {
         }
     }
 
-    /// Revert the last applied write (R10).
+    /// Revert the last applied write (R10). Enqueued as a non-coalescable entry so it
+    /// serializes behind any pending write rather than racing it.
     public func undoLastApply() async {
+        await writeQueue.submit(key: nil) { [weak self] in
+            await self?.performUndo()
+        }
+    }
+
+    /// The actual undo, run serially by `writeQueue`. Reads `lastReceipt` **at execution
+    /// time** (not captured at enqueue), so an undo queued behind a still-pending write
+    /// reverts *that* write's bytes — snapshotting the receipt at enqueue would restore
+    /// pre-write text over a just-committed write.
+    private func performUndo() async {
         guard let environment, let catalog, let receipt = lastReceipt else { return }
         applyState = .applying
         do {
@@ -495,9 +531,8 @@ public final class AppModel {
     /// undoable as one step (G4, replace-with-backup). A config that fails validation is
     /// rejected before anything is written.
     public func importConfig(text: String) async {
-        guard let environment, let browser else { return }
-        await commitWrite(notice: "Imported configuration.") {
-            try await ConfigWriter().validateAndImport(text: text, into: browser.merged.model, cli: environment.cli)
+        await commitWrite(notice: "Imported configuration.") { model, cli in
+            try await ConfigWriter().validateAndImport(text: text, into: model, cli: cli)
         }
     }
 
@@ -515,11 +550,14 @@ public final class AppModel {
     }
 
     private func applyReset(in category: String?, notice: String) async {
-        guard let environment, let browser else { return }
+        guard let browser else { return }
+        // The op set is what the user is looking at when they trigger the reset; the
+        // model those ops fold into is resolved fresh at execution (below), so the
+        // stale-on-disk guard compares against current bytes.
         let ops = resetOperations(in: category, browser: browser)
         guard !ops.isEmpty else { return }
-        await commitWrite(notice: notice) {
-            try await ConfigWriter().validateAndApplyBatch(operations: ops, in: browser.merged.model, cli: environment.cli)
+        await commitWrite(notice: notice) { model, cli in
+            try await ConfigWriter().validateAndApplyBatch(operations: ops, in: model, cli: cli)
         }
     }
 
@@ -536,14 +574,28 @@ public final class AppModel {
 
     /// Run a whole-file/batch write and map its outcome into `applyState` + refresh +
     /// reload, shared by import and reset (the single-option `applyEdit` keeps its own
-    /// path because it anchors feedback to a row via `applyingOptionName`). Clears that
-    /// anchor so surface-level feedback bars show the result instead of a stale row.
-    private func commitWrite(notice: String, _ work: () async throws -> WriteReceipt) async {
-        guard let environment, let catalog else { return }
+    /// path because it anchors feedback to a row via `applyingOptionName`). Enqueued as a
+    /// non-coalescable entry on `writeQueue` (U1) so a batch write and a queued
+    /// `applyEdit` never run concurrently. The `work` closure receives the model and CLI
+    /// **fresh at execution** so its stale-on-disk guard compares against current bytes.
+    private func commitWrite(
+        notice: String,
+        _ work: @escaping @MainActor (ConfigModel, GhosttyCLI?) async throws -> WriteReceipt
+    ) async {
+        await writeQueue.submit(key: nil) { [weak self] in
+            await self?.performCommitWrite(notice: notice, work)
+        }
+    }
+
+    private func performCommitWrite(
+        notice: String,
+        _ work: @MainActor (ConfigModel, GhosttyCLI?) async throws -> WriteReceipt
+    ) async {
+        guard let environment, let catalog, let browser else { return }
         applyingOptionName = nil
         applyState = .applying
         do {
-            let receipt = try await work()
+            let receipt = try await work(browser.merged.model, environment.cli)
             lastReceipt = receipt
             let gitTracked = GitContext.isInsideWorkingTree(path: receipt.resolvedPath)
             await refreshConfig(environment: environment, catalog: catalog)
