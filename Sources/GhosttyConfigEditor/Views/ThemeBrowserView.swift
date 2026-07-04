@@ -205,25 +205,16 @@ private struct ThemeRow: View {
     /// The "Current" signal — a non-color pill (icon + text), so it reads without
     /// relying on hue alone (A11Y-7).
     private var currentPill: some View {
-        Label("Current", systemImage: "checkmark.circle.fill")
-            .labelStyle(.titleAndIcon)
-            .font(.caption2.weight(.semibold))
-            .padding(.horizontal, 6)
-            .padding(.vertical, 1)
-            .background(Color.accentColor.opacity(0.15), in: Capsule())
-            .foregroundStyle(Color.accentColor)
+        Pill(text: "Current", systemImage: "checkmark.circle.fill", tint: .accentColor, style: .prominent)
     }
 
     /// E1: light/dark badge, shown once the theme's colors have loaded (never forces
     /// an eager read — an unclassified theme is simply unlabeled).
     private func appearanceBadge(_ appearance: ThemeAppearance) -> some View {
         let isDark = appearance == .dark
-        return Label(isDark ? "Dark" : "Light", systemImage: isDark ? "moon.fill" : "sun.max.fill")
-            .font(.caption2)
-            .padding(.horizontal, 6)
-            .padding(.vertical, 1)
-            .background(.secondary.opacity(0.15), in: Capsule())
-            .foregroundStyle(.secondary)
+        return Pill(text: isDark ? "Dark" : "Light",
+                    systemImage: isDark ? "moon.fill" : "sun.max.fill",
+                    style: .prominent)
     }
 
     // MARK: - Preview swatch

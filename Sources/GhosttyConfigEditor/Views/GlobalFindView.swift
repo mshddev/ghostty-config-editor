@@ -37,7 +37,7 @@ struct GlobalFindView: View {
         VStack(alignment: .leading, spacing: 8) {
             HStack(alignment: .firstTextBaseline, spacing: 8) {
                 Text("Find")
-                    .font(.title2.weight(.semibold))
+                    .font(.surfaceTitle)
                 if let resultCount {
                     Text("\(resultCount) result\(resultCount == 1 ? "" : "s")")
                         .font(.callout)
@@ -47,33 +47,12 @@ struct GlobalFindView: View {
                 Button("Done") { model.endFind() }
                     .keyboardShortcut(.cancelAction)   // Esc closes Find
             }
-            searchField(query)
+            SurfaceSearchField(prompt: "Find any setting — name, description, or behavior",
+                               text: query, focus: $fieldFocused)
         }
-        .padding(.horizontal, 20)
-        .padding(.top, 16)
+        .padding(.horizontal, DesignTokens.Spacing.surface)
+        .padding(.top, DesignTokens.Spacing.large)
         .padding(.bottom, 10)
-    }
-
-    private func searchField(_ text: Binding<String>) -> some View {
-        HStack(spacing: 6) {
-            Image(systemName: "magnifyingglass")
-                .foregroundStyle(.secondary)
-                .font(.callout)
-                .accessibilityHidden(true)
-            TextField("Find any setting — name, description, or behavior", text: text)
-                .textFieldStyle(.plain)
-                .focused($fieldFocused)
-            if !text.wrappedValue.isEmpty {
-                Button { text.wrappedValue = "" } label: {
-                    Image(systemName: "xmark.circle.fill").foregroundStyle(.secondary)
-                }
-                .buttonStyle(.plain)
-                .accessibilityLabel("Clear search")
-            }
-        }
-        .padding(.horizontal, 8)
-        .padding(.vertical, 6)
-        .background(Color.secondary.opacity(0.10), in: RoundedRectangle(cornerRadius: 8))
     }
 
     // MARK: - Results
@@ -162,12 +141,7 @@ private struct FindResultRow: View {
     /// The category this option lives in — the pill that orients a result surfaced from
     /// another surface ("this is in Appearance").
     private var categoryPill: some View {
-        Text(option.option.category)
-            .font(.caption2)
-            .padding(.horizontal, 6)
-            .padding(.vertical, 1)
-            .background(.secondary.opacity(0.15), in: Capsule())
-            .foregroundStyle(.secondary)
+        Pill(text: option.option.category, style: .prominent)
     }
 
     /// Why this option surfaced, shown only when the *name* didn't obviously match: a

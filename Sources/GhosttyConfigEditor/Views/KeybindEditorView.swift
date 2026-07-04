@@ -547,11 +547,7 @@ private struct KeybindRow: View {
     // MARK: Origin badge
 
     private var badge: some View {
-        Text(badgeText)
-            .font(.caption2)
-            .padding(.horizontal, 6).padding(.vertical, 2)
-            .background(badgeTint.opacity(0.15), in: Capsule())
-            .foregroundStyle(badgeTint)
+        Pill(text: badgeText, tint: badgeTint, style: .prominent)
     }
 
     /// Origin badge copy, standardized to the app's shared status vocabulary (F5,

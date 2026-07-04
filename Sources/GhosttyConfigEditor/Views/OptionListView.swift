@@ -418,12 +418,7 @@ struct OptionRow: View {
     /// shown only on customized rows. A default/unset row shows nothing here.
     private var customizedAffordance: some View {
         HStack(spacing: 4) {
-            Text(option.state.displayName)   // "Customized"
-                .font(.caption2)
-                .padding(.horizontal, 7)
-                .padding(.vertical, 2)
-                .background(Color.accentColor.opacity(0.15), in: Capsule())
-                .foregroundStyle(Color.accentColor)
+            Pill(text: option.state.displayName, tint: .accentColor, style: .prominent)
                 .accessibilityHidden(true)   // the title already announces the state
             Button {
                 Task { await model.applyEdit(option: option, values: []) }
@@ -1890,10 +1885,10 @@ private struct OptionInfoPopover: View {
                 .foregroundStyle(.secondary)
                 .textSelection(.enabled)
             HStack(spacing: 8) {
-                Badge(text: option.option.category, systemImage: "folder")
-                Badge(text: option.option.valueType.rawValue, systemImage: "tag")
+                Pill(text: option.option.category, systemImage: "folder")
+                Pill(text: option.option.valueType.rawValue, systemImage: "tag")
                 if option.option.isRepeatable {
-                    Badge(text: "repeatable", systemImage: "plus.square.on.square")
+                    Pill(text: "repeatable", systemImage: "plus.square.on.square")
                 }
                 stateBadge
             }
@@ -1904,11 +1899,12 @@ private struct OptionInfoPopover: View {
     private var stateBadge: some View {
         switch option.state {
         case .setNonDefault:
-            Badge(text: "customized", systemImage: "pencil", tint: .accentColor)
+            // DS-4: render the state's own display name ("Customized"), not a lowercase literal.
+            Pill(text: option.state.displayName, systemImage: "pencil", tint: .accentColor)
         case .setToDefault:
-            Badge(text: "at default", systemImage: "equal", tint: .secondary)
+            Pill(text: "at default", systemImage: "equal", tint: .secondary)
         case .unset:
-            Badge(text: "not using yet", systemImage: "sparkles", tint: .orange)
+            Pill(text: "not using yet", systemImage: "sparkles", tint: .orange)
         }
     }
 
@@ -2066,25 +2062,6 @@ extension NSColor {
         let g = Int((c.greenComponent * 255).rounded())
         let b = Int((c.blueComponent * 255).rounded())
         return String(format: "#%02x%02x%02x", r, g, b)
-    }
-}
-
-private struct Badge: View {
-    let text: String
-    var systemImage: String? = nil
-    var tint: Color = .secondary
-
-    var body: some View {
-        Label {
-            Text(text)
-        } icon: {
-            if let systemImage { Image(systemName: systemImage) }
-        }
-        .font(.caption)
-        .padding(.horizontal, 7)
-        .padding(.vertical, 3)
-        .background(tint.opacity(0.12), in: Capsule())
-        .foregroundStyle(tint == .secondary ? Color.secondary : tint)
     }
 }
 

@@ -1,4 +1,5 @@
 import SwiftUI
+import AppKit
 import GhosttyConfigKit
 
 /// Shared chrome so every surface — Options, Themes, Keybindings, Problems — titles,
@@ -16,6 +17,171 @@ enum RowMetrics {
     static let titleFont: Font = .body
     /// The row's one-line secondary summary.
     static let subtitleFont: Font = .caption
+}
+
+// MARK: - Design tokens (DS-3, DS-12, GAP-7)
+
+/// The single source of spacing, corner-radius, and tint constants every surface
+/// consumes, so no view hand-picks a literal (DS-3). The primitives are framework-
+/// neutral (`CGFloat`/`Color`) so the AppKit `KeyRecorderView` can share the same
+/// radius. Tint fills sit over **dynamic** system bases (`.secondary`/`.primary`/
+/// `.accentColor`), so they adapt to light and dark rather than baking a dark-assumed
+/// alpha (GAP-1).
+enum DesignTokens {
+    enum Spacing {
+        static let tight: CGFloat = 4
+        static let snug: CGFloat = 6
+        static let standard: CGFloat = 8
+        static let cozy: CGFloat = 12
+        static let large: CGFloat = 16
+        /// The horizontal inset every surface's content shares.
+        static let surface: CGFloat = 20
+    }
+
+    enum Radius {
+        static let tight: CGFloat = 4
+        static let standard: CGFloat = 6
+        static let card: CGFloat = 10
+        /// The search-field pill radius (its established value, kept in one place).
+        static let field: CGFloat = 8
+    }
+
+    /// A soft neutral fill for search fields, subtle chips, and at-rest chrome.
+    static let subtleFill = Color.secondary.opacity(0.10)
+    /// The accent-tinted fill for a selected/current status pill.
+    static let accentFill = Color.accentColor.opacity(0.15)
+    /// The background lift a control gains on hover / keyboard focus (U12 consumes it).
+    static let hoverLift = Color.primary.opacity(0.06)
+}
+
+/// Named durations + curves for the app's small motion vocabulary (KTD5). Transitions
+/// that consume these are reduce-motion gated via `gated(_:reduceMotion:)`; a hover
+/// tint is not motion and stays ungated.
+enum MotionSystem {
+    /// A quick cross-fade — feedback appearing, an overlay showing (~0.15s).
+    static let quickFade: Animation = .easeOut(duration: 0.15)
+    /// A weightier settle — a selection landing, a value committing (~0.25s).
+    static let settle: Animation = .easeOut(duration: 0.25)
+
+    /// The animation to use, honoring Reduce Motion: nil (instant) when it is on. The one
+    /// helper both the SwiftUI environment flag and the AppKit `NSWorkspace` flag route
+    /// through (GAP-7).
+    static func gated(_ animation: Animation, reduceMotion: Bool) -> Animation? {
+        reduceMotion ? nil : animation
+    }
+
+    /// The AppKit-side Reduce Motion flag for `KeyRecorderView`, mirroring SwiftUI's
+    /// `\.accessibilityReduceMotion` environment value.
+    static var systemReduceMotion: Bool {
+        NSWorkspace.shared.accessibilityDisplayShouldReduceMotion
+    }
+}
+
+/// The two-step semantic type scale (DS-8): `surfaceTitle` is the routine per-surface
+/// header; `heroTitle` is the one reserved larger step for the single identity moment
+/// (Welcome, applied by U22), so it visibly outranks ordinary chrome.
+extension Font {
+    static let surfaceTitle = Font.title2.weight(.semibold)
+    static let heroTitle = Font.largeTitle.weight(.semibold)
+}
+
+// MARK: - Shared components
+
+/// The one small tinted capsule for status/metadata across every surface — "Customized",
+/// a theme's "Current", a Find result's category, a keybind's origin (DS-3). Replaces six
+/// hand-rolled capsules. `tint` colors both the soft fill and the label; `.prominent`
+/// deepens the fill for a primary status like "Current".
+struct Pill: View {
+    enum Style { case subtle, prominent }
+    let text: String
+    var systemImage: String? = nil
+    var tint: Color = .secondary
+    var style: Style = .subtle
+
+    var body: some View {
+        Label {
+            Text(text)
+        } icon: {
+            if let systemImage { Image(systemName: systemImage) }
+        }
+        .font(.caption)
+        .padding(.horizontal, 7)
+        .padding(.vertical, 3)
+        .background(tint.opacity(style == .prominent ? 0.15 : 0.12), in: Capsule())
+        .foregroundStyle(tint == .secondary ? Color.secondary : tint)
+    }
+}
+
+/// A Form-row button that reads unambiguously destructive — **explicit** red, because
+/// macOS grouped Forms drop `role: .destructive`-only styling (DS-7). The reset-all rows
+/// consume it (U24).
+struct DestructiveRowButton: View {
+    let title: String
+    let action: () -> Void
+
+    var body: some View {
+        Button(role: .destructive, action: action) {
+            Text(title).foregroundStyle(.red)
+        }
+    }
+}
+
+/// The one search-field recipe shared by every surface header and the global Find
+/// overlay (DS-12): a magnifying-glass icon, a plain text field, and a clear button on
+/// the neutral `subtleFill`. An optional `FocusState` binding lets Find drive
+/// focus-on-appear (and U26 make the per-surface field keyboard-reachable).
+struct SurfaceSearchField: View {
+    let prompt: String
+    @Binding var text: String
+    var focus: FocusState<Bool>.Binding? = nil
+
+    var body: some View {
+        HStack(spacing: DesignTokens.Spacing.snug) {
+            Image(systemName: "magnifyingglass")
+                .foregroundStyle(.secondary)
+                .font(.callout)
+                .accessibilityHidden(true)
+            field
+            if !text.isEmpty {
+                Button { text = "" } label: {
+                    Image(systemName: "xmark.circle.fill").foregroundStyle(.secondary)
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel("Clear search")
+            }
+        }
+        .padding(.horizontal, DesignTokens.Spacing.standard)
+        .padding(.vertical, DesignTokens.Spacing.snug)
+        .background(DesignTokens.subtleFill, in: RoundedRectangle(cornerRadius: DesignTokens.Radius.field))
+    }
+
+    @ViewBuilder private var field: some View {
+        if let focus {
+            TextField(prompt, text: $text).textFieldStyle(.plain).focused(focus)
+        } else {
+            TextField(prompt, text: $text).textFieldStyle(.plain)
+        }
+    }
+}
+
+/// The shared save-state vocabulary (icon + tint) so the surface feedback bar and the
+/// inline per-row feedback (U6) map a state the same way instead of drifting (DS-10).
+/// Behavior — collapse timing, Undo/Reload placement — stays in the views.
+extension AppModel.ApplyState {
+    var feedbackSymbol: String {
+        switch self {
+        case .idle, .applying: return ""
+        case .succeeded: return "checkmark.circle.fill"
+        case .failed: return "xmark.octagon.fill"
+        }
+    }
+    var feedbackTint: Color {
+        switch self {
+        case .idle, .applying: return .secondary
+        case .succeeded: return .green
+        case .failed: return .red
+        }
+    }
 }
 
 /// The top of every surface: a title, an optional secondary count line, an optional
@@ -39,7 +205,7 @@ struct SurfaceHeader: View {
         VStack(alignment: .leading, spacing: 8) {
             HStack(alignment: .firstTextBaseline, spacing: 8) {
                 Text(title)
-                    .font(.title2.weight(.semibold))
+                    .font(.surfaceTitle)
                     .lineLimit(1)
                 if let subtitle {
                     Text(subtitle)
@@ -52,33 +218,12 @@ struct SurfaceHeader: View {
                 }
             }
             if let searchText {
-                searchField(searchText)
+                SurfaceSearchField(prompt: searchPrompt, text: searchText)
             }
         }
-        .padding(.horizontal, 20)
-        .padding(.top, 16)
+        .padding(.horizontal, DesignTokens.Spacing.surface)
+        .padding(.top, DesignTokens.Spacing.large)
         .padding(.bottom, 10)
-    }
-
-    private func searchField(_ text: Binding<String>) -> some View {
-        HStack(spacing: 6) {
-            Image(systemName: "magnifyingglass")
-                .foregroundStyle(.secondary)
-                .font(.callout)
-                .accessibilityHidden(true)
-            TextField(searchPrompt, text: text)
-                .textFieldStyle(.plain)
-            if !text.wrappedValue.isEmpty {
-                Button { text.wrappedValue = "" } label: {
-                    Image(systemName: "xmark.circle.fill").foregroundStyle(.secondary)
-                }
-                .buttonStyle(.plain)
-                .accessibilityLabel("Clear search")
-            }
-        }
-        .padding(.horizontal, 8)
-        .padding(.vertical, 6)
-        .background(Color.secondary.opacity(0.10), in: RoundedRectangle(cornerRadius: 8))
     }
 
     private func infoButton(_ text: String) -> some View {
@@ -170,8 +315,8 @@ struct SurfaceFeedbackBar: View {
             bar {
                 VStack(alignment: .leading, spacing: 2) {
                     HStack(spacing: 8) {
-                        Label("Saved", systemImage: "checkmark.circle.fill")
-                            .foregroundStyle(.green).font(.caption)
+                        Label("Saved", systemImage: applyState.feedbackSymbol)
+                            .foregroundStyle(applyState.feedbackTint).font(.caption)
                         Spacer(minLength: 8)
                         if model.canUndo {
                             Button("Undo") { Task { await model.undoLastApply() } }
@@ -191,8 +336,8 @@ struct SurfaceFeedbackBar: View {
         case .failed(let message, let offersReload):
             bar {
                 HStack(alignment: .firstTextBaseline, spacing: 8) {
-                    Label(message, systemImage: "xmark.octagon.fill")
-                        .foregroundStyle(.red).font(.caption)
+                    Label(message, systemImage: applyState.feedbackSymbol)
+                        .foregroundStyle(applyState.feedbackTint).font(.caption)
                         .fixedSize(horizontal: false, vertical: true)
                     // Stale-on-disk: the fix is a reload, so offer it right on the banner (G3).
                     if offersReload {

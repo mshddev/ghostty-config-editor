@@ -91,7 +91,7 @@ final class KeyRecorderNSView: NSView {
     override func drawFocusRingMask() {
         // Recording draws its own accent border, so only ring the focused-idle state.
         guard !isRecording else { return }
-        NSBezierPath(roundedRect: bounds.insetBy(dx: 1, dy: 1), xRadius: 6, yRadius: 6).fill()
+        NSBezierPath(roundedRect: bounds.insetBy(dx: 1, dy: 1), xRadius: DesignTokens.Radius.standard, yRadius: DesignTokens.Radius.standard).fill()
     }
 
     // MARK: - Focus / lifecycle
@@ -247,7 +247,7 @@ final class KeyRecorderNSView: NSView {
 
     override func draw(_ dirtyRect: NSRect) {
         let bounds = self.bounds.insetBy(dx: 1, dy: 1)
-        let path = NSBezierPath(roundedRect: bounds, xRadius: 6, yRadius: 6)
+        let path = NSBezierPath(roundedRect: bounds, xRadius: DesignTokens.Radius.standard, yRadius: DesignTokens.Radius.standard)
         (isRecording ? NSColor.controlAccentColor.withAlphaComponent(0.12) : NSColor.controlBackgroundColor).setFill()
         path.fill()
         (isRecording ? NSColor.controlAccentColor : NSColor.separatorColor).setStroke()

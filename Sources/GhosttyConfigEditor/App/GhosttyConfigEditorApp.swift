@@ -315,7 +315,7 @@ struct RootView: View {
                     .overlay {
                         if model.isShowingWelcome { WelcomeView() }
                     }
-                    .animation(reduceMotion ? nil : .easeInOut(duration: 0.2), value: model.isShowingWelcome)
+                    .animation(MotionSystem.gated(MotionSystem.settle, reduceMotion: reduceMotion), value: model.isShowingWelcome)
             }
         }
     }
