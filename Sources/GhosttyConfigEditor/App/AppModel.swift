@@ -77,11 +77,13 @@ public final class AppModel {
     public enum ApplyState: Equatable {
         case idle
         case applying
-        /// Saved successfully. `notice` carries a new-surface/restart hint (AE5);
-        /// `gitTracked` is true when the file lives in a git working tree (U7);
-        /// `reload` is the auto-reload outcome whose kit-derived caption the views
-        /// stack beneath the notice (R1, R6 — see `GhosttyReloader`).
-        case succeeded(notice: String?, gitTracked: Bool, reload: ReloadOutcome)
+        /// Saved successfully. `headline` is the lead word — "Saved" for an apply,
+        /// "Reverted" for an undo — so an undo stops stacking "Saved" over "Reverted"
+        /// (CM-6). `notice` carries a new-surface/restart hint (AE5); `gitTracked` is
+        /// true when the file lives in a git working tree (U7); `reload` is the
+        /// auto-reload outcome whose kit-derived caption the views stack beneath the
+        /// notice (R1, R6 — see `GhosttyReloader`).
+        case succeeded(headline: String, notice: String?, gitTracked: Bool, reload: ReloadOutcome)
         /// A write/validation failure. `offersReload` is true only for the stale-on-disk
         /// case, where re-reading disk is the actual fix — so the surface can show an inline
         /// "Reload" (the message says "reload" and now something does, G3/GAP-2). All other
@@ -166,6 +168,12 @@ public final class AppModel {
     private var environment: GhosttyEnvironment?
     private var catalog: OptionCatalog?
     private var lastReceipt: WriteReceipt?
+    /// The last successful inline edit (option name + values), captured so a revert can
+    /// be redone by re-issuing it (U6). Edit-replay — it never touches `lastReceipt`.
+    private var lastApplyEdit: (name: String, values: [String])?
+    /// The edit a Redo would re-apply: set when an undo reverts `lastApplyEdit`, cleared
+    /// by the next successful apply. Drives the time-boxed inline Redo link (U6).
+    private var redoableApply: (name: String, values: [String])?
 
     /// Serializes every disk write — single-option applies, batch import/reset, and
     /// undo — so only one is ever in flight (U1/GAP-8). Coalesces a same-option burst
@@ -367,13 +375,17 @@ public final class AppModel {
                 cli: environment.cli
             )
             lastReceipt = receipt
+            // Remember what to redo-through, and invalidate any prior redo — a fresh
+            // apply supersedes a revert that could have been redone (U6).
+            lastApplyEdit = (optionName, values)
+            redoableApply = nil
             let gitTracked = GitContext.isInsideWorkingTree(path: receipt.resolvedPath)
             if let catalog { await refreshConfig(environment: environment, catalog: catalog) }
             // Best-effort: ask the running Ghostty to reload now that the new bytes are
             // committed (R1). Never throws — the only throwing call here is the write
             // above — and never downgrades a successful save to a failure (R5/KTD5).
             let reload = reloader.reload(enabled: autoReloadEnabled)
-            applyState = .succeeded(notice: option.option.applyNotice, gitTracked: gitTracked, reload: reload)
+            applyState = .succeeded(headline: "Saved", notice: option.option.applyNotice, gitTracked: gitTracked, reload: reload)
         } catch ConfigWriteError.validationFailed(let messages) {
             applyState = .failed(messages.first?.message ?? "The change didn't validate.", offersReload: false)
         } catch ConfigWriteError.staleOnDisk {
@@ -393,6 +405,19 @@ public final class AppModel {
         }
     }
 
+    /// True while a just-reverted edit can be re-applied — drives the inline Redo link (U6).
+    public var canRedoApply: Bool { redoableApply != nil }
+
+    /// Re-apply the edit a prior undo reverted (U6). A single-step redo implemented as
+    /// edit-replay: it re-issues `applyEdit` through the same serial queue, so it never
+    /// fights the last-write receipt model. Guarded — a no-op when nothing is redoable.
+    public func redoLastApply() async {
+        guard let edit = redoableApply else { return }
+        await writeQueue.submit(key: edit.name) { [weak self] in
+            await self?.performApplyEdit(optionName: edit.name, values: edit.values)
+        }
+    }
+
     /// The actual undo, run serially by `writeQueue`. Reads `lastReceipt` **at execution
     /// time** (not captured at enqueue), so an undo queued behind a still-pending write
     /// reverts *that* write's bytes — snapshotting the receipt at enqueue would restore
@@ -403,11 +428,15 @@ public final class AppModel {
         do {
             _ = try ConfigWriter().restore(from: receipt)
             lastReceipt = nil
+            // The edit we just reverted becomes redoable (U6) — a single-step redo.
+            redoableApply = lastApplyEdit
             await refreshConfig(environment: environment, catalog: catalog)
             // Reload after an undo too, so the live terminal reverts (closes the undo
             // gap — undo previously refreshed only the app's own view) (R1/AE5).
             let reload = reloader.reload(enabled: autoReloadEnabled)
-            applyState = .succeeded(notice: "Reverted to the previous value.", gitTracked: false, reload: reload)
+            // "Reverted" as the headline, so the UI stops stacking "Saved" over the
+            // revert message (CM-6); the reload caption still rides beneath if present.
+            applyState = .succeeded(headline: "Reverted", notice: nil, gitTracked: false, reload: reload)
         } catch {
             applyState = .failed(error.localizedDescription, offersReload: false)
         }
@@ -597,10 +626,15 @@ public final class AppModel {
         do {
             let receipt = try await work(browser.merged.model, environment.cli)
             lastReceipt = receipt
+            // A batch write (import / reset-all / reset-category) isn't a single inline
+            // edit, so it carries no single-step redo: clear both, so undoing a batch
+            // never offers to redo a stale, unrelated inline edit (U6).
+            lastApplyEdit = nil
+            redoableApply = nil
             let gitTracked = GitContext.isInsideWorkingTree(path: receipt.resolvedPath)
             await refreshConfig(environment: environment, catalog: catalog)
             let reload = reloader.reload(enabled: autoReloadEnabled)
-            applyState = .succeeded(notice: notice, gitTracked: gitTracked, reload: reload)
+            applyState = .succeeded(headline: "Saved", notice: notice, gitTracked: gitTracked, reload: reload)
         } catch ConfigWriteError.validationFailed(let messages) {
             applyState = .failed(messages.first?.message ?? "The change didn't validate.", offersReload: false)
         } catch ConfigWriteError.staleOnDisk {

@@ -188,6 +188,47 @@ extension AppModel.ApplyState {
         case .failed: return .red
         }
     }
+    /// True once a write has settled (saved or failed) — the point at which feedback
+    /// animates in. `.applying` is *not* settled, so it appears instantly (MO-2).
+    var isSettled: Bool {
+        switch self {
+        case .succeeded, .failed: return true
+        case .idle, .applying: return false
+        }
+    }
+}
+
+/// The one visual for a settled apply state (DS-10): the icon+headline line over the
+/// stacked captions (notice, auto-reload message, git-tracked hint). The per-row
+/// feedback (U6) and the surface feedback bar both render this identically — each owns
+/// only its own chrome (divider, padding) and action links (Undo / Redo / Reload).
+/// Renders nothing while idle or applying (those are placement-specific).
+struct ApplyFeedbackContent: View {
+    let state: AppModel.ApplyState
+
+    var body: some View {
+        switch state {
+        case .idle, .applying:
+            EmptyView()
+        case .succeeded(let headline, let notice, let gitTracked, let reload):
+            VStack(alignment: .leading, spacing: 2) {
+                Label(headline, systemImage: state.feedbackSymbol)
+                    .foregroundStyle(state.feedbackTint).font(.caption)
+                if let notice { Text(notice).font(.caption2).foregroundStyle(.secondary) }
+                if let reloadMessage = reload.message {
+                    Text(reloadMessage).font(.caption2).foregroundStyle(.secondary)
+                }
+                if gitTracked {
+                    Text("This file is git-tracked — commit it in your dotfiles repo.")
+                        .font(.caption2).foregroundStyle(.secondary)
+                }
+            }
+        case .failed(let message, _):
+            Label(message, systemImage: state.feedbackSymbol)
+                .foregroundStyle(state.feedbackTint).font(.caption)
+                .fixedSize(horizontal: false, vertical: true)
+        }
+    }
 }
 
 /// The top of every surface: a title, an optional secondary count line, an optional
@@ -317,34 +358,24 @@ struct SurfaceFeedbackBar: View {
                     Text("Saving…").font(.caption).foregroundStyle(.secondary)
                 }
             }
-        case .succeeded(let notice, let gitTracked, let reload):
+        case .succeeded:
             bar {
-                VStack(alignment: .leading, spacing: 2) {
-                    HStack(spacing: 8) {
-                        Label("Saved", systemImage: applyState.feedbackSymbol)
-                            .foregroundStyle(applyState.feedbackTint).font(.caption)
-                        Spacer(minLength: 8)
-                        if model.canUndo {
-                            Button("Undo") { Task { await model.undoLastApply() } }
-                                .buttonStyle(.link).font(.caption)
-                        }
-                    }
-                    if let notice { Text(notice).font(.caption2).foregroundStyle(.secondary) }
-                    if let reloadMessage = reload.message {
-                        Text(reloadMessage).font(.caption2).foregroundStyle(.secondary)
-                    }
-                    if gitTracked {
-                        Text("This file is git-tracked — commit it in your dotfiles repo.")
-                            .font(.caption2).foregroundStyle(.secondary)
+                HStack(alignment: .top, spacing: 8) {
+                    ApplyFeedbackContent(state: applyState)
+                    Spacer(minLength: 8)
+                    if model.canUndo {
+                        Button("Undo") { Task { await model.undoLastApply() } }
+                            .buttonStyle(.link).font(.caption)
+                    } else if model.canRedoApply {
+                        Button("Redo") { Task { await model.redoLastApply() } }
+                            .buttonStyle(.link).font(.caption)
                     }
                 }
             }
-        case .failed(let message, let offersReload):
+        case .failed(_, let offersReload):
             bar {
-                HStack(alignment: .firstTextBaseline, spacing: 8) {
-                    Label(message, systemImage: applyState.feedbackSymbol)
-                        .foregroundStyle(applyState.feedbackTint).font(.caption)
-                        .fixedSize(horizontal: false, vertical: true)
+                HStack(alignment: .top, spacing: 8) {
+                    ApplyFeedbackContent(state: applyState)
                     // Stale-on-disk: the fix is a reload, so offer it right on the banner (G3).
                     if offersReload {
                         Spacer(minLength: 8)

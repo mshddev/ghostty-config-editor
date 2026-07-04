@@ -414,7 +414,7 @@ struct OptionRow: View {
                 editor
                 infoButton
             }
-            feedback
+            OptionRowFeedback(option: option)
         }
         .padding(.vertical, RowMetrics.rowVerticalPadding)
         .onHover { isHovering = $0 }
@@ -505,56 +505,6 @@ struct OptionRow: View {
         }
     }
 
-    /// Per-row apply status, shown only while this option is the one being written
-    /// (`applyingOptionName`), so a single global apply state never decorates the
-    /// wrong row.
-    @ViewBuilder
-    private var feedback: some View {
-        if model.applyingOptionName == option.option.name {
-            switch model.applyState {
-            case .idle:
-                EmptyView()
-            case .applying:
-                HStack(spacing: 6) {
-                    ProgressView().controlSize(.small)
-                    Text("Saving…").font(.caption2).foregroundStyle(.secondary)
-                }
-                .padding(.leading, 15)
-            case .succeeded(let notice, let gitTracked, let reload):
-                VStack(alignment: .leading, spacing: 2) {
-                    Label("Saved", systemImage: "checkmark.circle.fill")
-                        .foregroundStyle(.green).font(.caption)
-                    if let notice { Text(notice).font(.caption2).foregroundStyle(.secondary) }
-                    if let reloadMessage = reload.message {
-                        Text(reloadMessage).font(.caption2).foregroundStyle(.secondary)
-                    }
-                    if gitTracked {
-                        Text("This file is git-tracked — commit it in your dotfiles repo.")
-                            .font(.caption2).foregroundStyle(.secondary)
-                    }
-                    if model.canUndo {
-                        Button("Undo") { Task { await model.undoLastApply() } }
-                            .buttonStyle(.link).font(.caption2)
-                    }
-                }
-                .padding(.leading, 15)
-            case .failed(let message, let offersReload):
-                HStack(alignment: .firstTextBaseline, spacing: 8) {
-                    Label(message, systemImage: "xmark.octagon.fill")
-                        .foregroundStyle(.red).font(.caption2)
-                        .fixedSize(horizontal: false, vertical: true)
-                    // Stale-on-disk is the one failure a reload fixes — offer it inline
-                    // right where the error shows, so "reload and try again" is one click (G3).
-                    if offersReload {
-                        Button("Reload") { Task { await model.reloadFromDisk() } }
-                            .buttonStyle(.link).font(.caption2)
-                    }
-                }
-                .padding(.leading, 15)
-            }
-        }
-    }
-
     private var docHelp: String {
         let doc = option.option.documentation
         return doc.isEmpty ? "No documentation available." : doc
@@ -568,6 +518,100 @@ struct OptionRow: View {
     /// owns truncation, so a real sentence wraps rather than ellipsizing mid-word.
     private var subtitle: String {
         option.option.subtitleSummary
+    }
+}
+
+/// Per-row apply feedback (U6, MO-2). Shown only while this option is the one being
+/// written (`applyingOptionName`), so a single global apply state never decorates the
+/// wrong row. Three behaviors the old inline block lacked:
+///  - the settled feedback **fades in** under the row (`MotionSystem.quickFade` + a
+///    slide from the top); `.applying` appears instantly so "Saving…" doesn't flicker;
+///  - after ~2.5s untouched a *saved* result **collapses to a small static checkmark**,
+///    so the rows below return to place instead of being shoved permanently — ⌘Z stays
+///    the durable undo (a failure never collapses; it holds until the next edit);
+///  - a brief inline **Undo** (after a save) / **Redo** (after a revert) rides along
+///    until the collapse — the time-boxed single-step redo (U6 decision).
+/// The collapse timer keys on `applyState`: every settle is preceded by `.applying`, so
+/// the id always changes between outcomes and the 2.5s window restarts each edit.
+private struct OptionRowFeedback: View {
+    @Environment(AppModel.self) private var model
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    let option: MergedOption
+    @State private var collapsed = false
+
+    private var isActiveRow: Bool { model.applyingOptionName == option.option.name }
+
+    var body: some View {
+        Group {
+            if isActiveRow {
+                content
+                    .padding(.leading, 15)
+            }
+        }
+        .animation(MotionSystem.gated(MotionSystem.quickFade, reduceMotion: reduceMotion),
+                   value: model.applyState.isSettled)
+        .task(id: model.applyState) { await runCollapseTimer() }
+    }
+
+    @ViewBuilder private var content: some View {
+        switch model.applyState {
+        case .idle:
+            EmptyView()
+        case .applying:
+            HStack(spacing: 6) {
+                ProgressView().controlSize(.small)
+                Text("Saving…").font(.caption2).foregroundStyle(.secondary)
+            }
+        case .succeeded(let headline, _, _, _):
+            succeeded(headline: headline)
+                .transition(.opacity.combined(with: .move(edge: .top)))
+        case .failed(let message, let offersReload):
+            HStack(alignment: .firstTextBaseline, spacing: 8) {
+                ApplyFeedbackContent(state: model.applyState)
+                // Stale-on-disk is the one failure a reload fixes — offer it inline right
+                // where the error shows, so "reload and try again" is one click (G3).
+                if offersReload {
+                    Button("Reload") { Task { await model.reloadFromDisk() } }
+                        .buttonStyle(.link).font(.caption2)
+                }
+            }
+            .transition(.opacity.combined(with: .move(edge: .top)))
+        }
+    }
+
+    @ViewBuilder private func succeeded(headline: String) -> some View {
+        if collapsed {
+            // Collapsed: a small static checkmark, so the rows below return to place. The
+            // headline is its accessibility label so VoiceOver still says Saved/Reverted.
+            Image(systemName: model.applyState.feedbackSymbol)
+                .foregroundStyle(model.applyState.feedbackTint)
+                .font(.caption)
+                .accessibilityLabel(headline)
+        } else {
+            VStack(alignment: .leading, spacing: 4) {
+                ApplyFeedbackContent(state: model.applyState)
+                if model.canUndo {
+                    Button("Undo") { Task { await model.undoLastApply() } }
+                        .buttonStyle(.link).font(.caption2)
+                } else if model.canRedoApply {
+                    Button("Redo") { Task { await model.redoLastApply() } }
+                        .buttonStyle(.link).font(.caption2)
+                }
+            }
+        }
+    }
+
+    /// Reset on every state change, then — only for *this* row's saved result — wait
+    /// ~2.5s and collapse. Cancelled and restarted whenever `applyState` changes (the
+    /// `.task(id:)` identity), so a new edit reopens the full feedback.
+    private func runCollapseTimer() async {
+        collapsed = false
+        guard isActiveRow, case .succeeded = model.applyState else { return }
+        try? await Task.sleep(for: .seconds(2.5))
+        guard !Task.isCancelled else { return }
+        withAnimation(MotionSystem.gated(MotionSystem.quickFade, reduceMotion: reduceMotion)) {
+            collapsed = true
+        }
     }
 }
 
