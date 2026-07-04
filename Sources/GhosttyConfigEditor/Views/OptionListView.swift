@@ -1093,7 +1093,10 @@ private struct NumericOptionEditor: View {
                 plainField
             }
         }
-        .accessibilityLabel(Text(option.option.displayTitle))
+        // Each inner control (slider / field / stepper / size) carries the full shared
+        // label (name + default + state) directly; the container keeps the friendly name
+        // as a fallback for the whole group.
+        .accessibilityLabel(optionControlA11yLabel(option))
         .onChange(of: fieldFocused) { _, focused in
             if !focused { commitOnBlur() }   // commit-on-blur (B7)
         }
@@ -1121,6 +1124,11 @@ private struct NumericOptionEditor: View {
                     if !editing { commitSlider(spec) }
                 }
                 .frame(width: 120)
+                // Name + default + state on the control itself (not the container, which
+                // wouldn't reliably attach), and the friendly value ("85%"), so VoiceOver
+                // speaks the same as every other editor rather than a bare track fraction.
+                .accessibilityLabel(optionControlA11yLabel(option))
+                .accessibilityValue(Text(spec.displayString(for: spec.clamp(live))))
                 // Read-out via the spec's display transform: a 0–1 opacity reads "85%",
                 // a contrast slider stays a plain number (no scale) (DS-1/U3).
                 Text(spec.displayString(for: spec.clamp(live)))
@@ -1143,7 +1151,6 @@ private struct NumericOptionEditor: View {
                 .accessibilityHidden(true)
             }
         }
-        .accessibilityValue(Text(spec.displayString(for: spec.clamp(live))))
         .onAppear { live = seed(spec) }
         .onChange(of: draft) { _, _ in live = seed(spec) }
     }
@@ -1177,6 +1184,7 @@ private struct NumericOptionEditor: View {
                 // Resign on Return so commit-on-blur is the single write path and a
                 // following ⌘Z reverts the config write, not the field text (review #2).
                 .onSubmit { fieldFocused = false }
+                .accessibilityLabel(optionControlA11yLabel(option))
             if let unit = spec.unit {
                 Text(unit).font(.caption).foregroundStyle(.secondary)
             }
@@ -1194,11 +1202,13 @@ private struct NumericOptionEditor: View {
         if let lo = spec.min, let hi = spec.max, lo < hi {
             Stepper("", value: stepperBinding(spec), in: lo...hi, step: spec.step ?? 1)
                 .labelsHidden()
+                .accessibilityLabel(optionControlA11yLabel(option))
         } else {
             Stepper("",
                     onIncrement: { stepField(spec, by: 1) },
                     onDecrement: { stepField(spec, by: -1) })
                 .labelsHidden()
+                .accessibilityLabel(optionControlA11yLabel(option))
         }
     }
 
@@ -1260,6 +1270,7 @@ private struct NumericOptionEditor: View {
                 .frame(width: 120)
                 .focused($fieldFocused)
                 .onSubmit { fieldFocused = false }   // resign → commit-on-blur; ⌘Z targets config (review #2)
+                .accessibilityLabel(optionControlA11yLabel(option))
                 // VoiceOver announces the friendly size, not the raw digits (CM-8).
                 .accessibilityValue(Text(formatted.isEmpty ? draft : formatted))
         }
@@ -1277,6 +1288,7 @@ private struct NumericOptionEditor: View {
                 .frame(width: 80)
                 .focused($fieldFocused)
                 .onSubmit { commitUnclamped() }
+                .accessibilityLabel(optionControlA11yLabel(option))
             if inferredStep != 1 {
                 // A fractional default earns a fine stepper; an integer default drops
                 // it, since a whole-number nudge on an unbounded field is noise.
@@ -1284,6 +1296,7 @@ private struct NumericOptionEditor: View {
                         onIncrement: { stepUnclamped(by: inferredStep) },
                         onDecrement: { stepUnclamped(by: -inferredStep) })
                     .labelsHidden()
+                    .accessibilityLabel(optionControlA11yLabel(option))
             }
         }
     }
@@ -1323,9 +1336,12 @@ private struct NumericOptionEditor: View {
     // MARK: Formatting
 
     /// Decimal places implied by the step: whole numbers for step ≥ 1, otherwise
-    /// enough places to render the step (capped at 3).
+    /// enough places to render the step (capped at 3). A non-positive step (a
+    /// mis-authored spec) maps to whole numbers rather than trapping: `-log10(0)` is
+    /// +∞ and `Int(.infinity)` is a hard crash, and a negative step yields NaN.
     private func decimals(for spec: NumericSpec) -> Int {
         let step = spec.step ?? 1
+        guard step > 0 else { return 0 }
         if step >= 1 { return 0 }
         return Swift.min(3, Int(ceil(-log10(step))))
     }

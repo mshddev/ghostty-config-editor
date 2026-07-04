@@ -445,6 +445,9 @@ public final class AppModel {
     public func resetApplyState() {
         applyState = .idle
         applyingOptionName = nil
+        // Invalidate any pending single-step redo: it's time-boxed to the visible
+        // feedback, and after a disk reload the reverted bytes may already be gone (U6).
+        redoableApply = nil
     }
 
     // MARK: - Reload from disk (G3)

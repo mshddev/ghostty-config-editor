@@ -49,4 +49,16 @@ final class FontFeaturesTests: XCTestCase {
     func testDisableTagMatchIsCaseInsensitive() {
         XCTAssertFalse(FontFeatures.ligaturesEnabled(["-CALT"]))
     }
+
+    // A user's explicit enable tag (`calt`, no minus) is not our disable tag, so it is
+    // preserved when turning ligatures off — the disable set is appended alongside it.
+    // The two contradict; Ghostty resolves last-wins (the trailing `-calt` disables), and
+    // reading the result back correctly reports ligatures off.
+    func testEnableTagAndDisableSetCoexistAndReadAsOff() {
+        let off = FontFeatures.disablingLigatures(["calt"])
+        XCTAssertEqual(off, ["calt", "-calt", "-liga", "-dlig"])
+        XCTAssertFalse(FontFeatures.ligaturesEnabled(off))
+        // Turning back on strips only the disable tags, leaving the user's `calt`.
+        XCTAssertEqual(FontFeatures.enablingLigatures(off), ["calt"])
+    }
 }
