@@ -195,6 +195,8 @@
   .tag.pref    { background: var(--accent-soft); color: var(--accent); border: 1px solid var(--accent-line); }
   .tag.unit    { background: var(--surface-2); color: var(--ink-2); border: 1px solid var(--line); }
   .tag.flip    { background: var(--danger-soft); color: var(--danger); border: 1px solid color-mix(in srgb, var(--danger) 30%, transparent); }
+  .tag.locked  { background: var(--good-soft); color: var(--good); border: 1px solid color-mix(in srgb, var(--good) 32%, transparent); }
+  .decis.done { border-left: 3px solid var(--good); }
   .decis h3 { font-size: 16.5px; margin: 0; font-weight: 650; letter-spacing: -.01em; }
   .decis .field { font-size: 13.5px; line-height: 1.5; }
   .decis .field .lbl {
@@ -206,6 +208,13 @@
     font-size: 13.5px; border: 1px solid var(--line);
   }
   .decis .ask b { color: var(--ink); }
+  .decis .outcome {
+    margin-top: auto; padding: 10px 12px; background: var(--good-soft); border-radius: 9px;
+    font-size: 13.5px; border: 1px solid color-mix(in srgb, var(--good) 30%, transparent);
+    display: flex; gap: 8px; align-items: baseline;
+  }
+  .decis .outcome .ck { color: var(--good); font-weight: 700; flex: none; }
+  .decis .outcome b { color: var(--ink); }
   code, .kbd {
     font-family: var(--mono); font-size: .88em;
     background: var(--surface-2); padding: 1px 5px; border-radius: 5px; color: var(--ink);
@@ -356,7 +365,7 @@
 <header class="topbar">
   <span class="mark">ghostty <b>config</b> · pass-2 plan</span>
   <nav>
-    <a class="decis" href="#decisions">◆ Decisions</a>
+    <a class="decis" href="#decisions" style="color:var(--good)">✓ Decisions</a>
     <a href="#map">Map</a>
     <a href="#phases">Phases</a>
     <a href="#ktd">Decisions&nbsp;made</a>
@@ -393,94 +402,94 @@
     <div class="stat"><div class="n">27</div><div class="l">dependency-ordered units</div></div>
     <div class="stat"><div class="n">98</div><div class="l">findings &amp; gaps traced</div></div>
     <div class="stat"><div class="n">6</div><div class="l">R11 quality gates</div></div>
-    <div class="stat"><div class="n">4</div><div class="l">decisions need your call</div></div>
+    <div class="stat"><div class="n">6&nbsp;✓</div><div class="l">decisions locked</div></div>
     <div class="stat"><div class="n">463</div><div class="l">themes to render fast</div></div>
   </div>
 
   <!-- DECISIONS -->
   <section id="decisions">
-    <div class="sec-head"><h2>What needs you</h2><div class="rule"></div></div>
-    <div class="sec-title">Decisions to make before build</div>
+    <div class="sec-head"><h2>Your calls</h2><div class="rule"></div></div>
+    <div class="sec-title">All six decisions — locked</div>
     <p class="sec-lede">
-      The plan is self-resolving almost everywhere — most forks are explicitly the implementer's call.
-      These are the few that change a <b>user-facing name</b>, <b>flip a prior behavior</b>, or <b>revisit a Pass-1 decision</b>,
-      so they're worth your sign-off. Two more are pure preference.
+      Every fork that needed you is resolved (2026-07-04) and folded into the plan. U4 (the rename) is
+      already shipped to the codebase and a new repo; the other five are recorded as <b>LOCKED</b> notes on their units.
+      Everything else was self-resolving or the implementer's call by design.
     </p>
 
     <div class="decis-wrap">
       <div class="decis-banner">
-        <span class="dot"></span>
-        <b>4&nbsp;to&nbsp;confirm · 2&nbsp;your&nbsp;preference</b>
-        <span>— everything else is decided in the plan or left to the implementer by design.</span>
+        <span class="dot" style="background:var(--good);box-shadow:0 0 0 4px color-mix(in srgb, var(--good) 22%, transparent);"></span>
+        <b>6&nbsp;of&nbsp;6 decided</b>
+        <span>— outcomes below; each is a LOCKED note on its unit in the plan.</span>
       </div>
       <div class="decis-grid">
 
-        <div class="decis">
+        <div class="decis done">
           <div class="top">
-            <span class="tag confirm">Confirm</span>
+            <span class="tag locked">✓ Shipped</span>
             <span class="tag unit">U4</span>
           </div>
           <h3>One canonical product name</h3>
-          <div class="field"><span class="lbl">What changes</span>The app calls itself three different names across the menu bar, window title and Welcome header. U4 standardizes on <b>"Ghostty Config Editor"</b> everywhere (executable/paths untouched).</div>
-          <div class="field"><span class="lbl">Why</span>Three names read as unfinished; one name is a coherent identity.</div>
-          <div class="ask"><b>Your call:</b> is "Ghostty Config Editor" the name you want (vs. a shorter "Ghostty Config")?</div>
+          <div class="field"><span class="lbl">What changed</span>The app called itself three different names across the menu bar, window title and Welcome header. Now standardized on <b>"Ghostty Config Editor"</b> everywhere.</div>
+          <div class="field"><span class="lbl">Why this name</span>"Config" is the term people search for a Ghostty GUI; "editor" is precise for a config-file tool; it reads as a third-party companion, not first-party.</div>
+          <div class="outcome"><span class="ck">✓</span><span><b>Decision:</b> Ghostty Config Editor, subtitle "An unofficial config editor for Ghostty." Renamed across code, module, bundle id, backup dir, docs; pushed to new repo <code>ghostty-config-editor</code>.</span></div>
         </div>
 
-        <div class="decis">
+        <div class="decis done">
           <div class="top">
-            <span class="tag confirm">Confirm</span>
+            <span class="tag locked">✓ Locked</span>
             <span class="tag unit">U7</span>
           </div>
           <h3>"Window transparency" → "Window opacity"</h3>
-          <div class="field"><span class="lbl">What changes</span>The slider reads a raw <code>1</code> with ambiguous direction. U7 retitles to <b>"Window opacity"</b> so 100% = solid, shows a %, and adds "Opaque / Transparent" captions. Matches Ghostty's key semantics — <b>no math change</b>.</div>
+          <div class="field"><span class="lbl">What changes</span>The slider read a raw <code>1</code> with ambiguous direction. Retitled to <b>"Window opacity"</b> so 100% = solid, with a % and "Opaque / Transparent" captions. Matches Ghostty's key semantics — <b>no math change</b>.</div>
           <div class="field"><span class="lbl">Why</span>"Opacity 100%" is unambiguous where "transparency 1" inverts the mental model. Search still hits "see-through".</div>
-          <div class="ask"><b>Your call:</b> approve the user-facing rename?</div>
+          <div class="outcome"><span class="ck">✓</span><span><b>Decision:</b> rename to "Window opacity".</span></div>
         </div>
 
-        <div class="decis">
+        <div class="decis done">
           <div class="top">
-            <span class="tag confirm">Confirm</span>
+            <span class="tag locked">✓ Locked</span>
             <span class="tag flip">Revisits Pass-1</span>
             <span class="tag unit">U5 · KTD8</span>
           </div>
           <h3>Drop the mid-row "Customized" pill</h3>
-          <div class="field"><span class="lbl">What changes</span>Pass 1's mid-row "Customized" pill squeezes long labels into wrapping/truncation and repeats to noise. U5 replaces it with a small non-accent <b>state dot</b> + reset folded into the ⓘ popover (inline reset glyph on hover/focus).</div>
-          <div class="field"><span class="lbl">Why</span>Keeps "this is changed" + one-step reset while giving labels their room back. This is the <b>one Pass-1 decision the plan reopens</b>, with evidence.</div>
-          <div class="ask"><b>Your call:</b> approve revisiting the B5 pill decision?</div>
+          <div class="field"><span class="lbl">What changes</span>Pass 1's mid-row "Customized" pill squeezed long labels into wrapping/truncation and repeated to noise. Replaced with a small non-accent <b>state dot</b> + reset folded into the ⓘ popover (inline reset glyph on hover/focus).</div>
+          <div class="field"><span class="lbl">Why</span>Keeps "this is changed" + one-step reset while giving labels their room back. The one Pass-1 decision the plan reopens, with evidence.</div>
+          <div class="outcome"><span class="ck">✓</span><span><b>Decision:</b> replace pill with a state dot; reset in the ⓘ popover + hover glyph.</span></div>
         </div>
 
-        <div class="decis">
+        <div class="decis done">
           <div class="top">
-            <span class="tag confirm">Confirm</span>
+            <span class="tag locked">✓ Locked</span>
             <span class="tag flip">Behavior flip</span>
             <span class="tag unit">U17</span>
           </div>
           <h3>Disabled default shortcuts show in place</h3>
-          <div class="field"><span class="lbl">What changes</span>Today an action whose only shortcut is a <i>disabled default</i> shows as an empty "No shortcut" row. After U17 it shows the shortcut as a <b>struck-through capsule</b> with one-click re-enable.</div>
+          <div class="field"><span class="lbl">What changes</span>Today an action whose only shortcut is a <i>disabled default</i> shows an empty "No shortcut" row. Now it shows the shortcut as a <b>struck-through capsule</b> with one-click re-enable.</div>
           <div class="field"><span class="lbl">Why</span>Surfaces a turned-off default (currently invisible) and makes it reversible. A deliberate flip, not a pure revival.</div>
-          <div class="ask"><b>Your call:</b> approve the behavior change?</div>
+          <div class="outcome"><span class="ck">✓</span><span><b>Decision:</b> show disabled defaults struck-through in place.</span></div>
         </div>
 
-        <div class="decis">
+        <div class="decis done">
           <div class="top">
-            <span class="tag pref">Your preference</span>
+            <span class="tag locked">✓ Locked</span>
             <span class="tag unit">U6</span>
           </div>
           <h3>Single-step "Redo" link</h3>
-          <div class="field"><span class="lbl">What changes</span>After a change, the collapsed feedback checkmark can offer a small time-boxed <b>Redo</b> link. The plan will drop it if it fights the receipt model. A full undo/redo stack stays deferred either way.</div>
+          <div class="field"><span class="lbl">What changes</span>After a change, the collapsed feedback checkmark offers a small time-boxed <b>Redo</b> link. Dropped only if it fights the receipt model (flagged in the PR). A full undo/redo stack stays deferred either way.</div>
           <div class="field"><span class="lbl">Why</span>Cheap one-step redo without new machinery.</div>
-          <div class="ask"><b>Your call:</b> pursue the Redo link, or leave it entirely to the implementer?</div>
+          <div class="outcome"><span class="ck">✓</span><span><b>Decision:</b> add the Redo link.</span></div>
         </div>
 
-        <div class="decis">
+        <div class="decis done">
           <div class="top">
-            <span class="tag pref">Your preference</span>
+            <span class="tag locked">✓ Locked</span>
             <span class="tag unit">U15 · U16</span>
           </div>
           <h3>Theme browsing defaults</h3>
-          <div class="field"><span class="lbl">What changes</span>Themes get an optional <b>grid mode</b> (list stays default) and a <b>hover preview</b> that enlarges the terminal mockup in place — or a fixed preview pane if in-place reflow janks (implementer's call). Neither writes your config on hover.</div>
+          <div class="field"><span class="lbl">What changes</span>Themes get an optional <b>grid mode</b> (list stays default) and a <b>hover preview</b> that enlarges the terminal mockup — enlarge-in-place or a fixed pane, the implementer's call after trying it live. Neither writes your config on hover.</div>
           <div class="field"><span class="lbl">Why</span>Browse-before-commit without touching the config until you click.</div>
-          <div class="ask"><b>Your call:</b> happy with list-as-default + implementer's hover mechanic, or have a preference?</div>
+          <div class="outcome"><span class="ck">✓</span><span><b>Decision:</b> list stays the default; grid is a toggle; hover mechanic left to the implementer.</span></div>
         </div>
 
       </div>
