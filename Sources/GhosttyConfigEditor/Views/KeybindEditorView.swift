@@ -89,10 +89,20 @@ struct KeybindEditorView: View {
     private func bindingList(_ groups: [KeybindActionGroup], foldParams: Set<String>) -> some View {
         // Computed once per render, not per row.
         let restorable = model.restorableActions
-        return List(groups) { group in
-            KeybindRow(group: group,
-                       foldParams: foldParams,
-                       canRestoreDefault: restorable.contains(group.action))
+        // Read the ~140 actions under curated functional sections instead of one flat wall
+        // (KB-9). Sectioning is applied to the *filtered* groups, so a search shows only the
+        // sections that still have matches.
+        let sections = ActionCategoryCatalog.bundled.sections(for: groups)
+        return List {
+            ForEach(sections) { section in
+                Section(section.title) {
+                    ForEach(section.groups) { group in
+                        KeybindRow(group: group,
+                                   foldParams: foldParams,
+                                   canRestoreDefault: restorable.contains(group.action))
+                    }
+                }
+            }
         }
     }
 
