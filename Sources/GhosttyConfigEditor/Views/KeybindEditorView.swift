@@ -168,6 +168,10 @@ private struct KeybindRow: View {
 
     /// A soft, transient warning from the recorder (e.g. "add a modifier").
     @State private var warning: String?
+    /// True while any chord in this row is recording — drives the row's recording hint (the
+    /// guidance the compact capsule no longer shows). Reading it in the body is also what
+    /// re-lays-out the row on the recording toggle, so the recorder's width is always current.
+    @State private var isRecordingActive = false
     /// A pending conflict-at-capture prompt (F4): the chord the user just recorded, the
     /// action it already collides with, and which edit to commit on Replace.
     @State private var pendingConflict: PendingConflict?
@@ -200,6 +204,14 @@ private struct KeybindRow: View {
                     .foregroundStyle(.orange)
                     .lineLimit(2)
                     .fixedSize(horizontal: false, vertical: true)
+                    .frame(maxWidth: .infinity, alignment: .trailing)
+            } else if isRecordingActive {
+                // The capsule shows only a compact recording dot now, so the guidance lives
+                // here. Reading `isRecordingActive` also re-lays-out the row on the recording
+                // toggle, keeping the content-sized recorder's width current (Phase G review).
+                Label("Press the new keys — ⌫ clears, esc cancels.", systemImage: "record.circle")
+                    .font(.caption2)
+                    .foregroundStyle(.secondary)
                     .frame(maxWidth: .infinity, alignment: .trailing)
             }
         }
@@ -324,7 +336,8 @@ private struct KeybindRow: View {
         KeyRecorderView(
             token: chord.trigger,
             onCapture: { capture($0, edit: .rebind(chord)) },
-            onWarning: { warning = $0 }
+            onWarning: { warning = $0 },
+            onRecordingChanged: { isRecordingActive = $0 }
         )
         // Content-sized (U27): a ⌘n chip stays ~50pt (not a fixed 108) so two-chord rows
         // keep the action title readable at the minimum window width. Height stays 30.

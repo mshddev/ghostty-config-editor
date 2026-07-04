@@ -15,11 +15,14 @@ struct KeyRecorderView: NSViewRepresentable {
     let onCapture: (String) -> Void
     /// Called with a soft warning (e.g. "add a modifier") or nil to clear it.
     var onWarning: (String?) -> Void = { _ in }
+    /// Called when recording starts (true) / stops (false) — the row shows a recording hint.
+    var onRecordingChanged: (Bool) -> Void = { _ in }
 
     func makeNSView(context: Context) -> KeyRecorderNSView {
         let view = KeyRecorderNSView()
         view.onToken = onCapture
         view.onWarning = onWarning
+        view.onRecordingChanged = onRecordingChanged
         view.displayToken = token
         return view
     }
@@ -27,6 +30,7 @@ struct KeyRecorderView: NSViewRepresentable {
     func updateNSView(_ view: KeyRecorderNSView, context: Context) {
         view.onToken = onCapture
         view.onWarning = onWarning
+        view.onRecordingChanged = onRecordingChanged
         view.displayToken = token
         view.needsDisplay = true
     }
@@ -46,6 +50,12 @@ struct KeyRecorderView: NSViewRepresentable {
 final class KeyRecorderNSView: NSView {
     var onToken: ((String) -> Void)?
     var onWarning: ((String?) -> Void)?
+    /// Called when recording starts/stops, so the SwiftUI row can show its recording hint.
+    /// Also the *reliable* re-layout signal: the capsule's width depends only on
+    /// `displayToken`, not on the AppKit-internal `isRecording` that SwiftUI's layout can't
+    /// observe — so nothing here needs to force a resize on the recording toggle (U27,
+    /// Phase G review).
+    var onRecordingChanged: ((Bool) -> Void)?
     var displayToken: String = "" {
         didSet {
             guard oldValue != displayToken else { return }
@@ -68,7 +78,7 @@ final class KeyRecorderNSView: NSView {
             // The focus ring is suppressed while recording (the accent border stands in),
             // so re-note the mask when recording toggles.
             noteFocusRingMaskChanged()
-            invalidateIntrinsicContentSize()   // recording shows a wider hint line (U27)
+            onRecordingChanged?(isRecording)   // the row shows its recording hint
             updateAccessibilityValue()
             // MO-7: cross-fade the capsule's border/fill on the recording toggle (~120ms,
             // gated by Reduce Motion).
@@ -384,17 +394,16 @@ final class KeyRecorderNSView: NSView {
 
     // MARK: - Drawing
 
-    /// The text + font the capsule currently shows, shared by `draw` and
-    /// `intrinsicContentSize` so the capsule sizes to exactly what it renders (U27 — a
-    /// ⌘n chip is ~50pt, not a fixed 108, so two-chord rows stop truncating the action
-    /// title at the minimum window width).
-    private var displayedContent: (text: String, color: NSColor, font: NSFont) {
+    /// The capsule's **idle** text + font — shared by `draw` and `intrinsicContentSize` so
+    /// the capsule sizes to exactly what it renders when not recording (U27 — a ⌘n chip is
+    /// ~50pt, not a fixed 108, so two-chord rows stop truncating the action title at the
+    /// minimum window width). Crucially this does **not** vary with `isRecording`: the width
+    /// depends only on `displayToken`, which SwiftUI's layout reliably re-measures on — so a
+    /// recording⇄idle toggle never leaves the capsule stuck at the wrong width (Phase G review).
+    private var idleContent: (text: String, color: NSColor, font: NSFont) {
         // The stored token is Ghostty's raw `super+…` spelling; show the macOS glyphs.
         let shown = KeybindTrigger.displaySymbol(for: displayToken)
-        if isRecording {
-            return (displayToken.isEmpty ? "Press the keys…" : "Press the keys…  (\(shown))",
-                    .secondaryLabelColor, .systemFont(ofSize: NSFont.systemFontSize))
-        } else if displayToken.isEmpty {
+        if displayToken.isEmpty {
             // Names both affordances now that focus and recording are decoupled (A11Y-9).
             return ("Click or press ⏎ to record", .secondaryLabelColor,
                     .systemFont(ofSize: NSFont.systemFontSize))  // was tertiary — strict contrast (H3)
@@ -411,30 +420,36 @@ final class KeyRecorderNSView: NSView {
     }
 
     override func draw(_ dirtyRect: NSRect) {
-        // The border/fill live on the layer now (so they can cross-fade, MO-7); `draw`
-        // renders only the text, the recording hint, and the bound-state pencil.
+        // The border/fill live on the layer now (so they can cross-fade, MO-7).
         let bounds = self.bounds.insetBy(dx: 1, dy: 1)
-        let (text, color, font) = displayedContent
+        if isRecording {
+            // A compact recording indicator that fits the stable (idle-width) capsule — the
+            // accent border already signals recording, and the guidance ("press the new keys,
+            // ⌫ clears, esc cancels") lives in the row hint (SwiftUI) so the capsule width
+            // never has to grow (Phase G review). A pulsing look would need a timer; a static
+            // accent dot reads clearly enough.
+            drawRecordingDot(in: bounds)
+            return
+        }
+        let (text, color, font) = idleContent
         let attributes: [NSAttributedString.Key: Any] = [.font: font, .foregroundColor: color]
         let attributed = NSAttributedString(string: text, attributes: attributes)
         let size = attributed.size()
-        // While recording, lift the main line to make room for the hint beneath it;
-        // otherwise center it vertically (isFlipped, so y grows downward from the top).
-        let mainY = isRecording ? bounds.minY + 3 : bounds.midY - size.height / 2
-        attributed.draw(at: NSPoint(x: bounds.minX + 10, y: mainY))
-
-        if isRecording {
-            let hint = NSAttributedString(string: "⌫ clear · esc cancel", attributes: [
-                // `smallSystemFontSize` (~11pt) instead of a hardcoded 9pt — it tracks the
-                // system control-size setting, the closest AppKit gets to Dynamic Type here
-                // (H3, review nit #4). Contrast raised from tertiary to secondary.
-                .font: NSFont.systemFont(ofSize: NSFont.smallSystemFontSize),
-                .foregroundColor: NSColor.secondaryLabelColor,
-            ])
-            hint.draw(at: NSPoint(x: bounds.minX + 10, y: bounds.minY + 3 + size.height))
-        } else if !displayToken.isEmpty {
+        // Center vertically (isFlipped, so y grows downward from the top).
+        attributed.draw(at: NSPoint(x: bounds.minX + 10, y: bounds.midY - size.height / 2))
+        if !displayToken.isEmpty {
             drawEditAffordance(in: bounds)
         }
+    }
+
+    /// The recording state's compact in-capsule mark: a small accent dot at the leading edge
+    /// (the layer border already carries the accent) — no wide prompt, so the capsule keeps
+    /// its idle width.
+    private func drawRecordingDot(in bounds: NSRect) {
+        let d: CGFloat = 8
+        let rect = NSRect(x: bounds.minX + 10, y: bounds.midY - d / 2, width: d, height: d)
+        NSColor.controlAccentColor.setFill()
+        NSBezierPath(ovalIn: rect).fill()
     }
 
     /// A dimmed pencil at the trailing edge (KB-6): a *persistent* signal the bound capsule
@@ -458,13 +473,12 @@ final class KeyRecorderNSView: NSView {
     }
 
     override var intrinsicContentSize: NSSize {
-        let content = displayedContent
-        let textWidth = (content.text as NSString).size(withAttributes: [.font: content.font]).width
-        // 10pt padding each side, plus room for the trailing pencil when a chord is bound.
-        let pencil: CGFloat = (!displayToken.isEmpty && !isRecording) ? 22 : 0
-        let width = ceil(textWidth) + 20 + pencil
-        // Floor so a lone glyph stays comfortably clickable; ceiling so a long sequence or
-        // the recording hint doesn't blow out the row.
-        return NSSize(width: min(max(width, 54), 220), height: 30)
+        // Sized to the *idle* content only — recording shows a compact in-capsule dot (not a
+        // wider prompt), so the width never changes on the recording toggle. 10pt padding
+        // each side, plus room for the trailing pencil on a bound chord.
+        let content = idleContent
+        let textWidth = ceil((content.text as NSString).size(withAttributes: [.font: content.font]).width)
+        let pencil: CGFloat = displayToken.isEmpty ? 0 : 22
+        return NSSize(width: min(max(textWidth + 20 + pencil, 54), 220), height: 30)
     }
 }
