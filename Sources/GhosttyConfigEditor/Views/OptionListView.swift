@@ -250,29 +250,13 @@ struct OptionListView: View {
                     .multilineTextAlignment(.center)
             }
             VStack(spacing: 8) {
-                springboardButton("Browse recommended", systemImage: "sparkles") { model.selection = .recommended }
-                springboardButton("Pick a theme", systemImage: "paintpalette") { model.selection = .themes }
-                springboardButton("Describe a change", systemImage: "magnifyingglass") { model.beginFind() }
+                SpringboardCard(title: "Browse recommended", systemImage: "sparkles") { model.selection = .recommended }
+                SpringboardCard(title: "Pick a theme", systemImage: "paintpalette") { model.selection = .themes }
+                SpringboardCard(title: "Describe a change", systemImage: "magnifyingglass") { model.beginFind() }
             }
-            .frame(maxWidth: 300)
+            .frame(maxWidth: 320)
         }
         .padding(40)
-    }
-
-    private func springboardButton(_ title: String, systemImage: String, action: @escaping () -> Void) -> some View {
-        Button(action: action) {
-            HStack(spacing: 8) {
-                Image(systemName: systemImage).frame(width: 20).accessibilityHidden(true)
-                Text(title)
-                Spacer(minLength: 4)
-                Image(systemName: "chevron.right").font(.caption).foregroundStyle(.tertiary)
-                    .accessibilityHidden(true)
-            }
-            .frame(maxWidth: .infinity)
-            .contentShape(Rectangle())
-        }
-        .buttonStyle(.bordered)
-        .controlSize(.large)
     }
 }
 

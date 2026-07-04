@@ -43,6 +43,17 @@ struct RecommendedView: View {
                         }
                     }
                 }
+                // A closing next-step block (IA-5): the two concrete places to go after the
+                // recommended settings — themes and free-form Find — via the shared
+                // springboard component. No no-op "browse" filler.
+                Section("Next steps") {
+                    SpringboardCard(title: "Pick a theme",
+                                    detail: "Browse Ghostty's built-in color themes.",
+                                    systemImage: "paintpalette") { model.selection = .themes }
+                    SpringboardCard(title: "Describe a change",
+                                    detail: "Search every setting, or say what you want in plain words.",
+                                    systemImage: "magnifyingglass") { model.beginFind() }
+                }
             }
             .formStyle(.grouped)
         }

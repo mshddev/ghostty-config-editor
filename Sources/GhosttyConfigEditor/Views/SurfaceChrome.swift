@@ -483,3 +483,45 @@ struct SurfaceFeedbackBar: View {
         }
     }
 }
+
+/// A "jump-in" springboard card (F3/IA-5): an accent icon, a title, an optional one-line
+/// detail, and a trailing chevron, styled as a pickable row with the U12 hover/focus
+/// affordance. Extracted as the one shared component behind the Welcome pane's jump-in
+/// cards, the empty-Customized springboard, and Recommended's next-steps — so the three
+/// "where to go next" surfaces speak one vocabulary and share one look.
+struct SpringboardCard: View {
+    let title: String
+    var detail: String? = nil
+    let systemImage: String
+    let action: () -> Void
+
+    var body: some View {
+        Button(action: action) {
+            HStack(spacing: 12) {
+                Image(systemName: systemImage)
+                    .font(.title3)
+                    .foregroundStyle(Color.accentColor)
+                    .frame(width: 28)
+                    .accessibilityHidden(true)
+                VStack(alignment: .leading, spacing: 1) {
+                    Text(title).font(.body.weight(.medium)).foregroundStyle(.primary)
+                    if let detail {
+                        Text(detail).font(.caption).foregroundStyle(.secondary)
+                            .fixedSize(horizontal: false, vertical: true)
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                    }
+                }
+                Spacer(minLength: 4)
+                Image(systemName: "chevron.right").font(.caption).foregroundStyle(.tertiary)
+                    .accessibilityHidden(true)
+            }
+            .padding(12)
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(HoverAffordanceButtonStyle(
+            cornerRadius: 10,
+            insets: EdgeInsets(),
+            restingFill: Color.primary.opacity(0.04)))
+        .accessibilityLabel(detail.map { "\(title). \($0)" } ?? title)
+    }
+}

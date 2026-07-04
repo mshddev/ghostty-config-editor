@@ -1,4 +1,5 @@
 import SwiftUI
+import AppKit
 import GhosttyConfigKit
 
 /// The first-run welcome (F2, ONBOARD-1/7/9/10): a non-modal in-window pane shown on a
@@ -32,24 +33,15 @@ struct WelcomeView: View {
             header
             safetyStrip
             VStack(spacing: 8) {
-                jumpInCard(
-                    title: "Pick a theme",
-                    detail: "Browse Ghostty's built-in color themes.",
-                    systemImage: "paintpalette",
-                    action: { model.selection = .themes }
-                )
-                jumpInCard(
-                    title: "Recommended settings",
-                    detail: "The handful of options most people set first.",
-                    systemImage: "sparkles",
-                    action: { model.selection = .recommended }
-                )
-                jumpInCard(
-                    title: "Describe a change",
-                    detail: "Search every setting, or say what you want in plain words.",
-                    systemImage: "magnifyingglass",
-                    action: { model.beginFind() }
-                )
+                jumpIn(title: "Pick a theme",
+                       detail: "Browse Ghostty's built-in color themes.",
+                       systemImage: "paintpalette") { model.selection = .themes }
+                jumpIn(title: "Recommended settings",
+                       detail: "The handful of options most people set first.",
+                       systemImage: "sparkles") { model.selection = .recommended }
+                jumpIn(title: "Describe a change",
+                       detail: "Search every setting, or say what you want in plain words.",
+                       systemImage: "magnifyingglass") { model.beginFind() }
             }
             HStack {
                 Spacer()
@@ -64,14 +56,18 @@ struct WelcomeView: View {
     }
 
     private var header: some View {
-        VStack(alignment: .leading, spacing: 6) {
-            HStack(spacing: 10) {
-                Image(systemName: "gearshape.2.fill")
-                    .font(.title)
-                    .foregroundStyle(Color.accentColor)
+        VStack(alignment: .leading, spacing: 8) {
+            HStack(spacing: 12) {
+                // The one identity moment: the app's own icon at hero size, over U2's
+                // reserved hero type step — so the welcome outranks routine chrome
+                // (CB-8/DS-8) and reuses the real mark instead of a generic gear.
+                Image(nsImage: NSApplication.shared.applicationIconImage)
+                    .resizable()
+                    .frame(width: 44, height: 44)
                     .accessibilityHidden(true)
                 Text(AppInfo.welcomeTitle)
-                    .font(.title2.weight(.semibold))
+                    .font(.heroTitle)
+                    .fixedSize(horizontal: false, vertical: true)
             }
             Text("Configure Ghostty visually — every setting in one place, no config-file syntax to learn.")
                 .font(.callout)
@@ -97,37 +93,13 @@ struct WelcomeView: View {
         .background(Color.green.opacity(0.10), in: RoundedRectangle(cornerRadius: 10))
     }
 
-    private func jumpInCard(title: String, detail: String, systemImage: String, action: @escaping () -> Void) -> some View {
-        Button {
+    /// A welcome jump-in destination: the shared `SpringboardCard`, wrapped so picking one
+    /// also dismisses the welcome (it's marked seen on the first navigation, not later).
+    private func jumpIn(title: String, detail: String, systemImage: String, action: @escaping () -> Void) -> some View {
+        SpringboardCard(title: title, detail: detail, systemImage: systemImage) {
             action()
             model.dismissWelcome()
-        } label: {
-            HStack(spacing: 12) {
-                Image(systemName: systemImage)
-                    .font(.title3)
-                    .foregroundStyle(Color.accentColor)
-                    .frame(width: 28)
-                    .accessibilityHidden(true)
-                VStack(alignment: .leading, spacing: 1) {
-                    Text(title).font(.body.weight(.medium)).foregroundStyle(.primary)
-                    Text(detail).font(.caption).foregroundStyle(.secondary)
-                        .fixedSize(horizontal: false, vertical: true)
-                        .frame(maxWidth: .infinity, alignment: .leading)
-                }
-                Spacer(minLength: 4)
-                Image(systemName: "chevron.right").font(.caption).foregroundStyle(.tertiary)
-                    .accessibilityHidden(true)
-            }
-            .padding(12)
-            .contentShape(Rectangle())
         }
-        // U12: the card's subtle resting fill, lifted by the hover/focus token on top —
-        // so pointer and keyboard both show the same "this is pickable" strengthening.
-        .buttonStyle(HoverAffordanceButtonStyle(
-            cornerRadius: 10,
-            insets: EdgeInsets(),
-            restingFill: Color.primary.opacity(0.04)))
-        .accessibilityLabel("\(title). \(detail)")
     }
 }
 
