@@ -45,14 +45,20 @@ struct RecommendedView: View {
                 }
                 // A closing next-step block (IA-5): the two concrete places to go after the
                 // recommended settings — themes and free-form Find — via the shared
-                // springboard component. No no-op "browse" filler.
+                // springboard component. No no-op "browse" filler. Clear the Form's own row
+                // background/insets so the card supplies all the chrome (no card-in-card
+                // against the grouped Section's rounded row).
                 Section("Next steps") {
                     SpringboardCard(title: "Pick a theme",
                                     detail: "Browse Ghostty's built-in color themes.",
                                     systemImage: "paintpalette") { model.selection = .themes }
+                        .listRowInsets(EdgeInsets())
+                        .listRowBackground(Color.clear)
                     SpringboardCard(title: "Describe a change",
                                     detail: "Search every setting, or say what you want in plain words.",
                                     systemImage: "magnifyingglass") { model.beginFind() }
+                        .listRowInsets(EdgeInsets())
+                        .listRowBackground(Color.clear)
                 }
             }
             .formStyle(.grouped)

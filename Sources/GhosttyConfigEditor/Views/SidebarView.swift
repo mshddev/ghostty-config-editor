@@ -11,12 +11,18 @@ struct SidebarView: View {
 
     /// The sidebar's selection reads as **nil while a global Find is in progress** (IA-3),
     /// so no category stays falsely highlighted when the detail pane is showing Find
-    /// results instead. Writing through still works: picking any row sets the real
-    /// selection, and the app's `onChange(selection)` ends Find — so a click both leaves
-    /// Find and navigates. When Find ends, the previous highlight returns.
+    /// results instead. Writing through ends Find on *any* pick and navigates: the setter
+    /// calls `endFind()` explicitly rather than relying on the app's `onChange(selection)`,
+    /// because re-picking the row Find was started from writes an **equal** selection —
+    /// which `onChange` wouldn't fire, leaving the click dead. When Find ends, the previous
+    /// highlight returns. Both the scrolling List and the footer bind through this, so the
+    /// footer's "Settings" row also clears during Find.
     private var sidebarSelection: Binding<SidebarSelection?> {
         Binding(get: { model.isFinding ? nil : model.selection },
-                set: { model.selection = $0 })
+                set: { newValue in
+                    if model.isFinding { model.endFind() }
+                    model.selection = newValue
+                })
     }
 
     var body: some View {
@@ -83,8 +89,7 @@ struct SidebarView: View {
     /// active destination. ⌘, selects it too; the gear icon separates it from the "Options"
     /// section that groups the categories.
     private var settingsFooter: some View {
-        @Bindable var model = model
-        return List(selection: $model.selection) {
+        List(selection: sidebarSelection) {
             Label("Settings", systemImage: "gearshape")
                 .tag(SidebarSelection.settings)
         }

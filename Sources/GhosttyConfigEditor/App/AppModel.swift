@@ -596,7 +596,9 @@ public final class AppModel {
     /// Total options that deviate from their defaults — the set the Customized surface
     /// lists, and the number the sidebar's Customized badge shows (IA-9). Distinct from
     /// `resettableCount`, which counts only the primary-file subset a batch reset clears.
-    public var customizedCount: Int { browser?.customizedOptions.count ?? 0 }
+    /// Counts the merged set directly — `browser.customizedOptions` sorts a throwaway array
+    /// we'd only take `.count` of, and this is read on every sidebar re-render.
+    public var customizedCount: Int { browser?.merged.customizedOptions.count ?? 0 }
 
     /// True when a customized option is defined in the primary config file, so the
     /// primary-only batch reset will actually unset it (canonical-path compared, matching
