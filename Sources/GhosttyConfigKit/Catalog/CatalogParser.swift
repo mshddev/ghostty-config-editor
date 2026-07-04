@@ -74,6 +74,10 @@ public enum CatalogParser {
         "link-previews",
         "window-decoration",
         "background-blur",
+        // Tri-state (true / false / unset-null). Presented toggle-first so a raw "true"
+        // never renders in a picker (CV-5); the unset/null state stays reachable via the
+        // row's reset, and true/false are the on/off axis.
+        "cursor-style-blink",
     ]
 
     /// True when an option accepts `true`/`false` among other values, so the editor

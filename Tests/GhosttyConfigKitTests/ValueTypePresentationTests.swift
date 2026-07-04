@@ -25,6 +25,18 @@ final class ValueTypePresentationTests: XCTestCase {
         XCTAssertTrue(catalog.option(named: "confirm-close-surface")!.isBooleanish)
     }
 
+    // U8 (CV-5): the tri-state cursor-style-blink (true / false / unset-null) is
+    // presented toggle-first, so a raw "true" never renders in a picker. Its underlying
+    // enumeration type is preserved so the unset state stays lossless.
+    func testCursorStyleBlinkIsBooleanishTriState() throws {
+        let catalog = try referenceCatalog()
+        let blink = try XCTUnwrap(catalog.option(named: "cursor-style-blink"))
+        XCTAssertTrue(blink.isBooleanish)
+        XCTAssertEqual(blink.valueType, .enumeration)
+        XCTAssertTrue(blink.enumValues.contains("true"))
+        XCTAssertTrue(blink.enumValues.contains("false"))
+    }
+
     func testBooleanishPreservesRawValueType() throws {
         let catalog = try referenceCatalog()
         // The hint must not coerce the type: background-blur stays open-valued text,

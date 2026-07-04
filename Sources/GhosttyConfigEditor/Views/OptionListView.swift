@@ -470,7 +470,7 @@ struct OptionRow: View {
     /// stays plain advanced text — a generic list editor would invite arbitrary
     /// includes the reader follows (out of scope). `keybind` is edited on its own
     /// surface, not here.
-    private static let listEditorOptions: Set<String> = ["env", "font-feature"]
+    private static let listEditorOptions: Set<String> = ["env"]
 
     @ViewBuilder
     private var editor: some View {
@@ -478,6 +478,10 @@ struct OptionRow: View {
             FontFamilyEditor(option: option)
         } else if option.option.name == "palette" {
             PaletteEditor(option: option)
+        } else if option.option.name == "font-feature" {
+            // Toggle-first Ligatures control (U8), with the generic per-tag list demoted
+            // to a "Customize…" disclosure for stylistic sets.
+            FontFeatureEditor(option: option)
         } else if Self.listEditorOptions.contains(option.option.name) {
             ListValueEditor(option: option)
         } else if !option.option.isRepeatable {
@@ -1346,7 +1350,16 @@ private struct BooleanishEditor: View {
                 .toggleStyle(.switch)
                 .controlSize(.small)
                 .accessibilityLabel(optionControlA11yLabel(option))
-            if !extraChoices.isEmpty {
+            // Exactly one extra state reads as a labeled checkbox refining "on" — no
+            // mystery single-item menu (CV-5). It's a modifier of the on-state, so it
+            // appears only while the switch is on. Two or more extras keep the menu.
+            if isOn(savedValue), let single = singleExtra {
+                Toggle(isOn: extraBinding(single)) {
+                    Text(single.label).font(.callout)
+                }
+                .toggleStyle(.checkbox)
+                .controlSize(.small)
+            } else if extraChoices.count >= 2 {
                 extrasMenu
             }
         }
@@ -1378,10 +1391,25 @@ private struct BooleanishEditor: View {
     }
 
     /// The documented values beyond the plain true/false axis — the "extra states"
-    /// the trailing menu offers (with friendly labels, raw tags).
+    /// the trailing checkbox/menu offers (with friendly labels, raw tags).
     private var extraChoices: [EnumChoice] {
         option.enumChoices(current: savedValue)
             .filter { $0.value != "true" && $0.value != "false" && !$0.value.isEmpty }
+    }
+
+    /// The sole extra state when there's exactly one, rendered as a checkbox (CV-5).
+    private var singleExtra: EnumChoice? {
+        extraChoices.count == 1 ? extraChoices.first : nil
+    }
+
+    /// Checkbox binding for the single extra: checked applies the extra value ("always"),
+    /// unchecked falls back to plain "true" (still on). Caching in `onChange` keeps the
+    /// off→on round-trip (B4).
+    private func extraBinding(_ choice: EnumChoice) -> Binding<Bool> {
+        Binding(
+            get: { savedValue.trimmingCharacters(in: .whitespaces) == choice.value },
+            set: { checked in apply(checked ? choice.value : "true") }
+        )
     }
 
     private var extrasMenu: some View {
@@ -1892,6 +1920,9 @@ private struct PaletteEditor: View {
 private struct ListValueEditor: View {
     @Environment(AppModel.self) private var model
     let option: MergedOption
+    /// A fixed button label — e.g. font-feature's "Customize…" disclosure — instead of
+    /// the default "Add…"/"N set" count (U8).
+    var customLabel: String? = nil
     @State private var showing = false
     @State private var newEntry = ""
 
@@ -1902,7 +1933,7 @@ private struct ListValueEditor: View {
 
     var body: some View {
         Button { showing.toggle() } label: {
-            Text(entries.isEmpty ? "Add…" : "\(entries.count) set")
+            Text(customLabel ?? (entries.isEmpty ? "Add…" : "\(entries.count) set"))
         }
         .buttonStyle(.bordered)
         .controlSize(.small)
@@ -1971,6 +2002,47 @@ private struct ListValueEditor: View {
 
     private func apply(_ values: [String]) {
         Task { await model.applyEdit(option: liveOption, values: values) }
+    }
+}
+
+// MARK: - Font-feature (Ligatures) editor
+
+/// `font-feature` (titled "Ligatures") rendered toggle-first (CV-9): the common case is
+/// "ligatures on or off", so a switch drives that — On strips Ghostty's `-calt, -liga,
+/// -dlig` disable set, Off writes it — over the kit `FontFeatures` tag arithmetic that
+/// preserves any user-added stylistic tags. The full per-tag list stays reachable behind
+/// a secondary "Customize…" disclosure for `ss01`-style sets.
+private struct FontFeatureEditor: View {
+    @Environment(AppModel.self) private var model
+    let option: MergedOption
+
+    /// Read the value in force from the live merged model, so the toggle reflects an
+    /// external edit or a just-applied write.
+    private var liveOption: MergedOption {
+        model.browser?.merged.option(named: option.option.name) ?? option
+    }
+    private var values: [String] { liveOption.isSet ? liveOption.userValues : [] }
+
+    var body: some View {
+        HStack(spacing: 6) {
+            Toggle("", isOn: ligatureBinding)
+                .labelsHidden()
+                .toggleStyle(.switch)
+                .controlSize(.small)
+                .accessibilityLabel(optionControlA11yLabel(option))
+            ListValueEditor(option: option, customLabel: "Customize…")
+        }
+    }
+
+    private var ligatureBinding: Binding<Bool> {
+        Binding(
+            get: { FontFeatures.ligaturesEnabled(values) },
+            set: { on in
+                let next = on ? FontFeatures.enablingLigatures(values)
+                              : FontFeatures.disablingLigatures(values)
+                Task { await model.applyEdit(option: liveOption, values: next) }
+            }
+        )
     }
 }
 
