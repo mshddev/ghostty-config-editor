@@ -227,6 +227,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 struct GhosttyConfigEditorApp: App {
     @NSApplicationDelegateAdaptor(AppDelegate.self) private var appDelegate
     @State private var model = AppModel()
+    /// The current surface's "focus filter field" action, if it has a filter (U26). Drives
+    /// the "Filter Current List" (⌘L) menu command; nil ⇒ the command disables.
+    @FocusedValue(\.focusSurfaceFilter) private var focusSurfaceFilter
 
     var body: some Scene {
         // A single `Window`, not a `WindowGroup` (U35/GAP-5): this is a settings editor,
@@ -263,6 +266,11 @@ struct GhosttyConfigEditorApp: App {
                     .keyboardShortcut("r", modifiers: .command)
                 Button("Find…") { model.beginFind() }
                     .keyboardShortcut("f", modifiers: .command)
+                // Jump keyboard focus into the current surface's filter field, when it has
+                // one (U26): the per-surface search is otherwise only mouse-reachable.
+                Button("Filter Current List") { focusSurfaceFilter?() }
+                    .keyboardShortcut("l", modifiers: .command)
+                    .disabled(focusSurfaceFilter == nil)
             }
             // Import / export / copy the whole config in the File menu (G4). Import is
             // replace-with-backup (confirmed + undoable); the model validates before writing.

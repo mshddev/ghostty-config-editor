@@ -322,6 +322,22 @@ struct ApplyFeedbackContent: View {
 /// component bound per-surface** (Options→`query`, Themes→`themeQuery`, Keybindings→
 /// its filter) — it filters the *current* surface, never a single global query that
 /// means two things at once (the global ⌘F Find is a separate affordance, D2).
+/// A "focus this surface's filter field" action, published to the focused scene so the
+/// View menu's "Filter Current List" (⌘L) can jump keyboard focus into the per-surface
+/// search without the mouse — the keyboard gap System Settings never closed (U26/GAP-2).
+/// Only a surface that actually HAS a filter publishes it, so the command disables
+/// elsewhere. A menu route (not focus-on-surface-entry) is deliberate: auto-focusing on
+/// appear would yank focus out of the sidebar during keyboard row-to-row navigation.
+struct SurfaceFilterFocusKey: FocusedValueKey {
+    typealias Value = () -> Void
+}
+extension FocusedValues {
+    var focusSurfaceFilter: (() -> Void)? {
+        get { self[SurfaceFilterFocusKey.self] }
+        set { self[SurfaceFilterFocusKey.self] = newValue }
+    }
+}
+
 struct SurfaceHeader: View {
     let title: String
     /// A secondary line under the title, e.g. "142 shortcuts" or "7 results". Hidden when nil.
@@ -333,6 +349,7 @@ struct SurfaceHeader: View {
     var infoText: String? = nil
 
     @State private var showingInfo = false
+    @FocusState private var searchFocused: Bool
 
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
@@ -351,7 +368,9 @@ struct SurfaceHeader: View {
                 }
             }
             if let searchText {
-                SurfaceSearchField(prompt: searchPrompt, text: searchText)
+                SurfaceSearchField(prompt: searchPrompt, text: searchText, focus: $searchFocused)
+                    // Publish a keyboard route to this filter while the surface is showing.
+                    .focusedSceneValue(\.focusSurfaceFilter, { searchFocused = true })
             }
         }
         .padding(.horizontal, DesignTokens.Spacing.surface)

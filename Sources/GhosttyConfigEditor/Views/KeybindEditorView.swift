@@ -254,6 +254,9 @@ private struct KeybindRow: View {
         // outside this element (see body).
         .accessibilityElement(children: .combine)
         .accessibilityLabel(actionColumnA11yLabel)
+        // The raw action id stays reachable for VoiceOver users who rely on it — surfaced as
+        // on-demand custom content (VO rotor) rather than spoken on every row (U26/GAP-3).
+        .accessibilityCustomContent("Action ID", group.action)
     }
 
     /// The action column's VoiceOver reading: friendly name, its one-line summary when
