@@ -58,6 +58,32 @@ public struct ActionLabelCatalog: Sendable {
         return base
     }
 
+    /// Display title that folds the `:param` parenthetical into the title **only** when
+    /// the base action carries more than one distinct param across the visible set
+    /// (`foldParams`, from `multiParamActions(in:)`) — so `goto_tab:1…8` disambiguate as
+    /// "Go to tab (1)…(8)", but `copy_to_clipboard:mixed`, the sole variant, reads simply
+    /// as "Copy" with its param left to the caption/help (KB-4). An action with no param,
+    /// or one not in `foldParams`, gets its base title alone.
+    public func displayTitle(for action: String, foldingParamsFor foldParams: Set<String>) -> String {
+        let base = Keybind.actionName(action)
+        let baseTitle = displayTitle(forAction: base)
+        guard let param = Self.actionParam(action), foldParams.contains(base) else { return baseTitle }
+        return baseTitle + " " + Self.humanizeParam(param)
+    }
+
+    /// The set of base action names that carry more than one distinct `:param` across
+    /// `actions` — the actions whose param is load-bearing enough to fold into the title
+    /// (KB-4). Kept in the kit so the fold decision is unit-testable independent of the
+    /// view. `goto_tab` (params 1…8) qualifies; `copy_to_clipboard` (only `mixed`) doesn't.
+    public static func multiParamActions(in actions: [String]) -> Set<String> {
+        var paramsByBase: [String: Set<String>] = [:]
+        for action in actions {
+            guard let param = actionParam(action) else { continue }
+            paramsByBase[Keybind.actionName(action), default: []].insert(param)
+        }
+        return Set(paramsByBase.filter { $0.value.count > 1 }.keys)
+    }
+
     // MARK: - Fallbacks
 
     /// The `:param` portion of an action, or nil when there is none.

@@ -17,6 +17,10 @@ struct KeybindEditorView: View {
     var body: some View {
         let all = model.keybindGroups
         let groups = filtered(all)
+        // Which base actions carry >1 distinct param, so their param folds into the title
+        // (goto_tab:1…8) rather than reading as a lone caption (copy_to_clipboard:mixed).
+        // Computed over the *full* set so filtering never changes a row's title (KB-4).
+        let foldParams = ActionLabelCatalog.multiParamActions(in: all.map(\.action))
         return VStack(spacing: 0) {
             SurfaceHeader(
                 title: OptionCategorizer.keybindingsCategory,
@@ -32,7 +36,7 @@ struct KeybindEditorView: View {
             } else if groups.isEmpty {
                 ContentUnavailableView.search(text: filter)
             } else {
-                bindingList(groups)
+                bindingList(groups, foldParams: foldParams)
             }
             lintBar
             SurfaceFeedbackBar(applyState: model.applyState)
@@ -82,11 +86,13 @@ struct KeybindEditorView: View {
             .padding(.bottom, 8)
     }
 
-    private func bindingList(_ groups: [KeybindActionGroup]) -> some View {
+    private func bindingList(_ groups: [KeybindActionGroup], foldParams: Set<String>) -> some View {
         // Computed once per render, not per row.
         let restorable = model.restorableActions
         return List(groups) { group in
-            KeybindRow(group: group, canRestoreDefault: restorable.contains(group.action))
+            KeybindRow(group: group,
+                       foldParams: foldParams,
+                       canRestoreDefault: restorable.contains(group.action))
         }
     }
 
@@ -143,6 +149,9 @@ struct KeybindEditorView: View {
 private struct KeybindRow: View {
     @Environment(AppModel.self) private var model
     let group: KeybindActionGroup
+    /// Base actions whose `:param` folds into the title (KB-4) — passed down so the whole
+    /// list agrees, and the decision doesn't change under search.
+    let foldParams: Set<String>
     /// True when this action has a Ghostty default the user has changed, so a
     /// "Restore default" item is offered (re-enables the default, drops the rebind).
     let canRestoreDefault: Bool
@@ -189,8 +198,12 @@ private struct KeybindRow: View {
 
     // MARK: Action (the config item)
 
-    /// The friendly action title (A2), including any humanized `:param`.
-    private var friendlyTitle: String { ActionLabelCatalog.bundled.displayTitle(for: group.action) }
+    /// The friendly action title (A2), folding a humanized `:param` into the title only
+    /// for multi-param base actions (KB-4). The raw id (params included) stays reachable
+    /// as the title's tooltip and via search.
+    private var friendlyTitle: String {
+        ActionLabelCatalog.bundled.displayTitle(for: group.action, foldingParamsFor: foldParams)
+    }
 
     /// A one-line description for the action, or empty when none is curated. Keyed by the
     /// param-less action name (`goto_split:previous` → `goto_split`), so param variants
@@ -203,11 +216,14 @@ private struct KeybindRow: View {
     private var actionColumn: some View {
         VStack(alignment: .leading, spacing: 2) {
             // Primary: the friendly title (system font, so it reads as a name, not code).
+            // The raw action id is demoted to the tooltip (KB-5/CB-7) — off the row but
+            // still discoverable on hover, and matched by search regardless.
             Text(friendlyTitle)
                 .font(.body)
                 .foregroundStyle(group.isUnbound ? AnyShapeStyle(.secondary) : AnyShapeStyle(.primary))
                 .lineLimit(1)
                 .truncationMode(.tail)
+                .help(group.action)
             // Secondary: a one-line summary when curated.
             if !actionSummary.isEmpty {
                 Text(actionSummary)
@@ -216,54 +232,45 @@ private struct KeybindRow: View {
                     .lineLimit(1)
                     .truncationMode(.tail)
             }
-            HStack(spacing: 6) {
-                badge
-                // The raw id + params, demoted to a caption (still visible for power
-                // users, and searchable — R8 / Open Question #4).
-                Text(group.action)
-                    .font(.caption2.monospaced())
-                    .foregroundStyle(.secondary)
-                    .lineLimit(1)
-                    .truncationMode(.middle)
+            // Badge only when the action *deviates* from its default — a wall of "Default"
+            // pills across ~140 rows carries no signal (KB-5, badges = deviations only).
+            if let badgeText {
+                Pill(text: badgeText, tint: badgeTint, style: .prominent)
             }
         }
-        // Collapse the action column's fragments (title, summary, badge, raw id) into one
-        // VoiceOver element read as name + state — the raw id is a sighted power-user
-        // caption, so it's dropped from the spoken label (H2). The chord recorders/menu are
-        // deliberately outside this element (see body).
+        // Collapse the action column's fragments (title, summary, badge) into one VoiceOver
+        // element read as name + state — the raw id is a sighted power-user tooltip, so it's
+        // dropped from the spoken label (H2). The chord recorders/menu are deliberately
+        // outside this element (see body).
         .accessibilityElement(children: .combine)
         .accessibilityLabel(actionColumnA11yLabel)
     }
 
     /// The action column's VoiceOver reading: friendly name, its one-line summary when
-    /// curated, and the origin badge (Default / Customized / No shortcut).
+    /// curated, and the spoken state — VoiceOver still hears "No shortcut"/"Default"/
+    /// "Customized" even though only deviations show a visible badge.
     private var actionColumnA11yLabel: Text {
         var parts = [friendlyTitle]
         if !actionSummary.isEmpty { parts.append(actionSummary) }
-        parts.append(badgeText)
+        parts.append(spokenState)
         return Text(parts.joined(separator: ", "))
     }
 
     // MARK: Origin badge (per action)
 
-    private var badge: some View {
-        Pill(text: badgeText, tint: badgeTint, style: .prominent)
-    }
-
     /// Whether the action deviates from Ghostty's defaults — any user addition, override,
     /// or a turned-off default counts.
     private var isCustomized: Bool { group.chords.contains { $0.origin != .default && $0.origin != .unbound } }
 
-    /// Origin badge copy, standardized to the app's shared status vocabulary (CONTENT-9/10)
-    /// — matching the option rows' "Default"/"Customized" language.
-    private var badgeText: String {
+    /// The visible badge — nil for an untouched default or an unbound action (no badge;
+    /// the empty recorder already reads as "no shortcut"). Only a *deviation* shows.
+    private var badgeText: String? { isCustomized ? "Customized" : nil }
+    private var badgeTint: Color { .accentColor }
+
+    /// The state VoiceOver announces, whether or not a badge is drawn.
+    private var spokenState: String {
         if group.isUnbound { return "No shortcut" }
         return isCustomized ? "Customized" : "Default"
-    }
-
-    private var badgeTint: Color {
-        if group.isUnbound { return .secondary }
-        return isCustomized ? .accentColor : .secondary
     }
 
     // MARK: Chord area (capsules + add + menu)
@@ -368,15 +375,20 @@ private struct KeybindRow: View {
         }
     }
 
+    @ViewBuilder
     private func triggerPill(_ chord: MergedKeybind, strikethrough: Bool) -> some View {
+        let physical = KeybindTrigger.isPhysicalNamedKey(chord.trigger)
         Text(KeybindTrigger.displaySymbol(for: chord.trigger))
-            .font(.body)
+            // A physical key (the hardware Copy/Paste key) reads as a mono small-caps chip
+            // so a lone word doesn't look like prose beside the ⌘⌃⌥⇧ glyph chords (KB-3/CB-6).
+            .font(physical ? .system(.caption, design: .monospaced).smallCaps() : .body)
             .foregroundStyle(strikethrough ? AnyShapeStyle(.tertiary) : AnyShapeStyle(.secondary))
             .strikethrough(strikethrough, color: .secondary)
             .lineLimit(1)
             .truncationMode(.middle)
             .padding(.horizontal, 10).padding(.vertical, 5)
             .background(Color.secondary.opacity(0.10), in: RoundedRectangle(cornerRadius: DesignTokens.Radius.standard))
+            .help(physical ? "Physical \(KeybindTrigger.displaySymbol(for: chord.trigger).capitalized) key" : "")
     }
 
     private var addChordButton: some View {

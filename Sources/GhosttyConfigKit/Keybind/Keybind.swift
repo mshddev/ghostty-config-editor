@@ -161,6 +161,25 @@ public struct KeybindTrigger: Sendable, Equatable {
         parse(trigger).displaySymbol()
     }
 
+    /// A "physical" named-key trigger: a bare, modifier-less named key such as the
+    /// hardware Copy/Paste keys (`copy`, `paste`). These read as a distinct mono
+    /// small-caps chip because a lone word can't lean on the ⌘⌃⌥⇧ glyph vocabulary a
+    /// modified chord uses, so it would otherwise look like prose (KB-3/CB-6). A
+    /// single-character key (`a`, `=`) is *not* physical — that's an ordinary key that
+    /// only ever appears inside a modified chord. Sequences and prefixed triggers never
+    /// qualify.
+    public var isPhysicalNamedKey: Bool {
+        guard prefixes.isEmpty, chords.count == 1 else { return false }
+        let chord = chords[0]
+        guard chord.modifiers.isEmpty else { return false }
+        return Self.canonicalizeKey(chord.key).count > 1
+    }
+
+    /// Convenience: does this raw trigger render as a physical named-key chip?
+    public static func isPhysicalNamedKey(_ trigger: String) -> Bool {
+        parse(trigger).isPhysicalNamedKey
+    }
+
     /// Lowercase only single-character keys (letters such as `T`→`t`, and
     /// layout-resolved characters); named keys (`arrow_left`) and punctuation
     /// (`=`, `[`) pass through unchanged. Whitespace is trimmed so a stray space

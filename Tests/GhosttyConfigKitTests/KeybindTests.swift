@@ -220,4 +220,22 @@ final class KeybindTests: XCTestCase {
         XCTAssertEqual(KeybindTrigger.displaySymbol(for: "arrow_left"), "arrow_left")
         XCTAssertEqual(KeybindTrigger.displaySymbol(for: ""), "")
     }
+
+    // MARK: - Physical named-key detection (KB-3/CB-6, U18)
+
+    func testPhysicalNamedKeyIsOnlyABareModifierlessNamedKey() {
+        // Hardware Copy/Paste keys: bare, modifier-less, multi-character → physical chip.
+        XCTAssertTrue(KeybindTrigger.isPhysicalNamedKey("copy"))
+        XCTAssertTrue(KeybindTrigger.isPhysicalNamedKey("paste"))
+        // A modified chord is not physical, even onto a named key.
+        XCTAssertFalse(KeybindTrigger.isPhysicalNamedKey("super+c"))
+        XCTAssertFalse(KeybindTrigger.isPhysicalNamedKey("shift+arrow_left"))
+        // A bare single-character key is an ordinary key, not physical.
+        XCTAssertFalse(KeybindTrigger.isPhysicalNamedKey("a"))
+        XCTAssertFalse(KeybindTrigger.isPhysicalNamedKey("="))
+        // Prefixed or sequence triggers never qualify.
+        XCTAssertFalse(KeybindTrigger.isPhysicalNamedKey("global:copy"))
+        XCTAssertFalse(KeybindTrigger.isPhysicalNamedKey("copy>paste"))
+        XCTAssertFalse(KeybindTrigger.isPhysicalNamedKey(""))
+    }
 }

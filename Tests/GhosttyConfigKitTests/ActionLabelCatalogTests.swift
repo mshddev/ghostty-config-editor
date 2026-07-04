@@ -50,4 +50,41 @@ final class ActionLabelCatalogTests: XCTestCase {
     func testKeybindActionDisplayTitleConvenience() {
         XCTAssertEqual(KeybindAction(name: "copy_to_clipboard").displayTitle, "Copy")
     }
+
+    // MARK: - Param-fold decision (KB-4, U18)
+
+    func testMultiParamActionsCountsOnlyBasesWithMoreThanOneDistinctParam() {
+        let actions = ["goto_tab:1", "goto_tab:2", "goto_tab:3",
+                       "copy_to_clipboard:mixed", "copy_to_clipboard:mixed",  // one distinct param
+                       "reload_config"]                                        // no param
+        let fold = ActionLabelCatalog.multiParamActions(in: actions)
+        XCTAssertTrue(fold.contains("goto_tab"), "3 distinct params → fold")
+        XCTAssertFalse(fold.contains("copy_to_clipboard"), "one distinct param (mixed) → don't fold")
+        XCTAssertFalse(fold.contains("reload_config"), "no param → don't fold")
+    }
+
+    func testDisplayTitleFoldsParamOnlyForMultiParamBases() {
+        // goto_tab has 8 variants → the param disambiguates in the title.
+        let variants = (1...8).map { "goto_tab:\($0)" }
+        let fold = ActionLabelCatalog.multiParamActions(in: variants + ["copy_to_clipboard:mixed"])
+        XCTAssertEqual(ActionLabelCatalog.bundled.displayTitle(for: "goto_tab:1", foldingParamsFor: fold),
+                       "Go to tab (1)")
+        // copy_to_clipboard:mixed is the sole variant → title stays "Copy", no parenthetical.
+        XCTAssertEqual(ActionLabelCatalog.bundled.displayTitle(for: "copy_to_clipboard:mixed", foldingParamsFor: fold),
+                       "Copy")
+        // A param-less action is unaffected.
+        XCTAssertEqual(ActionLabelCatalog.bundled.displayTitle(for: "reload_config", foldingParamsFor: fold),
+                       ActionLabelCatalog.bundled.displayTitle(forAction: "reload_config"))
+    }
+
+    func testParamFoldDecisionComputedFromTheRealDefaultsFixture() throws {
+        // Covers R8: the fold set derived from the shipped 1.3.1 defaults folds goto_tab
+        // (params 1…8) but not copy_to_clipboard (only `mixed`).
+        let names = KeybindReference.parseActions(try Fixture.text("list-actions", "txt")).map(\.name)
+        let defaults = KeybindReference.parseDefaults(try Fixture.text("list-keybinds-default", "txt"),
+                                                      knownActions: Set(names))
+        let fold = ActionLabelCatalog.multiParamActions(in: defaults.map(\.action))
+        XCTAssertTrue(fold.contains("goto_tab"))
+        XCTAssertFalse(fold.contains("copy_to_clipboard"))
+    }
 }
