@@ -140,6 +140,7 @@ struct ThemeBrowserView: View {
 /// derived from the model so a row re-renders the moment its colors load or fail.
 private struct ThemeRow: View {
     @Environment(AppModel.self) private var model
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     let theme: ThemeRef
     /// When set (pinned Light/Dark pair rows), labels the pairing slot and suppresses
     /// the appearance badge — so "Light mode" (the slot) never collides visually with
@@ -190,6 +191,10 @@ private struct ThemeRow: View {
                         .lineLimit(1)
                     if isCurrent { currentPill }
                 }
+                // MO-6: the "Current" pill scales in when a theme is applied, matching the
+                // option-row state dot. Keyed to `isCurrent` so nothing else animates.
+                .animation(MotionSystem.gated(MotionSystem.settle, reduceMotion: reduceMotion),
+                           value: isCurrent)
                 if let roleCaption {
                     Text(roleCaption)
                         .font(.caption2)

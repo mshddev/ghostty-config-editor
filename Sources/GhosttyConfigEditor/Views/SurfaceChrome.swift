@@ -188,6 +188,10 @@ struct Pill: View {
         .padding(.vertical, 3)
         .background(tint.opacity(style == .prominent ? 0.15 : 0.12), in: Capsule())
         .foregroundStyle(tint == .secondary ? Color.secondary : tint)
+        // MO-6: a state-triggered pill (a theme's "Current") scales in rather than
+        // popping. Inert for the always-present metadata chips — a transition only fires
+        // when the pill is conditionally inserted inside an animation transaction.
+        .transition(.scale(scale: 0.9).combined(with: .opacity))
     }
 }
 

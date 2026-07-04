@@ -352,17 +352,26 @@ struct RootView: View {
                 // surface (D2), so it replaces the detail column while active rather
                 // than filtering whatever surface happens to be selected.
                 GlobalFindView()
+                    .transition(.opacity)
             } else {
-                switch model.selection {
-                case .recommended: RecommendedView()
-                case .problems: ProblemsView()
-                case .themes: ThemeBrowserView()
-                case .settings: SettingsView()
-                case .category(let name) where name == OptionCategorizer.keybindingsCategory: KeybindEditorView()
-                default: OptionListView()
+                Group {
+                    switch model.selection {
+                    case .recommended: RecommendedView()
+                    case .problems: ProblemsView()
+                    case .themes: ThemeBrowserView()
+                    case .settings: SettingsView()
+                    case .category(let name) where name == OptionCategorizer.keybindingsCategory: KeybindEditorView()
+                    default: OptionListView()
+                    }
                 }
+                .transition(.opacity)
             }
         }
+        // MO-8/CB-13: Find cross-fades, keyed to `isFinding` *only* — a plain category
+        // switch (selection changes, isFinding stays false) opens no transaction, so
+        // sidebar navigation stays instant. Gated on Reduce Motion via the one U2 helper.
+        .animation(MotionSystem.gated(MotionSystem.quickFade, reduceMotion: reduceMotion),
+                   value: model.isFinding)
         .cappedContentColumn()
         // Each surface titles itself in its in-content SurfaceHeader (C3); an explicit
         // empty title keeps the toolbar from falling back to the truncated app name.

@@ -319,7 +319,14 @@ private struct CategoryOptionList: View {
                     // so the disclosure is a custom tappable section header with the
                     // rows conditionally rendered in the card below it.
                     Section {
-                        if advancedExpanded { rows(advanced) }
+                        if advancedExpanded {
+                            // Try a fade on the revealed rows (MO-4/CB-12). Grouped-Form
+                            // Sections are documented-fragile with insertions, so this may
+                            // resolve to instant appearance — which is fine: the rotating
+                            // chevron is the honest cue either way (never removed).
+                            rows(advanced)
+                                .transition(.opacity)
+                        }
                     } header: {
                         advancedHeader(count: advanced.count)
                     }
@@ -344,8 +351,11 @@ private struct CategoryOptionList: View {
 
     private func advancedHeader(count: Int) -> some View {
         Button {
-            if reduceMotion { advancedExpanded.toggle() }
-            else { withAnimation(.easeInOut(duration: 0.15)) { advancedExpanded.toggle() } }
+            // One motion helper for the whole app (U2): reduce-motion resolves to
+            // `withAnimation(nil)` — an instant toggle — through the same gate.
+            withAnimation(MotionSystem.gated(MotionSystem.quickFade, reduceMotion: reduceMotion)) {
+                advancedExpanded.toggle()
+            }
         } label: {
             HStack(spacing: 6) {
                 Image(systemName: "chevron.right")
@@ -381,6 +391,7 @@ private struct CategoryOptionList: View {
 /// shown inline beneath the row while this option is the one being written.
 struct OptionRow: View {
     @Environment(AppModel.self) private var model
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @State private var showingInfo = false
     @State private var isHovering = false
     let option: MergedOption
@@ -412,7 +423,11 @@ struct OptionRow: View {
                 // `layoutPriority(1)` so the label claims its natural width first and a
                 // title never wraps to make room for the accessory (DS-9).
                 .layoutPriority(1)
+                // MO-6: the state cue scales in/out when a value is customized or reset —
+                // keyed to `option.state` only, so the hover dot↔reset swap stays instant.
                 stateAccessory
+                    .animation(MotionSystem.gated(MotionSystem.settle, reduceMotion: reduceMotion),
+                               value: option.state)
                 Spacer(minLength: 12)
                 editor
                 infoButton
@@ -459,6 +474,9 @@ struct OptionRow: View {
                 }
             }
             .frame(width: 22, height: 22)   // width-stable: dot ↔ reset never shifts the row
+            // MO-6: the same scale-in the theme "Current" pill uses, so both state cues
+            // read consistently. Driven by the `.animation(value: option.state)` above.
+            .transition(.scale(scale: 0.9).combined(with: .opacity))
         }
     }
 
