@@ -120,9 +120,13 @@ struct WelcomeView: View {
             }
             .padding(12)
             .contentShape(Rectangle())
-            .background(Color.primary.opacity(0.04), in: RoundedRectangle(cornerRadius: 10))
         }
-        .buttonStyle(.plain)
+        // U12: the card's subtle resting fill, lifted by the hover/focus token on top —
+        // so pointer and keyboard both show the same "this is pickable" strengthening.
+        .buttonStyle(HoverAffordanceButtonStyle(
+            cornerRadius: 10,
+            insets: EdgeInsets(),
+            restingFill: Color.primary.opacity(0.04)))
         .accessibilityLabel("\(title). \(detail)")
     }
 }

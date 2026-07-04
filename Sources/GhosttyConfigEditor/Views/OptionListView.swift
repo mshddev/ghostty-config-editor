@@ -359,7 +359,10 @@ private struct CategoryOptionList: View {
             }
             .contentShape(Rectangle())
         }
-        .buttonStyle(.plain)
+        .buttonStyle(HoverAffordanceButtonStyle(
+            cornerRadius: DesignTokens.Radius.standard,
+            insets: EdgeInsets(top: 4, leading: 8, bottom: 4, trailing: 8),
+            pointingHand: true))
         .accessibilityLabel("Advanced, \(count) options")
         .accessibilityValue(advancedExpanded ? "Expanded" : "Collapsed")
         .accessibilityHint("Show or hide advanced options")
@@ -444,7 +447,7 @@ struct OptionRow: View {
                             .frame(width: 22, height: 22)
                             .contentShape(Rectangle())
                     }
-                    .buttonStyle(.plain)
+                    .buttonStyle(HoverAffordanceButtonStyle.icon)
                     .help("Reset to default")
                     .accessibilityLabel("Reset \(option.option.displayTitle) to default")
                 } else if model.selection != .customized {
@@ -501,7 +504,7 @@ struct OptionRow: View {
                 .frame(width: 28, height: 28)
                 .contentShape(Rectangle())
         }
-        .buttonStyle(.plain)
+        .buttonStyle(HoverAffordanceButtonStyle.icon)
         .help(docHelp)
         .accessibilityLabel("Info for \(option.option.name)")
         .popover(isPresented: $showingInfo, arrowEdge: .trailing) {

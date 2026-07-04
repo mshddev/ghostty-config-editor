@@ -93,6 +93,79 @@ extension Font {
 
 // MARK: - Shared components
 
+/// U12 (MO-5, IA-4, GAP-2, KTD5): the one hover/focus affordance for strengthenable
+/// controls — the ⓘ / reset icon buttons, the Advanced disclosure header, the Welcome
+/// jump-in cards, the Find result rows. It lifts the background by the U2 `hoverLift`
+/// token on pointer hover **and** on keyboard focus, identically, so no affordance is
+/// pointer-only (the KTD5/GAP-2 parity rule; the full keyboard gate is U26). It changes
+/// only a tint — no movement or scale — so per HIG it is *not* decorative motion and
+/// stays ungated by Reduce Motion.
+///
+/// `restingFill` gives cards a subtle base the hover lifts *on top of*; `pointingHand`
+/// adds the `NSCursor.pointingHand` an unlabeled disclosure needs to read as clickable
+/// (IA-4). Icon buttons that already size their own hit target use `.icon` (zero insets).
+struct HoverAffordanceButtonStyle: ButtonStyle {
+    var cornerRadius: CGFloat = DesignTokens.Radius.standard
+    var insets: EdgeInsets = EdgeInsets(top: 4, leading: 6, bottom: 4, trailing: 6)
+    /// An always-present resting fill (the Welcome cards' subtle base); hover/focus lifts
+    /// on top of it. Nil for controls that are transparent at rest (icon buttons, rows).
+    var restingFill: Color? = nil
+    /// Show `NSCursor.pointingHand` on hover — for the otherwise-flat Advanced header.
+    var pointingHand: Bool = false
+
+    /// For icon buttons whose label already carries its hit-target frame (the ⓘ / reset
+    /// glyphs): zero insets so the lift fills that exact frame, a tight radius.
+    static var icon: HoverAffordanceButtonStyle {
+        HoverAffordanceButtonStyle(cornerRadius: DesignTokens.Radius.tight, insets: EdgeInsets())
+    }
+
+    func makeBody(configuration: Configuration) -> some View {
+        HoverBody(configuration: configuration,
+                  cornerRadius: cornerRadius,
+                  insets: insets,
+                  restingFill: restingFill,
+                  pointingHand: pointingHand)
+    }
+
+    private struct HoverBody: View {
+        let configuration: Configuration
+        let cornerRadius: CGFloat
+        let insets: EdgeInsets
+        let restingFill: Color?
+        let pointingHand: Bool
+        @State private var hovering = false
+        // Best-effort keyboard-focus parity; the guaranteed fallback is the system focus
+        // ring the plain button keeps. The full keyboard/VoiceOver gate is U26.
+        @Environment(\.isFocused) private var focused: Bool
+
+        var body: some View {
+            let lifted = hovering || focused
+            configuration.label
+                .padding(insets)
+                .background {
+                    ZStack {
+                        if let restingFill {
+                            RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
+                                .fill(restingFill)
+                        }
+                        RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
+                            .fill(DesignTokens.hoverLift)
+                            .opacity(lifted ? 1 : 0)
+                    }
+                }
+                .contentShape(RoundedRectangle(cornerRadius: cornerRadius, style: .continuous))
+                .opacity(configuration.isPressed ? 0.7 : 1)
+                .onHover { inside in
+                    hovering = inside
+                    guard pointingHand else { return }
+                    if inside { NSCursor.pointingHand.push() } else { NSCursor.pop() }
+                }
+                // Balance the cursor stack if the control is torn down mid-hover.
+                .onDisappear { if pointingHand && hovering { NSCursor.pop() } }
+        }
+    }
+}
+
 /// The one small tinted capsule for status/metadata across every surface — "Customized",
 /// a theme's "Current", a Find result's category, a keybind's origin (DS-3). Replaces six
 /// hand-rolled capsules. `tint` colors both the soft fill and the label; `.prominent`

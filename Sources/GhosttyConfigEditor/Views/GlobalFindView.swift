@@ -130,7 +130,9 @@ private struct FindResultRow: View {
             .contentShape(Rectangle())
             .padding(.vertical, RowMetrics.rowVerticalPadding)
         }
-        .buttonStyle(.plain)
+        // U12: the whole result row lifts on hover/focus so it reads as the jump target.
+        .buttonStyle(HoverAffordanceButtonStyle(cornerRadius: DesignTokens.Radius.standard,
+                                                insets: EdgeInsets()))
         .accessibilityElement(children: .combine)
         .accessibilityLabel(accessibilityLabel)
         .accessibilityHint("Opens this setting")
