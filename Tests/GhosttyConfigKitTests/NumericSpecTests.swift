@@ -79,6 +79,32 @@ final class NumericSpecTests: XCTestCase {
         XCTAssertEqual(NumericSpec.inferredStep(forDefault: "block"), 1)   // non-numeric → whole
     }
 
+    // MARK: - U3 percent / unit display (DS-1)
+
+    func testOpacitySlidersRenderZeroToOneAsPercent() {
+        let spec = NumericSpecCatalog.bundled.spec(for: "background-opacity")
+        XCTAssertEqual(spec?.displayScale, 100)
+        XCTAssertEqual(spec?.unit, "%")
+        XCTAssertEqual(spec?.displayString(for: 0.85), "85%")
+        XCTAssertEqual(spec?.displayString(for: 1.0), "100%")
+        XCTAssertEqual(spec?.displayString(for: 0.0), "0%")
+        XCTAssertEqual(spec?.displayString(for: 0.15), "15%")
+    }
+
+    func testContrastSliderIsNeverShownAsPercent() {
+        // minimum-contrast is a 1–21 slider with NO displayScale — must not read "2100%".
+        let spec = NumericSpecCatalog.bundled.spec(for: "minimum-contrast")
+        XCTAssertNil(spec?.displayScale)
+        XCTAssertEqual(spec?.displayString(for: 21), "21")
+        XCTAssertEqual(spec?.displayString(for: 3.5), "3.5")
+    }
+
+    func testFontSizeDisplayAppendsUnitWithoutScaling() {
+        let spec = NumericSpecCatalog.bundled.spec(for: "font-size")
+        XCTAssertEqual(spec?.displayString(for: 16), "16pt")
+        XCTAssertEqual(spec?.displayString(for: 13.5), "13.5pt")
+    }
+
     private func referenceCatalog() throws -> OptionCatalog {
         CatalogParser.parse(try Fixture.text("show-config-default-docs", "txt"))
     }

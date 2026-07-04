@@ -17,13 +17,19 @@ public struct NumericSpec: Sendable, Codable, Equatable {
     public let max: Double?
     public let step: Double?
     public let unit: String?
+    /// Multiplier applied to the stored value **for display only** — 100 turns a 0–1
+    /// opacity into a percentage (0.85 → 85). The stored/written value is unchanged
+    /// (KTD3). An explicit per-option opt-in, never inferred from `.slider`: a 1–21
+    /// contrast slider carries no scale, so it is never shown as "2100%" (DS-1).
+    public let displayScale: Double?
     public let style: Style
 
-    public init(min: Double? = nil, max: Double? = nil, step: Double? = nil, unit: String? = nil, style: Style) {
+    public init(min: Double? = nil, max: Double? = nil, step: Double? = nil, unit: String? = nil, displayScale: Double? = nil, style: Style) {
         self.min = min
         self.max = max
         self.step = step
         self.unit = unit
+        self.displayScale = displayScale
         self.style = style
     }
 }
@@ -62,6 +68,18 @@ public extension NumericSpec {
     static func inferredStep(forDefault defaultValue: String) -> Double {
         guard let value = Double(defaultValue.trimmingCharacters(in: .whitespaces)) else { return 1 }
         return value.rounded() == value ? 1 : 0.1
+    }
+
+    /// The stored value as the user should read it: scaled by `displayScale` (if any)
+    /// with `unit` appended. `0.85` on a percent spec (scale 100, unit "%") → "85%";
+    /// a bare integer stays bare. Display transform only — the stored value is
+    /// untouched (KTD3/DS-1). Trailing-zero-free so a slider reads "85%", not "85.0%".
+    func displayString(for value: Double) -> String {
+        let scaled = value * (displayScale ?? 1)
+        let rounded = scaled.rounded()
+        let number = abs(scaled - rounded) < 1e-9 ? String(Int(rounded)) : String(format: "%g", scaled)
+        guard let unit else { return number }
+        return "\(number)\(unit)"
     }
 }
 
@@ -104,9 +122,18 @@ public struct EnumValueLabels: Sendable {
         self.labels = labels
     }
 
-    /// The friendly label for a value, or the raw value when none is curated.
+    /// The friendly label for an enum value, via a deterministic fallback chain so a
+    /// raw config token never renders as a user-facing value (KTD3/CV-1/CM-1): a
+    /// curated label wins; then boolean-ish `true`/`false` → On/Off; otherwise the
+    /// humanized token (`block_hollow` → "Block hollow"). Applied only at enum /
+    /// boolean-ish display sites, so hex, paths, and numbers are never mangled.
     public func label(option: String, value: String) -> String {
-        labels[option]?[value] ?? value
+        if let curated = labels[option]?[value] { return curated }
+        switch value.lowercased() {
+        case "true": return "On"
+        case "false": return "Off"
+        default: return LabelCatalog.humanize(value)
+        }
     }
 
     /// Option names carrying value labels — used by the orphan-key guard (KTD1).

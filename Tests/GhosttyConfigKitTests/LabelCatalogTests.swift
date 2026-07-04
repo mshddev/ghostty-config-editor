@@ -40,6 +40,41 @@ final class LabelCatalogTests: XCTestCase {
         XCTAssertEqual(LabelCatalog.firstSentence("   \n  "), "")
     }
 
+    // MARK: - title-echo skip (U3, CV-10/CM-5)
+
+    func testShortSummarySkipsATitleEchoingFirstSentence() {
+        // Empty curated → humanized title "Background image fit"; the first doc sentence
+        // restates it, so the summary must advance to the next real sentence.
+        let catalog = LabelCatalog(curated: [:])
+        XCTAssertEqual(
+            catalog.shortSummary(for: "background-image-fit",
+                                 documentation: "Background image fit. Controls how the image is scaled."),
+            "Controls how the image is scaled."
+        )
+    }
+
+    func testShortSummaryIsEmptyWhenDocsAreOnlyATitleEcho() {
+        let catalog = LabelCatalog(curated: [:])
+        XCTAssertEqual(catalog.shortSummary(for: "background-image-fit", documentation: "Background image fit."), "")
+    }
+
+    func testFirstSentenceUnchangedWithoutATitle() {
+        // Back-compat: the no-title overload behaves exactly as before.
+        XCTAssertEqual(LabelCatalog.firstSentence("Alpha beta. Gamma delta."), "Alpha beta.")
+    }
+
+    func testBackgroundImageFitSummaryIsNeverATitleEchoInCatalog() throws {
+        let catalog = try referenceCatalog()
+        guard let option = catalog.option(named: "background-image-fit") else {
+            throw XCTSkip("background-image-fit absent from reference catalog")
+        }
+        func normalized(_ s: String) -> String {
+            s.lowercased().trimmingCharacters(in: CharacterSet(charactersIn: ". "))
+        }
+        XCTAssertNotEqual(normalized(option.shortSummary), normalized(option.displayTitle),
+                          "summary echoes the title for background-image-fit")
+    }
+
     // MARK: - displayTitle / shortSummary precedence
 
     func testCuratedTitleWinsOverHumanizer() {

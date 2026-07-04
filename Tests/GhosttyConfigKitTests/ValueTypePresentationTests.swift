@@ -43,17 +43,19 @@ final class ValueTypePresentationTests: XCTestCase {
 
     // MARK: - Enum value labels (CONTENT-8)
 
-    func testEnumValueLabelReturnsFriendlyThenFallsBackToRaw() {
+    func testEnumValueLabelReturnsFriendlyThenHumanizesUncuratedValues() {
+        // U3 (CV-1/CM-1): an uncurated value is HUMANIZED, never rendered as its raw
+        // token — a config token must never surface as a user-facing value.
         let labels = EnumValueLabels.bundled
         XCTAssertEqual(labels.label(option: "link-previews", value: "osc8"), "Only OSC 8 hyperlinks")
-        XCTAssertEqual(labels.label(option: "link-previews", value: "weird"), "weird")   // uncurated value → raw
-        XCTAssertEqual(labels.label(option: "no-such-option", value: "x"), "x")           // uncurated option → raw
+        XCTAssertEqual(labels.label(option: "link-previews", value: "weird"), "Weird")   // uncurated value → humanized
+        XCTAssertEqual(labels.label(option: "no-such-option", value: "x"), "X")           // uncurated option → humanized
     }
 
     func testCatalogOptionEnumValueLabelConvenience() throws {
         let option = try referenceCatalog().option(named: "confirm-close-surface")!
         XCTAssertEqual(option.enumValueLabel("always"), "Always, even when idle")
-        XCTAssertEqual(option.enumValueLabel("mystery"), "mystery")
+        XCTAssertEqual(option.enumValueLabel("mystery"), "Mystery")   // uncurated → humanized, never raw (U3)
     }
 
     func testEnumValueLabelOptionKeysResolveInCatalog() throws {

@@ -51,11 +51,14 @@ public struct LabelCatalog: Sendable {
     }
 
     /// A one-line description for an option. Curated summary wins, then the first
-    /// sentence of its docs, then empty (R1 is satisfied by the always-present
-    /// title, so an empty summary is acceptable).
+    /// non-title-echoing sentence of its docs, then empty (R1 is satisfied by the
+    /// always-present title, so an empty summary is acceptable).
     public func shortSummary(for name: String, documentation: String) -> String {
         if let summary = curated[name]?.summary, !summary.isEmpty { return summary }
-        return Self.firstSentence(documentation)
+        // A first sentence that merely restates the title adds nothing beneath a row
+        // that already shows the title, so advance past it (CV-10/CM-5). The title is
+        // only knowable here, not inside the pure `firstSentence`.
+        return Self.firstSentence(documentation, skippingTitleEcho: displayTitle(for: name))
     }
 
     // MARK: - Fallbacks
@@ -70,12 +73,13 @@ public struct LabelCatalog: Sendable {
         "sgr": "SGR", "csi": "CSI", "esc": "ESC", "ansi": "ANSI",
     ]
 
-    /// Turn a raw kebab-case key into a sentence-case phrase: first word
+    /// Turn a raw kebab- or snake-case token into a sentence-case phrase: first word
     /// capitalized, the rest lowercased, with known acronyms cased canonically.
     /// `humanize("adjust-cell-height")` → "Adjust cell height";
-    /// `humanize("macos-titlebar-style")` → "macOS titlebar style".
+    /// `humanize("macos-titlebar-style")` → "macOS titlebar style";
+    /// `humanize("block_hollow")` → "Block hollow" (enum values use snake_case).
     public static func humanize(_ name: String) -> String {
-        let words = name.split(separator: "-").map(String.init)
+        let words = name.split(whereSeparator: { $0 == "-" || $0 == "_" }).map(String.init)
         guard !words.isEmpty else { return name }
         var out: [String] = []
         for (index, raw) in words.enumerated() {
@@ -91,29 +95,50 @@ public struct LabelCatalog: Sendable {
         return out.joined(separator: " ")
     }
 
-    /// The first sentence of a doc block, collapsed to one line and capped in
-    /// length so it fits a subtitle. Truncation lands on a word boundary with an
-    /// ellipsis. Returns "" for empty docs.
-    public static func firstSentence(_ documentation: String, maxLength: Int = 120) -> String {
+    /// The first sentence of a doc block, collapsed to one line and capped in length
+    /// so it fits a subtitle. Truncation lands on a word boundary with an ellipsis.
+    /// Returns "" for empty docs. When `skippingTitleEcho` is non-empty, a leading
+    /// sentence that merely restates it is skipped and the next sentence used instead
+    /// (or "" if the docs are nothing but the echo) — see `shortSummary` (CV-10/CM-5).
+    public static func firstSentence(_ documentation: String, skippingTitleEcho title: String = "", maxLength: Int = 120) -> String {
         let flat = documentation
             .replacingOccurrences(of: "\n", with: " ")
             .trimmingCharacters(in: .whitespacesAndNewlines)
         guard !flat.isEmpty else { return "" }
 
-        var sentence = flat
-        if let boundary = flat.range(of: ". ") {
-            sentence = String(flat[..<boundary.lowerBound]) + "."
-        }
-
-        if sentence.count > maxLength {
-            let cut = sentence.prefix(maxLength)
-            if let lastSpace = cut.lastIndex(of: " ") {
-                sentence = cut[..<lastSpace].trimmingCharacters(in: .whitespaces) + "…"
+        let normalizedTitle = normalizedForEcho(title)
+        var remainder = Substring(flat)
+        while !remainder.isEmpty {
+            let sentence: String
+            if let boundary = remainder.range(of: ". ") {
+                sentence = String(remainder[..<boundary.lowerBound]) + "."
+                remainder = remainder[boundary.upperBound...]
             } else {
-                sentence = cut.trimmingCharacters(in: .whitespaces) + "…"
+                sentence = String(remainder)
+                remainder = Substring()
             }
+            if !normalizedTitle.isEmpty, normalizedForEcho(sentence) == normalizedTitle { continue }
+            return truncated(sentence, maxLength: maxLength)
         }
-        return sentence
+        return ""
+    }
+
+    /// Lowercased, trailing-period- and whitespace-stripped form for title-echo
+    /// comparison, so "Background image fit." matches the title "Background image fit".
+    private static func normalizedForEcho(_ text: String) -> String {
+        var t = text.lowercased().trimmingCharacters(in: .whitespaces)
+        while t.hasSuffix(".") { t.removeLast() }
+        return t.trimmingCharacters(in: .whitespaces)
+    }
+
+    /// Cap a sentence at `maxLength`, cutting on a word boundary with an ellipsis.
+    private static func truncated(_ sentence: String, maxLength: Int) -> String {
+        guard sentence.count > maxLength else { return sentence }
+        let cut = sentence.prefix(maxLength)
+        if let lastSpace = cut.lastIndex(of: " ") {
+            return cut[..<lastSpace].trimmingCharacters(in: .whitespaces) + "…"
+        }
+        return cut.trimmingCharacters(in: .whitespaces) + "…"
     }
 
     /// A short example value mined from a doc block — the first backtick-quoted token

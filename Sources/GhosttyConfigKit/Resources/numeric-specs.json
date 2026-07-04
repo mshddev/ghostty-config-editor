@@ -1,12 +1,12 @@
 {
   "version": 1,
   "specs": {
-    "background-opacity": { "min": 0, "max": 1, "step": 0.05, "style": "slider" },
-    "background-image-opacity": { "min": 0, "max": 1, "step": 0.05, "style": "slider" },
-    "unfocused-split-opacity": { "min": 0.15, "max": 1, "step": 0.05, "style": "slider" },
-    "bell-audio-volume": { "min": 0, "max": 1, "step": 0.05, "style": "slider" },
-    "cursor-opacity": { "min": 0, "max": 1, "step": 0.05, "style": "slider" },
-    "faint-opacity": { "min": 0, "max": 1, "step": 0.05, "style": "slider" },
+    "background-opacity": { "min": 0, "max": 1, "step": 0.05, "unit": "%", "displayScale": 100, "style": "slider" },
+    "background-image-opacity": { "min": 0, "max": 1, "step": 0.05, "unit": "%", "displayScale": 100, "style": "slider" },
+    "unfocused-split-opacity": { "min": 0.15, "max": 1, "step": 0.05, "unit": "%", "displayScale": 100, "style": "slider" },
+    "bell-audio-volume": { "min": 0, "max": 1, "step": 0.05, "unit": "%", "displayScale": 100, "style": "slider" },
+    "cursor-opacity": { "min": 0, "max": 1, "step": 0.05, "unit": "%", "displayScale": 100, "style": "slider" },
+    "faint-opacity": { "min": 0, "max": 1, "step": 0.05, "unit": "%", "displayScale": 100, "style": "slider" },
     "minimum-contrast": { "min": 1, "max": 21, "step": 0.5, "style": "slider" },
     "font-size": { "min": 4, "max": 72, "step": 0.5, "unit": "pt", "style": "field" },
     "image-storage-limit": { "style": "size" },
