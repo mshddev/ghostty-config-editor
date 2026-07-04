@@ -23,9 +23,6 @@ import AppKit
 private struct PopoverPassthroughDismiss: ViewModifier {
     @Binding var isPresented: Bool
     @State private var monitor: Any?
-    /// The window the popover anchors from, captured at open time. A mouse-down in this
-    /// window is "outside the popover"; one in the popover's own window is left alone.
-    @State private var hostWindow: NSWindow?
 
     func body(content: Content) -> some View {
         content
@@ -39,14 +36,15 @@ private struct PopoverPassthroughDismiss: ViewModifier {
 
     private func install() {
         guard monitor == nil else { return }
-        // At the moment the popover opens, the app window is still key/main; capture it so
-        // we can tell an outside click (this window) from a click inside the popover
-        // (its own `_NSPopoverWindow`).
-        hostWindow = NSApp.keyWindow ?? NSApp.mainWindow
-        monitor = NSEvent.addLocalMonitorForEvents(matching: [.leftMouseDown]) { event in
-            if event.window === hostWindow {
+        // At the moment the popover opens, the app window is still key/main; capture it as
+        // a weak local so we can tell an outside click (this window) from a click inside
+        // the popover (its own `_NSPopoverWindow`) without retaining the window.
+        let host = NSApp.keyWindow ?? NSApp.mainWindow
+        monitor = NSEvent.addLocalMonitorForEvents(matching: [.leftMouseDown]) { [weak host] event in
+            if let host, event.window === host {
                 // Outside the popover → close it, then let the click through so it acts on
-                // the control underneath in the same gesture (MO-1).
+                // the control underneath in the same gesture (MO-1). Flipping the binding
+                // fires `.onChange` → `remove()`, so the monitor tears itself down.
                 isPresented = false
             }
             return event
@@ -56,7 +54,6 @@ private struct PopoverPassthroughDismiss: ViewModifier {
     private func remove() {
         if let monitor { NSEvent.removeMonitor(monitor) }
         monitor = nil
-        hostWindow = nil
     }
 }
 

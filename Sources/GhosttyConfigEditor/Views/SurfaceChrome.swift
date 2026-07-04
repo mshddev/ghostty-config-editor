@@ -134,6 +134,11 @@ struct HoverAffordanceButtonStyle: ButtonStyle {
         let restingFill: Color?
         let pointingHand: Bool
         @State private var hovering = false
+        // Tracks whether *this* control currently owns a pushed cursor, so push/pop stay
+        // balanced even if `.onHover` delivers a stray or repeated true/false (tracking-
+        // area rebuilds on scroll/layout can) — an unmatched pop would corrupt the
+        // process-wide cursor stack.
+        @State private var didPushCursor = false
         // Best-effort keyboard-focus parity; the guaranteed fallback is the system focus
         // ring the plain button keeps. The full keyboard/VoiceOver gate is U26.
         @Environment(\.isFocused) private var focused: Bool
@@ -158,10 +163,14 @@ struct HoverAffordanceButtonStyle: ButtonStyle {
                 .onHover { inside in
                     hovering = inside
                     guard pointingHand else { return }
-                    if inside { NSCursor.pointingHand.push() } else { NSCursor.pop() }
+                    if inside {
+                        if !didPushCursor { NSCursor.pointingHand.push(); didPushCursor = true }
+                    } else if didPushCursor {
+                        NSCursor.pop(); didPushCursor = false
+                    }
                 }
                 // Balance the cursor stack if the control is torn down mid-hover.
-                .onDisappear { if pointingHand && hovering { NSCursor.pop() } }
+                .onDisappear { if didPushCursor { NSCursor.pop(); didPushCursor = false } }
         }
     }
 }

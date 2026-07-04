@@ -304,6 +304,10 @@ private struct ThemeRow: View {
             Button("Dark mode only") {
                 Task { await model.applyThemeInPair(theme.name, as: .dark) }
             }
+            // Explicit cancel: without it SwiftUI adds an ambiguous "OK" that reads like a
+            // confirm but does nothing. "Cancel" states plainly that it abandons (found in
+            // live testing).
+            Button("Cancel", role: .cancel) { }
         }
     }
 
