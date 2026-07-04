@@ -48,7 +48,7 @@ final class EnumChoicesTests: XCTestCase {
         let choices = option.enumChoices(current: "block")
         XCTAssertEqual(choices.count, 4)
         XCTAssertEqual(choices.filter(\.isSelected).map(\.value), ["block"])
-        XCTAssertEqual(choices.first?.label, "block") // not annotated
+        XCTAssertEqual(choices.first?.label, "Block") // curated (U3), not annotated with " — …"
     }
 
     // Unset, empty/unlisted default (macos-option-as-alt) → distinct unset entry
@@ -102,10 +102,19 @@ final class EnumChoicesTests: XCTestCase {
         XCTAssertEqual(choices.filter(\.isSelected).map(\.value), ["left"])
     }
 
-    // An option with no curated value labels shows its raw values unchanged.
-    func testUncuratedEnumFallsBackToRawLabels() {
-        let choices = enumOption(state: .setNonDefault, userValues: ["bar"]).enumChoices(current: "bar")
-        XCTAssertEqual(choices.map(\.label), choices.map(\.value))
+    // U3 (CV-1): an option with no curated value labels HUMANIZES its labels — a raw
+    // config token never surfaces as a choice — while the tags stay the raw values.
+    func testUncuratedEnumHumanizesLabelsButKeepsRawTags() {
+        let option = enumOption(
+            name: "demo-uncurated",
+            values: ["alpha_one", "beta"],
+            default: "alpha_one",
+            state: .setNonDefault,
+            userValues: ["beta"]
+        )
+        let choices = option.enumChoices(current: "beta")
+        XCTAssertEqual(choices.map(\.value), ["alpha_one", "beta"], "tags stay raw for Ghostty")
+        XCTAssertEqual(choices.map(\.label), ["Alpha one", "Beta"], "labels humanized, never the raw token")
     }
 
     // Current equals default and both are listed → no duplicate row.
