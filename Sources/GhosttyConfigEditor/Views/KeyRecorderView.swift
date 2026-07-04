@@ -268,6 +268,18 @@ final class KeyRecorderNSView: NSView {
         isRecording = false
     }
 
+    /// Speak a transient message to VoiceOver from this (focused) element — used for the
+    /// soft capture warning, which otherwise only updates a sibling visual Label (A11Y).
+    private func announce(_ message: String) {
+        NSAccessibility.post(
+            element: self,
+            notification: .announcementRequested,
+            userInfo: [
+                .announcement: message,
+                .priority: NSNumber(value: NSAccessibilityPriorityLevel.high.rawValue),
+            ])
+    }
+
     // MARK: - Capture
 
     /// Process a key-down while recording. Returns nil to swallow the event (so no
@@ -304,7 +316,12 @@ final class KeyRecorderNSView: NSView {
         // A character key with no ⌘/⌃/⌥ fires on ordinary typing — reject and keep
         // recording. (Bare named keys like F5 / arrows are allowed.)
         if !hasRealModifier, named == nil {
-            onWarning?("Add ⌘, ⌃, or ⌥ — that key alone would fire while you type.")
+            let message = "Add ⌘, ⌃, or ⌥ — that key alone would fire while you type."
+            onWarning?(message)
+            // The warning is a sibling Label in the row, outside the recorder's focused
+            // element, so a VoiceOver user gets no feedback on why capture was rejected —
+            // announce it from the focused recorder (A11Y).
+            announce(message)
             return nil
         }
 

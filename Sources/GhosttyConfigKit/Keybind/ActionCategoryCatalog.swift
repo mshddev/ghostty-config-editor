@@ -36,17 +36,34 @@ public struct ActionCategoryCatalog: Sendable {
 
     private let sectionsInOrder: [ActionSection]
     private let categories: [String: ActionCategory]
+    /// The declared section ids — so an action mapped to a section that doesn't exist
+    /// (a typo in the JSON) resolves to Other rather than vanishing (see `sectionID`).
+    private let declaredSectionIDs: Set<String>
 
     public init(sections: [ActionSection], categories: [String: ActionCategory]) {
         self.sectionsInOrder = sections
         self.categories = categories
+        self.declaredSectionIDs = Set(sections.map(\.id))
     }
 
     // MARK: - Read API
 
-    /// The section id for an action (params stripped); `Other` when uncategorized.
+    /// The section id for an action (params stripped). `Other` when uncategorized **or**
+    /// when the mapped section isn't a declared one — a mistyped `section` in the JSON
+    /// must not make the action's row disappear from the editor (it lands in Other).
     public func sectionID(forAction action: String) -> String {
-        categories[Keybind.actionName(action)]?.section ?? Self.otherSection.id
+        guard let id = categories[Keybind.actionName(action)]?.section,
+              declaredSectionIDs.contains(id) else { return Self.otherSection.id }
+        return id
+    }
+
+    /// Categorized actions whose `section` doesn't match any declared section — used by a
+    /// referential-integrity test so a typo is caught at test time (KTD1 discipline), even
+    /// though `sectionID` degrades gracefully at runtime.
+    public var danglingSectionActions: [String] {
+        categories.compactMap { name, category in
+            declaredSectionIDs.contains(category.section) ? nil : name
+        }
     }
 
     /// The within-section rank, or a sentinel that sorts after every ranked action.

@@ -159,6 +159,18 @@ final class KeybindTests: XCTestCase {
         XCTAssertTrue(KeybindValidation.isWritable(trigger: "super+t", action: "new_tab", knownActions: actions))
     }
 
+    func testValidationRejectsAnActionShapedTriggerWithAnEmbeddedEquals() {
+        let actions: Set<String> = ["new_tab", "copy_to_clipboard"]
+        // Typing a whole binding into the trigger-only "Edit as text" field would otherwise
+        // be written as `ctrl+a=copy_to_clipboard=new_tab`, a line Ghostty silently drops.
+        let whole = KeybindValidation.validate(trigger: "ctrl+a=copy_to_clipboard", action: "new_tab", knownActions: actions)
+        XCTAssertTrue(whole.contains { $0.severity == .error }, "a trigger key can't carry '='")
+        XCTAssertFalse(KeybindValidation.isWritable(trigger: "ctrl+a=copy_to_clipboard", action: "new_tab", knownActions: actions))
+        // The legitimate bare '=' key (super+=) is still fine.
+        let equalsKey = KeybindValidation.validate(trigger: "super+=", action: "new_tab", knownActions: actions)
+        XCTAssertFalse(equalsKey.contains { $0.severity == .error }, "the bare '=' key is a valid trigger")
+    }
+
     func testWhitespaceAroundBoundaryAndModifiersIsNormalized() {
         // A hand-typed trigger with stray spaces must canonicalize to the clean
         // form so it still matches a default and dedupes (no duplicate write).
@@ -228,7 +240,12 @@ final class KeybindTests: XCTestCase {
         XCTAssertEqual(KeybindTrigger.displaySymbol(for: "shift+arrow_down"), "⇧\(s)↓")
         XCTAssertEqual(KeybindTrigger.displaySymbol(for: "super+arrow_left"), "⌘\(s)←")
         XCTAssertEqual(KeybindTrigger.displaySymbol(for: "ctrl+page_up"), "⌃\(s)⇞")
-        XCTAssertEqual(KeybindTrigger.displaySymbol(for: "super+delete"), "⌘\(s)⌫")
+        // Keyed to the names the recorder/Ghostty actually emit: `backspace` is the ⌫ key,
+        // `delete` is *forward*-delete (⌦), and `enter` is the main Return key (↩). These
+        // are real default bindings (super+backspace=text:…, super+enter=toggle_fullscreen).
+        XCTAssertEqual(KeybindTrigger.displaySymbol(for: "super+backspace"), "⌘\(s)⌫")
+        XCTAssertEqual(KeybindTrigger.displaySymbol(for: "super+delete"), "⌘\(s)⌦")
+        XCTAssertEqual(KeybindTrigger.displaySymbol(for: "super+enter"), "⌘\(s)↩")
         // Digit keys are intentionally left raw (Ghostty ships super+digit_1 AND super+1;
         // mapping both to ⌘1 would look like a duplicated capsule).
         XCTAssertEqual(KeybindTrigger.displaySymbol(for: "super+digit_1"), "⌘\(s)digit_1")
@@ -250,6 +267,11 @@ final class KeybindTests: XCTestCase {
         // A modified chord is not physical, even onto a named key.
         XCTAssertFalse(KeybindTrigger.isPhysicalNamedKey("super+c"))
         XCTAssertFalse(KeybindTrigger.isPhysicalNamedKey("shift+arrow_left"))
+        // A bare key that HAS a macOS glyph (arrows, backspace) reads as its glyph, not as
+        // prose, so it isn't a "physical" chip — only keys with no glyph (copy, f5) are.
+        XCTAssertFalse(KeybindTrigger.isPhysicalNamedKey("arrow_left"))
+        XCTAssertFalse(KeybindTrigger.isPhysicalNamedKey("backspace"))
+        XCTAssertTrue(KeybindTrigger.isPhysicalNamedKey("f5"))
         // A bare single-character key is an ordinary key, not physical.
         XCTAssertFalse(KeybindTrigger.isPhysicalNamedKey("a"))
         XCTAssertFalse(KeybindTrigger.isPhysicalNamedKey("="))

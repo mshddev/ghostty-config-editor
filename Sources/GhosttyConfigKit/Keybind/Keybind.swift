@@ -173,7 +173,10 @@ public struct KeybindTrigger: Sendable, Equatable {
         guard prefixes.isEmpty, chords.count == 1 else { return false }
         let chord = chords[0]
         guard chord.modifiers.isEmpty else { return false }
-        return Self.canonicalizeKey(chord.key).count > 1
+        let key = Self.canonicalizeKey(chord.key)
+        // Only keys with no conventional macOS glyph read as "prose" and need the chip;
+        // arrows/backspace/etc. render as ↓/⌫ via `displayKey`, so they aren't "physical".
+        return key.count > 1 && Self.displayGlyphs[key] == nil
     }
 
     /// Convenience: does this raw trigger render as a physical named-key chip?
@@ -206,11 +209,15 @@ public struct KeybindTrigger: Sendable, Equatable {
         return displayGlyphs[canonical] ?? canonical
     }
 
+    // Keyed by the key names the recorder/Ghostty actually emit (see `namedKey` and
+    // `+list-keybinds --default`): the ⌫ key is `backspace`, `delete` is the *forward*
+    // delete, and the main Return key is `enter`. Getting these wrong renders real default
+    // bindings (`super+backspace`, `super+enter`) with the wrong glyph or no glyph at all.
     private static let displayGlyphs: [String: String] = [
         "arrow_up": "↑", "arrow_down": "↓", "arrow_left": "←", "arrow_right": "→",
         "page_up": "⇞", "page_down": "⇟", "home": "↖", "end": "↘",
-        "delete": "⌫", "forward_delete": "⌦", "escape": "⎋",
-        "return": "↩", "enter": "⌤", "tab": "⇥", "space": "␣",
+        "backspace": "⌫", "delete": "⌦", "escape": "⎋",
+        "enter": "↩", "tab": "⇥", "space": "␣",
     ]
 }
 
@@ -473,6 +480,15 @@ public enum KeybindValidation {
             for token in chord.rawModifiers where token != token.lowercased() {
                 issues.append(KeybindIssue(severity: .error,
                                            message: "Modifier “\(token)” must be lowercase (e.g. \(token.lowercased()))."))
+            }
+            // A key token can't carry an `=` — that's the trigger/action boundary. Typing a
+            // whole binding into the trigger-only text field (`ctrl+a=copy_to_clipboard`)
+            // would otherwise be written as `ctrl+a=copy_to_clipboard=<action>`, a line
+            // Ghostty silently drops. The bare `=` key (a single character) is legitimate.
+            let key = chord.key.trimmingCharacters(in: .whitespaces)
+            if key.count > 1, key.contains("=") {
+                issues.append(KeybindIssue(severity: .error,
+                                           message: "A shortcut can’t contain “=”. Enter only the keys (e.g. ctrl+a), not the action."))
             }
         }
 

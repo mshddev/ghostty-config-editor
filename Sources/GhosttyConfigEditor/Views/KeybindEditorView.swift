@@ -301,17 +301,19 @@ private struct KeybindRow: View {
 
     @ViewBuilder
     private func chordCapsule(_ chord: MergedKeybind) -> some View {
-        if model.isReadOnly(chord) {
-            readOnlyCapsule(chord)
-        } else {
-            switch chord.origin {
-            case .unbound:
-                recorder(for: chord, width: Self.emptyRecorderWidth)
-            case .userDisablesDefault:
-                disabledCapsule(chord)
-            case .default, .userAdded, .userOverridesDefault:
-                editableCapsule(chord)
-            }
+        let readOnly = model.isReadOnly(chord)
+        switch chord.origin {
+        case .userDisablesDefault:
+            // A turned-off default reads struck-through even when the unbind lives in an
+            // included file — checked *before* read-only, so a read-only unbind isn't
+            // rendered as a normal locked pill that looks bound. Re-enable is offered only
+            // when it's editable here; a read-only one shows where it's turned off instead.
+            disabledCapsule(chord, readOnly: readOnly)
+        case .unbound:
+            // An unbound placeholder has no source, so it's never read-only.
+            recorder(for: chord, width: Self.emptyRecorderWidth)
+        case .default, .userAdded, .userOverridesDefault:
+            if readOnly { readOnlyCapsule(chord) } else { editableCapsule(chord) }
         }
     }
 
@@ -357,18 +359,30 @@ private struct KeybindRow: View {
         chord.origin == .default ? "Turn off this default shortcut" : "Remove this shortcut"
     }
 
-    /// A default the user turned off: struck-through trigger with a one-click re-enable.
-    private func disabledCapsule(_ chord: MergedKeybind) -> some View {
+    /// A default the user turned off: struck-through trigger. When the unbind lives in the
+    /// writer's target file it carries a one-click re-enable; when it's turned off in an
+    /// included file it shows a lock naming that file (it can't be re-enabled from here).
+    @ViewBuilder
+    private func disabledCapsule(_ chord: MergedKeybind, readOnly: Bool) -> some View {
         HStack(spacing: 2) {
             triggerPill(chord, strikethrough: true)
-            Button {
-                perform { await model.removeKeybind(trigger: chord.canonicalTrigger) }
-            } label: {
-                Image(systemName: "arrow.uturn.backward")
+            if readOnly {
+                if let source = chord.source {
+                    Image(systemName: "lock")
+                        .font(.caption2).foregroundStyle(.tertiary)
+                        .help("Turned off in \((source.file as NSString).lastPathComponent) — edit it there")
+                        .accessibilityLabel("Turned off in \((source.file as NSString).lastPathComponent)")
+                }
+            } else {
+                Button {
+                    perform { await model.removeKeybind(trigger: chord.canonicalTrigger) }
+                } label: {
+                    Image(systemName: "arrow.uturn.backward")
+                }
+                .buttonStyle(.borderless)
+                .help("Re-enable this default shortcut")
+                .accessibilityLabel("Re-enable \(KeybindTrigger.displaySymbol(for: chord.trigger))")
             }
-            .buttonStyle(.borderless)
-            .help("Re-enable this default shortcut")
-            .accessibilityLabel("Re-enable \(KeybindTrigger.displaySymbol(for: chord.trigger))")
         }
     }
 
@@ -556,9 +570,28 @@ private struct KeybindRow: View {
         warning = nil
         let token = token.trimmingCharacters(in: .whitespaces)
         guard !token.isEmpty else { return }
-        if case .rebind(let chord) = edit, !chord.canonicalTrigger.isEmpty,
-           KeybindTrigger.parse(token).canonical() == chord.canonicalTrigger {
-            // Re-recording the chord's own current keys — clear any stale conflict prompt.
+        let newCanonical = KeybindTrigger.parse(token).canonical()
+
+        // The chord being re-recorded, if any: its own keys are a no-op, and it's excluded
+        // from the "this action already uses these keys" check below.
+        let editingCanonical: String?
+        if case .rebind(let chord) = edit { editingCanonical = chord.canonicalTrigger } else { editingCanonical = nil }
+
+        // Re-recording a chord's own current keys — clear any stale conflict prompt.
+        if let editingCanonical, !editingCanonical.isEmpty, newCanonical == editingCanonical {
+            pendingConflict = nil
+            return
+        }
+        // These keys are already one of THIS action's live chords. `conflictingAction`
+        // excludes the action itself, so it wouldn't catch this — but committing would
+        // silently collapse two of the action's shortcuts into one (rebind) or write a
+        // redundant duplicate (add). Warn softly and don't merge (adversarial finding).
+        if group.chords.contains(where: {
+            $0.canonicalTrigger == newCanonical
+                && $0.canonicalTrigger != editingCanonical
+                && $0.origin != .unbound && $0.origin != .userDisablesDefault
+        }) {
+            warning = "\(friendlyTitle) already uses \(KeybindTrigger.displaySymbol(for: token))."
             pendingConflict = nil
             return
         }

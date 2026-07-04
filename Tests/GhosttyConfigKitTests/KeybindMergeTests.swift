@@ -307,6 +307,17 @@ final class KeybindMergeTests: XCTestCase {
         XCTAssertEqual(unboundNames, ["goto_window"], "only the real, param-free, unbound action is listed")
     }
 
+    func testWithUnboundActionsDedupesRepeatedActionNames() {
+        // A degenerate +list-actions that repeats a name must yield ONE unbound row, so two
+        // `.unbound` MergedKeybinds don't share the `action:<name>` id and trip a SwiftUI
+        // duplicate-id fault after grouping (matches merge()'s Risk R-B guard).
+        let merged = KeybindMerge.merge(defaults: [], user: [])
+        let actions = [KeybindAction(name: "toggle_quick_terminal"), KeybindAction(name: "toggle_quick_terminal")]
+        let full = KeybindMerge.withUnboundActions(merged, allActions: actions)
+        XCTAssertEqual(full.filter { $0.action == "toggle_quick_terminal" }.count, 1)
+        XCTAssertEqual(Set(full.map(\.id)).count, full.count, "ids stay unique")
+    }
+
     func testWithUnboundActionsIsNoOpWhenActionListIsEmpty() {
         let merged = KeybindMerge.merge(defaults: [DefaultKeybind(trigger: "super+t", action: "new_tab")], user: [])
         XCTAssertEqual(KeybindMerge.withUnboundActions(merged, allActions: []), merged)

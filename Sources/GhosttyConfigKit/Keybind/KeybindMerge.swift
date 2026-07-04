@@ -216,8 +216,12 @@ public enum KeybindMerge {
     /// couldn't list them), so the editor still works against just the bound rows.
     public static func withUnboundActions(_ merged: [MergedKeybind], allActions: [KeybindAction]) -> [MergedKeybind] {
         let bound = Set(merged.map { Keybind.actionName($0.action) })
-        let unbound = allActions.map(\.name)
-            .filter { !nonBindableActions.contains($0) && !bound.contains($0) }
+        // Dedupe by name via a Set (matching `merge`'s Risk R-B guard): a degenerate
+        // `+list-actions` that repeats a name must not yield two `.unbound` rows sharing
+        // the `action:<name>` SwiftUI id and tripping a duplicate-id fault after grouping.
+        let unbound = Set(allActions.map(\.name))
+            .subtracting(bound)
+            .subtracting(nonBindableActions)
             .sorted()
             .map { MergedKeybind(trigger: "", action: $0, canonicalTrigger: "", origin: .unbound, source: nil) }
         return merged + unbound

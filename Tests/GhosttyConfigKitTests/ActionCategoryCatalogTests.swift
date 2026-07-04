@@ -29,6 +29,26 @@ final class ActionCategoryCatalogTests: XCTestCase {
                        ActionCategoryCatalog.otherSection.id)
     }
 
+    func testShippedCatalogHasNoDanglingSectionReferences() {
+        // Referential integrity: every action's `section` must be a declared section id.
+        let dangling = ActionCategoryCatalog.bundled.danglingSectionActions
+        XCTAssertTrue(dangling.isEmpty,
+                      "action-categories.json maps actions to undeclared sections: \(dangling.sorted())")
+    }
+
+    func testAnUndeclaredSectionDegradesToOtherRatherThanVanishing() {
+        // A typo'd section id must not make the action disappear — it lands in Other.
+        let catalog = ActionCategoryCatalog(
+            sections: [ActionSection(id: "splits", title: "Splits")],
+            categories: ["new_split": ActionCategory(section: "splits", rank: 1),
+                         "goto_split": ActionCategory(section: "splts", rank: 2)])  // deliberate typo
+        XCTAssertEqual(catalog.sectionID(forAction: "goto_split"), ActionCategoryCatalog.otherSection.id)
+        XCTAssertEqual(catalog.danglingSectionActions, ["goto_split"])
+        let sections = catalog.sections(for: [group("new_split"), group("goto_split")])
+        XCTAssertEqual(sections.map(\.id), ["splits", ActionCategoryCatalog.otherSection.id])
+        XCTAssertEqual(sections.last?.groups.map(\.action), ["goto_split"], "the typo'd action isn't dropped")
+    }
+
     func testParamIsStrippedWhenResolvingSection() {
         // goto_tab:1…8 all resolve to the same (goto_tab) section.
         XCTAssertEqual(ActionCategoryCatalog.bundled.sectionID(forAction: "goto_tab:3"), "windows_tabs")
