@@ -204,6 +204,42 @@ final class IntentSearchTests: XCTestCase {
         XCTAssertTrue(browser().searchHits("   ").isEmpty)
     }
 
+    // MARK: - Local scope vs global Find (R9/F3, U5 scenario 1)
+
+    func testLocalScopedSearchReturnsOnlyTheScopedCategory() {
+        let b = browser()
+        // Global Find spans the whole catalog: "opacity" matches options across more than
+        // one category (Appearance, Cursor, Tabs & Splits …).
+        let global = b.searchResults("opacity")
+        let globalCategories = Set(global.map(\.option.category))
+        XCTAssertGreaterThan(globalCategories.count, 1, "global Find must span multiple categories")
+        XCTAssertTrue(global.contains { $0.option.name == "background-opacity" })
+        XCTAssertTrue(global.contains { $0.option.name == "cursor-opacity" },
+                      "a Cursor-category match should appear in the unscoped global search")
+
+        // The per-surface local filter scoped to Appearance returns ONLY Appearance
+        // options — the same ranked search, constrained to the current category.
+        let scoped = b.searchResults("opacity", in: OptionCategorizer.appearanceCategory)
+        XCTAssertFalse(scoped.isEmpty)
+        XCTAssertTrue(scoped.allSatisfy { $0.option.category == OptionCategorizer.appearanceCategory },
+                      "a local Appearance query must return only Appearance options")
+        XCTAssertTrue(scoped.contains { $0.option.name == "background-opacity" })
+        XCTAssertFalse(scoped.contains { $0.option.name == "cursor-opacity" },
+                       "a Cursor option must not leak into an Appearance-scoped local search")
+        XCTAssertFalse(scoped.contains { $0.option.name == "unfocused-split-opacity" },
+                       "a Tabs & Splits option must not leak into an Appearance-scoped local search")
+        // Scoping only narrows — every scoped hit is also a global hit.
+        XCTAssertTrue(Set(scoped.map(\.option.name)).isSubset(of: Set(global.map(\.option.name))))
+    }
+
+    func testNilScopeMatchesUnscopedGlobalSearch() {
+        // A nil scope (a non-category surface) degrades to the unscoped results, so the
+        // local field on such a surface never silently drops matches.
+        let b = browser()
+        XCTAssertEqual(b.searchResults("opacity", in: nil).map(\.option.name),
+                       b.searchResults("opacity").map(\.option.name))
+    }
+
     func testEveryIntentMapOptionExistsInCatalog() {
         // KTD1-style guard: no phrase may map to an option absent from the catalog.
         let names = Set(catalog.options.map(\.name))

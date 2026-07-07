@@ -75,7 +75,9 @@ struct StatusView: View {
                     title: "\(count) customized option\(count == 1 ? "" : "s")",
                     detail: "Review values that differ from Ghostty defaults.",
                     actionTitle: "Review",
-                    action: { model.selection = .customized }
+                    // Drill into the Customized sub-surface; the sidebar stays on Status
+                    // (KTD6), and reselecting Status returns here to the hub (AE7).
+                    action: { model.setStatusDestination(.customized) }
                 )
             }
         }
@@ -106,7 +108,7 @@ struct StatusView: View {
                     title: "\(count) problem\(count == 1 ? "" : "s") detected",
                     detail: "Review validation errors and potentially unsafe settings.",
                     actionTitle: "Review Problems",
-                    action: { model.selection = .problems }
+                    action: { model.setStatusDestination(.problems) }
                 )
             } else {
                 StatusSummaryRow(

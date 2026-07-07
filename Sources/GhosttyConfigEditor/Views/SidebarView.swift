@@ -13,8 +13,9 @@ struct SidebarView: View {
     /// calls `endFind()` explicitly rather than relying on the app's `onChange(selection)`,
     /// because re-picking the row Find was started from writes an **equal** selection —
     /// which `onChange` wouldn't fire, leaving the click dead. When Find ends, the previous
-    /// highlight returns. Customized/Problems are Status drill-downs, so the footer stays
-    /// selected while either secondary surface is open.
+    /// highlight returns. The Customized/Problems drill-downs keep `selection == .status`
+    /// (KTD6), so the footer stays selected while either secondary surface is open; landing
+    /// on `.status` resets the drill-down to the hub via the model's `selection` `didSet`.
     private var sidebarSelection: Binding<SidebarSelection?> {
         Binding(get: { displayedSelection },
                 set: { newValue in
@@ -24,11 +25,7 @@ struct SidebarView: View {
     }
 
     private var displayedSelection: SidebarSelection? {
-        guard !model.isFinding else { return nil }
-        switch model.selection {
-        case .customized, .problems: return .status
-        default: return model.selection
-        }
+        model.isFinding ? nil : model.selection
     }
 
     var body: some View {
@@ -91,6 +88,16 @@ struct SidebarView: View {
                 .accessibilityLabel("Status")
                 .accessibilityValue(needsAttention ? "Needs attention" : "All clear")
                 .help(needsAttention ? "Status needs attention" : "Status is healthy")
+                // AE7: reselecting the already-highlighted Status footer must return to the
+                // hub. A `List(selection:)` binding doesn't fire for a re-pick of the current
+                // row (the value is unchanged), so this gesture catches the re-pick while a
+                // Customized/Problems drill-down is showing; the model's `selection` `didSet`
+                // then resets the destination to the hub. Harmless when Status isn't selected
+                // yet — the List binding also runs and both converge on the same state.
+                .simultaneousGesture(TapGesture().onEnded {
+                    if model.isFinding { model.endFind() }
+                    model.selection = .status
+                })
         }
         .scrollDisabled(true)
         .frame(height: 44)

@@ -20,7 +20,10 @@ struct OptionListView: View {
                 title: title,
                 subtitle: headerSubtitle,
                 searchText: $model.query,
-                searchPrompt: "Search options or describe a behavior"
+                // Name the local scope — "Search Appearance" — so the per-category filter
+                // reads as scoped to the current category, distinct from the whole-catalog
+                // global Find overlay (R9/F3).
+                searchPrompt: model.localSearchPrompt
             )
             Divider()
             statusBackLink
@@ -60,7 +63,7 @@ struct OptionListView: View {
 
     @ViewBuilder
     private var statusBackLink: some View {
-        if model.selection == .customized {
+        if model.isShowingCustomized {
             StatusBackLink()
         }
     }
@@ -143,7 +146,7 @@ struct OptionListView: View {
                 // Customized surface where "everything you changed" is the list you see. A
                 // grouped Form drops `role:`-only red styling, so render via
                 // DestructiveRowButton for explicit red (DS-7).
-                if model.selection == .customized && model.resettableCount > 0 {
+                if model.isShowingCustomized && model.resettableCount > 0 {
                     Section {
                         DestructiveRowButton(title: "Reset All to Defaults…") { confirmingReset = true }
                     }
@@ -160,7 +163,7 @@ struct OptionListView: View {
     /// fallback and search results still render ordinary rows.
     @ViewBuilder
     private func customizedRow(_ option: MergedOption) -> some View {
-        if model.selection == .customized, option.option.name == "theme" {
+        if model.isShowingCustomized, option.option.name == "theme" {
             DeepLinkRow(
                 title: LabelCatalog.bundled.displayTitle(for: "theme"),
                 value: model.currentTheme ?? "",
@@ -168,7 +171,7 @@ struct OptionListView: View {
                 systemImage: "paintpalette",
                 action: { model.focus(optionNamed: "theme") }
             )
-        } else if model.selection == .customized, option.option.name == "keybind" {
+        } else if model.isShowingCustomized, option.option.name == "keybind" {
             DeepLinkRow(
                 title: OptionCategorizer.keybindingsCategory,
                 subtitle: customizedKeybindSummary(option),
@@ -203,7 +206,7 @@ struct OptionListView: View {
             let n = model.visibleOptions.count
             return "\(n) result\(n == 1 ? "" : "s")"
         }
-        if model.selection == .customized {
+        if model.isShowingCustomized {
             let n = model.visibleOptions.count
             return n == 0 ? nil : "\(n) customized"
         }
@@ -211,11 +214,14 @@ struct OptionListView: View {
     }
 
     private var title: String {
-        if !model.query.trimmingCharacters(in: .whitespaces).isEmpty { return "Search" }
+        // While filtering, the title names the local scope too ("Search Appearance"), so
+        // the header — like the field prompt — reads as scoped to the current category (R9/F3).
+        if isSearching {
+            return model.localSearchScopeCategory.map { "Search \($0)" } ?? "Search"
+        }
+        if model.isShowingCustomized { return "Customized" }
         switch model.selection {
         case .category(let c): return c
-        case .customized: return "Customized"
-        case .problems: return "Problems"
         case .themes: return "Themes"
         case .recommended: return "Recommended" // rendered by RecommendedView; here for exhaustiveness
         case .status: return "Status" // rendered by StatusView; here for exhaustiveness
@@ -234,7 +240,7 @@ struct OptionListView: View {
     private var emptyState: some View {
         if !model.query.trimmingCharacters(in: .whitespaces).isEmpty {
             ContentUnavailableView.search(text: model.query)
-        } else if model.selection == .customized {
+        } else if model.isShowingCustomized {
             customizedSpringboard
         } else {
             ContentUnavailableView("No options",
@@ -459,7 +465,7 @@ struct OptionRow: View {
                     .buttonStyle(HoverAffordanceButtonStyle.icon)
                     .help("Reset to default")
                     .accessibilityLabel("Reset \(option.option.displayTitle) to default")
-                } else if model.selection != .customized {
+                } else if !model.isShowingCustomized {
                     Circle()
                         .fill(DesignTokens.customizedTint)
                         .frame(width: 8, height: 8)

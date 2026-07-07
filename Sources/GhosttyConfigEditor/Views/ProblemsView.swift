@@ -110,26 +110,48 @@ struct ProblemsView: View {
             Image(systemName: "xmark.octagon.fill").foregroundStyle(.red)
                 .accessibilityLabel("Error")
             VStack(alignment: .leading, spacing: 2) {
-                // G5: when the validation `key` names a real catalog option, the title
-                // is a deep-link that jumps to that control (clears search, selects its
-                // category, scrolls it into view via the shared `focus(optionNamed:)`);
-                // otherwise it's plain text (unmapped keys keep the "line N" fallback).
-                if let key = message.key, model.hasOption(named: key) {
-                    Button { model.focus(optionNamed: key) } label: {
-                        Text(key).font(.body.bold())
-                    }
-                    .buttonStyle(.link)
-                    .accessibilityHint("Show this setting")
-                } else {
-                    Text(message.key ?? "Error").font(.body.bold())
-                }
+                Text(message.key ?? "Error").font(.body.bold())
                 Text(message.message).font(.callout).foregroundStyle(.secondary)
                 if let line = message.line {
                     Text("line \(line)").font(.caption.monospaced()).foregroundStyle(.tertiary)
                 }
+                // F4/R10: each row exposes the right next action — Show Setting for a
+                // message whose key names a real control (clears search, selects its
+                // category, scrolls it in via `focus(optionNamed:)`), else an explicit
+                // file action for a keyless/unmapped diagnostic.
+                problemActions(model.problemAction(for: message))
             }
         }
         .padding(.vertical, RowMetrics.rowVerticalPadding)
+    }
+
+    /// The next-action row shared by validation and finding rows (F4/R10): Show Setting for
+    /// a mapped key, or Open Config at Line + Reveal in Finder for a file-only diagnostic.
+    /// Each action carries an accessible label so the recovery path is conveyed without
+    /// relying on the icon or link color (A11Y).
+    @ViewBuilder
+    private func problemActions(_ action: ProblemAction?) -> some View {
+        if let action {
+            HStack(spacing: DesignTokens.Spacing.cozy) {
+                switch action {
+                case .showSetting:
+                    Button("Show Setting") { model.perform(action) }
+                        .buttonStyle(.link)
+                        .accessibilityHint("Opens the implicated setting")
+                case .openFile(let path, let line):
+                    Button(line.map { "Open Config at Line \($0)" } ?? "Open Config") {
+                        model.openConfigFile(at: path, line: line)
+                    }
+                    .buttonStyle(.link)
+                    .accessibilityLabel(line.map { "Open config at line \($0)" } ?? "Open config file")
+                    Button("Reveal in Finder") { model.revealInFinder(path: path) }
+                        .buttonStyle(.link)
+                        .accessibilityLabel("Reveal config file in Finder")
+                }
+            }
+            .font(.caption)
+            .padding(.top, 2)
+        }
     }
 
     private func findingRow(_ finding: LintFinding) -> some View {
@@ -147,15 +169,15 @@ struct ProblemsView: View {
                         .fixedSize(horizontal: false, vertical: true)
                 }
                 .accessibilityElement(children: .combine)
+                // A footgun finding is a file-only warning (F4/R10): offer Open Config at
+                // Line + Reveal in Finder for its source location, with the file:line as a
+                // caption so the location stays visible.
                 if let location = finding.locations.first {
-                    Button {
-                        NSWorkspace.shared.open(URL(fileURLWithPath: location.file))
-                    } label: {
-                        Text("\((location.file as NSString).lastPathComponent):\(location.line)")
-                            .font(.caption.monospaced())
-                    }
-                    .buttonStyle(.link)
+                    Text("\((location.file as NSString).lastPathComponent):\(location.line)")
+                        .font(.caption.monospaced())
+                        .foregroundStyle(.tertiary)
                 }
+                problemActions(model.problemAction(for: finding))
             }
         }
         .padding(.vertical, RowMetrics.rowVerticalPadding)

@@ -406,9 +406,17 @@ struct RootView: View {
                 Group {
                     switch model.selection {
                     case .recommended: RecommendedView()
-                    case .problems: ProblemsView()
                     case .themes: ThemeBrowserView()
-                    case .status: StatusView(ghosttyVersion: ghosttyVersion)
+                    case .status:
+                        // The sidebar stays on `.status` for the hub and both drill-downs;
+                        // the destination decides which sub-surface renders (KTD6). Customized
+                        // reuses the option list (it shows the customized set), Problems its
+                        // own surface, and the hub the Status view.
+                        switch model.statusDestination {
+                        case .hub: StatusView(ghosttyVersion: ghosttyVersion)
+                        case .customized: OptionListView()
+                        case .problems: ProblemsView()
+                        }
                     case .category(let name) where name == OptionCategorizer.keybindingsCategory: KeybindEditorView()
                     default: OptionListView()
                     }

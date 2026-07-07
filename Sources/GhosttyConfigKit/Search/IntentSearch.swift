@@ -173,6 +173,18 @@ public struct CatalogBrowser: Sendable {
         search.search(query).compactMap { hit in merged.option(named: hit.optionName) }
     }
 
+    /// Search results scoped to a single category — the per-surface **local** filter
+    /// (R9/F3). Runs the same layered search as the global Find surface, then constrains
+    /// the ranked hits to the browsed category so a local filter never surfaces another
+    /// category's options. A `nil` scope (a non-category surface) degrades to the unscoped
+    /// results, so the local field never silently drops matches. Global Find keeps using
+    /// `searchResults(_:)` / `searchHits(_:)`, which always span the whole catalog.
+    public func searchResults(_ query: String, in category: String?) -> [MergedOption] {
+        let results = searchResults(query)
+        guard let category else { return results }
+        return results.filter { $0.option.category == category }
+    }
+
     /// Search results paired with their `SearchHit` provenance, in ranked order — so
     /// the global Find surface can show, per row, the option's category pill and (for
     /// intent matches) the phrase that surfaced it (D2). A hit whose option is absent

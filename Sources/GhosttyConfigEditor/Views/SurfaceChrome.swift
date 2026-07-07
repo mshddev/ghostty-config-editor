@@ -443,7 +443,9 @@ struct StatusBackLink: View {
 
     var body: some View {
         HStack {
-            Button { model.selection = .status } label: {
+            // Back to the Status hub via the destination model (KTD6); the sidebar keeps
+            // `.status` selected throughout the drill-down.
+            Button { model.setStatusDestination(.hub) } label: {
                 Label("Back to Status", systemImage: "chevron.left")
             }
             .buttonStyle(.link)

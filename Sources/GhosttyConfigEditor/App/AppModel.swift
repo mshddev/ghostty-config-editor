@@ -7,31 +7,29 @@ import GhosttyConfigKit
 ///
 /// `.themes` is the launch default; `.recommended` is the curated "start here"
 /// surface (F1), pinned above Themes in Get started but *not* the launch default
-/// (the app keeps opening on Themes to preserve its identity). `.customized` and
-/// `.problems` are drill-down surfaces reached from `.status`; the rest map to option
-/// categories. A `nil` selection is a defensive fallback that shows the unfiltered
-/// option list.
+/// (the app keeps opening on Themes to preserve its identity). `.status` is the in-window
+/// maintenance hub; its Customized and Problems drill-downs are *not* selection cases —
+/// they are `StatusDestination` sub-surfaces while `.status` stays selected (KTD6/AE7), so
+/// the sidebar has one truthful highlight. The rest map to option categories. A `nil`
+/// selection is a defensive fallback that shows the unfiltered option list.
 public enum SidebarSelection: Hashable {
     case recommended
-    case customized
-    case problems
     case themes
     case category(String)
     /// The in-window status hub: Ghostty binary/config health, behavior, customizations,
     /// and problems. Replaces the removed ⌘, `Settings` window — ⌘, now selects this.
+    /// Its Customized/Problems drill-downs live on `AppModel.statusDestination`, not here.
     case status
 }
 
 extension SidebarSelection {
     /// A stable string encoding for `@SceneStorage` last-surface restoration (G2). The
     /// associated-value `.category` case makes the enum non-`RawRepresentable`, so the
-    /// codec is hand-rolled: a `category:` prefix carries the category name.
+    /// codec is hand-rolled: a `category:` prefix carries the category name. Status always
+    /// restores to the hub (the drill-down destination is session state, not persisted).
     var storageString: String {
         switch self {
         case .recommended: return "recommended"
-        // Customized and Problems are secondary drill-downs from Status. Restore the
-        // hub on the next launch instead of reopening a hidden navigation destination.
-        case .customized, .problems: return "status"
         case .themes: return "themes"
         case .status: return "status"
         case .category(let name): return "category:\(name)"
@@ -41,7 +39,8 @@ extension SidebarSelection {
     init?(storageString raw: String) {
         switch raw {
         case "recommended": self = .recommended
-        // Migrate previously persisted sidebar destinations into the new Status hub.
+        // Migrate previously persisted sidebar destinations (incl. the retired
+        // customized/problems/settings selections) into the Status hub.
         case "customized", "problems", "settings", "status": self = .status
         case "themes": self = .themes
         default:
@@ -50,6 +49,17 @@ extension SidebarSelection {
             self = .category(String(raw.dropFirst(prefix.count)))
         }
     }
+}
+
+/// The Status hub's current drill-down sub-surface (KTD6/AE7). The sidebar selection stays
+/// `.status` for all three; this decides which surface renders. Landing on `.status`
+/// (footer reselection, ⌘,, `@SceneStorage` restoration, the Back to Status link) always
+/// resets this to `.hub` — so reselecting Status while on Customized/Problems returns to
+/// the hub — while the hub's Review buttons drill into `.customized` / `.problems`.
+public enum StatusDestination: Equatable, Sendable {
+    case hub
+    case customized
+    case problems
 }
 
 /// The Themes browser's appearance/favorites filter (U15 / TH-3). In-memory (a session
@@ -138,7 +148,23 @@ public final class AppModel {
     /// `setBinaryOverride(_:)` — so a fix on the "not found" screen survives relaunch.
     /// Read by `bootstrap()` as `GhosttyEnvironment.discover(userOverride:)`.
     public private(set) var binaryOverride: String?
-    public var selection: SidebarSelection? = .themes
+    public var selection: SidebarSelection? = .themes {
+        didSet {
+            // Landing on Status always returns to the hub (KTD6/AE7): the Customized and
+            // Problems drill-downs keep `selection == .status`, so reselecting the Status
+            // footer (or ⌘, / restoration) re-assigns `.status` and lands back on the hub
+            // rather than staying on a hidden sub-surface. `setStatusDestination` assigns
+            // the real destination *after* touching selection, so a drill-in still sticks.
+            if selection == .status { statusDestination = .hub }
+        }
+    }
+
+    /// The Status hub's active drill-down (KTD6/AE7). Only meaningful while
+    /// `selection == .status`; otherwise inert. Written by `setStatusDestination` (the
+    /// hub's Review buttons and the Back to Status link) and reset to `.hub` whenever
+    /// `selection` becomes `.status`.
+    public private(set) var statusDestination: StatusDestination = .hub
+
     public var query: String = ""
     /// The Themes surface's own search text (name filter), bound to the shared
     /// `SurfaceHeader` field. Distinct from `query` so each surface filters itself
@@ -563,6 +589,57 @@ public final class AppModel {
         }
     }
 
+    /// The resolved path of the primary config file (symlinks followed), or `nil` before a
+    /// browser is loaded. The fallback target for a Problems file action (Open at Line /
+    /// Reveal in Finder) when a diagnostic carries a line but no explicit file (F4/R10).
+    public var primaryConfigResolvedPath: String? {
+        browser?.merged.model.primary.resolvedPath
+    }
+
+    /// Reveal a specific file in the Finder (F4/R10) — a Problems finding can live in a
+    /// `config-file` include, not just the primary, so its Reveal targets that exact file.
+    /// Falls back to the primary config's directory when the path is gone.
+    public func revealInFinder(path: String) {
+        if FileManager.default.fileExists(atPath: path) {
+            NSWorkspace.shared.activateFileViewerSelecting([URL(fileURLWithPath: path)])
+        } else {
+            revealConfigInFinder()
+        }
+    }
+
+    /// Open the config file in the user's default editor, best-effort at `line` (F4/R10).
+    /// macOS has no universal line-jump across editors, so the line is advisory context —
+    /// the Problems row pairs this with Reveal in Finder as the reliable fallback. Mirrors
+    /// the `NSWorkspace.open` the finding rows already use.
+    public func openConfigFile(at path: String, line: Int? = nil) {
+        NSWorkspace.shared.open(URL(fileURLWithPath: path))
+    }
+
+    /// The next action a validation-message Problems row exposes (F4/R10): "Show Setting"
+    /// when the message's `key` names a real catalog option (focuses it), otherwise an
+    /// Open-at-Line file action when the message carries a line (its own file, or the
+    /// primary config as fallback). Pure routing lives in `ProblemActionPolicy`.
+    public func problemAction(for message: ValidationMessage) -> ProblemAction? {
+        ProblemActionPolicy.action(for: message, fallbackPath: primaryConfigResolvedPath) {
+            hasOption(named: $0)
+        }
+    }
+
+    /// The next action a static footgun finding row exposes (F4/R10): a file action at its
+    /// first location — footgun findings are file-only warnings, never option-keyed.
+    public func problemAction(for finding: LintFinding) -> ProblemAction? {
+        ProblemActionPolicy.action(for: finding)
+    }
+
+    /// Perform a resolved Problems row action (F4/R10): focus the mapped setting, or open
+    /// the source file at the diagnostic's line. Shared by the validation and finding rows.
+    public func perform(_ action: ProblemAction) {
+        switch action {
+        case .showSetting(let name): focus(optionNamed: name)
+        case .openFile(let path, let line): openConfigFile(at: path, line: line)
+        }
+    }
+
     /// Create an empty config file at the primary path when none exists yet (G1), so a
     /// newcomer can open it in an editor before making a first change. Creates the parent
     /// directory as needed, then reloads so `configMissing` clears. A no-op if a file is
@@ -771,6 +848,64 @@ public final class AppModel {
     public func endFind() {
         isFinding = false
         findQuery = ""
+    }
+
+    // MARK: - Status drill-down destinations (KTD6/AE7)
+
+    /// True when the Status hub's Customized drill-down is showing — the sidebar keeps
+    /// `.status` selected, so views test this rather than a (now-removed) `.customized`
+    /// selection case.
+    public var isShowingCustomized: Bool { selection == .status && statusDestination == .customized }
+
+    /// True when the Status hub's Problems drill-down is showing.
+    public var isShowingProblems: Bool { selection == .status && statusDestination == .problems }
+
+    /// Drill into a Status sub-surface (the hub's Review buttons → `.customized` /
+    /// `.problems`; the Back to Status link → `.hub`). Keeps the sidebar on `.status`.
+    /// Assigns `selection` first — which resets the destination to `.hub` via `didSet` —
+    /// then sets the requested destination, so the two never fight and reselecting Status
+    /// still returns to the hub (AE7).
+    public func setStatusDestination(_ destination: StatusDestination) {
+        selection = .status
+        statusDestination = destination
+        // The sidebar selection stays `.status` across these drill-downs, so the
+        // `onChange(of: selection)` surface cleanup doesn't fire — clear lingering apply
+        // feedback here so a hub action's "Saved" doesn't bleed into Customized/Problems
+        // (mirrors the per-surface cleanup, C3).
+        resetApplyState()
+    }
+
+    // MARK: - Local search scope (R9/F3)
+
+    /// The category a **local** (per-surface) search is scoped to — the browsed category,
+    /// or `nil` on non-category surfaces (where the local filter stays unscoped). Distinct
+    /// from global Find, which always spans the whole catalog (R9). Drives `visibleOptions`'
+    /// scoping and the search-field prompt.
+    public var localSearchScopeCategory: String? {
+        if case .category(let name) = selection { return name }
+        return nil
+    }
+
+    /// The prompt for the local search field, naming its scope so a local filter reads as
+    /// visibly scoped to the current category — "Search Appearance" (R9/F3). Falls back to
+    /// a generic prompt on surfaces without a single-category scope.
+    public var localSearchPrompt: String {
+        if let category = localSearchScopeCategory { return "Search \(category)" }
+        return "Search options or describe a behavior"
+    }
+
+    /// The human name of the surface currently browsed — the category name, "Customized",
+    /// "Themes", etc. Backs the surface title and the "clearing local search restores the
+    /// prior title" behavior (F3 scenario 5). `nil` only for the defensive `.none` fallback.
+    public var currentSurfaceName: String? {
+        if isShowingCustomized { return "Customized" }
+        switch selection {
+        case .category(let name): return name
+        case .themes: return "Themes"
+        case .recommended: return "Recommended"
+        case .status: return "Status"
+        case .none: return nil
+        }
     }
 
     // MARK: - Themes (U8)
@@ -1167,8 +1302,14 @@ public final class AppModel {
         guard let browser else { return [] }
         let q = query.trimmingCharacters(in: .whitespaces)
         if !q.isEmpty {
-            return browser.searchResults(q)
+            // A local filter is scoped to the current category (R9/F3): on a category
+            // surface it returns only that category's matches; the whole-catalog search is
+            // the separate global Find overlay. `localSearchScopeCategory` is nil off a
+            // category surface (e.g. Customized), so that search stays unscoped.
+            return browser.searchResults(q, in: localSearchScopeCategory)
         }
+        // The Customized drill-down keeps `selection == .status`; render its list here.
+        if isShowingCustomized { return browser.customizedOptions }
         switch selection {
         case .category(let category):
             // `theme` has a dedicated visual home in the Themes browser, so it's
@@ -1178,16 +1319,12 @@ public final class AppModel {
             // in-app path to values the picker can't express (a `light:…,dark:…`
             // pair, or a theme name not in `+list-themes`).
             return browser.options(in: category).filter { $0.option.name != "theme" }
-        case .customized:
-            return browser.customizedOptions
-        case .problems:
-            return [] // rendered by ProblemsView, not the option list
         case .themes:
             return [] // rendered by ThemeBrowserView
         case .recommended:
             return [] // rendered by RecommendedView
         case .status:
-            return [] // rendered by StatusView
+            return [] // hub rendered by StatusView; Problems by ProblemsView
         case .none:
             // Defensive fallback only — the sidebar always keeps a row selected,
             // so this nil branch isn't reachable through normal navigation.
@@ -1268,6 +1405,42 @@ public final class AppModel {
 
     public func snippet(for option: MergedOption) -> String {
         browser?.snippet(for: option) ?? "\(option.option.name) = \(option.option.defaultValue)"
+    }
+}
+
+/// The next action a Problems row exposes (F4/R10). A validation message whose key names a
+/// real catalog option focuses that setting ("Show Setting"); a file-only diagnostic (a
+/// footgun finding, or a keyless/unmapped validation line) opens the source file at its
+/// line ("Open Config at Line" / "Reveal in Finder"). Kept separate from its view so the
+/// routing is unit-testable without rendering the Problems list.
+public enum ProblemAction: Equatable, Sendable {
+    /// Focus the named setting via `focus(optionNamed:)` — a mapped validation key.
+    case showSetting(optionName: String)
+    /// Open the config file (best-effort at `line`) / reveal it — a file-only diagnostic.
+    case openFile(path: String, line: Int?)
+}
+
+/// Pure routing for Problems rows (F4/R10), independent of `AppModel`'s live browser so it
+/// unit-tests against the reference catalog. `hasOption` is the mapped-key check the model
+/// supplies; `fallbackPath` is the primary config, used when a keyless line carries no file.
+public enum ProblemActionPolicy {
+    static func action(
+        for message: ValidationMessage,
+        fallbackPath: String?,
+        hasOption: (String) -> Bool
+    ) -> ProblemAction? {
+        // A mapped key is a focusable setting — the most direct repair.
+        if let key = message.key, hasOption(key) { return .showSetting(optionName: key) }
+        // Otherwise a file+line diagnostic opens where the problem lives; a keyless line
+        // falls back to the primary config file the validator ran against.
+        if let file = message.file, let line = message.line { return .openFile(path: file, line: line) }
+        if let line = message.line, let fallbackPath { return .openFile(path: fallbackPath, line: line) }
+        return nil
+    }
+
+    static func action(for finding: LintFinding) -> ProblemAction? {
+        guard let location = finding.locations.first else { return nil }
+        return .openFile(path: location.file, line: location.line)
     }
 }
 
