@@ -1,6 +1,78 @@
 import SwiftUI
 import GhosttyConfigKit
 
+/// The flagship theme-row actions (R12/AE8): exactly one Apply, one Favorite, and one Theme
+/// Options control per theme, each with a distinct, task-specific accessibility label shared by
+/// the list row AND the grid card — so neither can drift into a duplicate or "mystery" control,
+/// and Apply / Favorite / Options stay three separate accessibility elements. Pure, so the
+/// one-of-each + distinct-label guarantee is unit-testable without rendering SwiftUI (KTD7).
+enum ThemeActionPolicy {
+    enum Kind: String, CaseIterable, Hashable, Sendable { case apply, favorite, options }
+
+    struct Descriptor: Equatable {
+        let kind: Kind
+        /// The label the control exposes to VoiceOver.
+        let accessibilityLabel: String
+        /// Apply carries its verb as a *hint* (its label is the theme identity, so VoiceOver
+        /// announces the theme, then the action); nil for Favorite/Options whose label already
+        /// names the action.
+        let accessibilityHint: String?
+        let systemImage: String
+    }
+
+    /// The three actions for a theme, given its favorite state and the identity string the
+    /// Apply control announces (name + appearance + current). Exactly one descriptor per kind.
+    struct Actions: Equatable {
+        let apply: Descriptor
+        let favorite: Descriptor
+        let options: Descriptor
+        /// All three in canonical order — one per kind (AE8).
+        var all: [Descriptor] { [apply, favorite, options] }
+    }
+
+    static func actions(themeName: String, isFavorite: Bool, applyIdentityLabel: String) -> Actions {
+        Actions(
+            apply: Descriptor(kind: .apply, accessibilityLabel: applyIdentityLabel,
+                              accessibilityHint: "Apply this theme", systemImage: "paintbrush"),
+            favorite: Descriptor(kind: .favorite,
+                                 accessibilityLabel: isFavorite ? "Unstar \(themeName)" : "Star \(themeName)",
+                                 accessibilityHint: nil, systemImage: isFavorite ? "star.fill" : "star"),
+            options: Descriptor(kind: .options, accessibilityLabel: "Theme options for \(themeName)",
+                                accessibilityHint: nil, systemImage: "ellipsis.circle")
+        )
+    }
+}
+
+/// The pure browsing-bucket dedup behind the Themes list/grid (TH-1/IA-7, R12): a Current
+/// theme is pinned and never re-appears in Favorites or the main browse list, and the Favorites
+/// band (only surfaced while browsing everything) never doubles the Current theme. Extracted
+/// from the view so the dedup survives the flagship-row cleanup and is unit-testable across
+/// favorite/filter/current transitions (AE8 scenario 4).
+enum ThemeSectionPolicy {
+    struct Buckets: Equatable {
+        var favorites: [ThemeRef]
+        var browse: [ThemeRef]
+    }
+
+    static func buckets(filtered: [ThemeRef],
+                        currentNames: Set<String>,
+                        isFavorite: (String) -> Bool,
+                        filter: ThemeFilter) -> Buckets {
+        // The Favorites *section* is only surfaced while browsing everything: a Dark/Light/
+        // Favorites filter already scopes the main list, so a duplicate favorites band would be
+        // redundant (and under the favorites filter would swallow the whole list). Under a
+        // filter, favorites simply live in the main list.
+        let showFavorites = filter == .all
+        let favorites = showFavorites
+            ? filtered.filter { isFavorite($0.name) && !currentNames.contains($0.name) }
+            : []
+        // Exclude the pinned set (current + favorites) from the main browsing list.
+        let pinned = currentNames.union(favorites.map(\.name))
+        let browse = filtered.filter { !pinned.contains($0.name) }
+        return Buckets(favorites: favorites, browse: browse)
+    }
+}
+
 /// The theme browser: live palette previews over Ghostty's built-in themes, with
 /// honest fidelity labeling and apply-via-safe-write (F2, R12, R14).
 ///
@@ -117,22 +189,16 @@ struct ThemeBrowserView: View {
     }
 
     private func sections(filtered: [ThemeRef]) -> Sections {
-        let currentNames = model.currentSelectedThemeNames
-        // The Favorites *section* is only surfaced while browsing everything: a Dark /
-        // Light / Favorites filter already scopes the main list, so a duplicate favorites
-        // band would be redundant (and, under the favorites filter, it would swallow the
-        // whole list). Under a filter, favorites simply live in the main list.
-        let showFavorites = model.themeFilter == .all
-        let favorites = showFavorites
-            ? filtered.filter { model.isFavorite($0.name) && !currentNames.contains($0.name) }
-            : []
-        // Exclude the pinned set from the main browsing list.
-        let pinned = currentNames.union(favorites.map(\.name))
-        let browse = filtered.filter { !pinned.contains($0.name) }
+        // The pinned/favorites/browse dedup is the pure `ThemeSectionPolicy` (unit-tested,
+        // AE8 scenario 4) so it survives the flagship-row cleanup unchanged.
+        let buckets = ThemeSectionPolicy.buckets(filtered: filtered,
+                                                 currentNames: model.currentSelectedThemeNames,
+                                                 isFavorite: { model.isFavorite($0) },
+                                                 filter: model.themeFilter)
         let header = model.themeQuery.trimmingCharacters(in: .whitespaces).isEmpty ? "All themes" : "Results"
         return Sections(current: model.currentThemeSelection,
-                        favorites: favorites,
-                        browse: browse,
+                        favorites: buckets.favorites,
+                        browse: buckets.browse,
                         browseHeader: header)
     }
 
@@ -203,9 +269,10 @@ struct ThemeBrowserView: View {
     // MARK: - Grid mode (U15 / TH-5)
 
     /// The minimum card width; the grid fits as many columns of at least this width as the
-    /// pane allows and degrades to one column below the threshold (GAP-4). The detail
-    /// surface caps at `WindowMetrics.contentMaxWidth` (640pt), so 280pt puts the 1→2 break
-    /// at ~846pt of window width — one column at 660, two by 900 (the plan's gate).
+    /// pane allows and degrades to one column below the threshold (GAP-4). Themes now use the
+    /// wider bounded canvas (`ContentWidthPolicy.wideMaxWidth`, 1000pt) rather than the 640pt
+    /// form measure, so a maximized window fits three columns of 280pt where it used to fit
+    /// two — Themes "uses available width" (R11/AE6) while forms stay readable.
     private static let minCardWidth: CGFloat = 280
 
     /// Grid browsing (TH-5): the deduped sections as `LazyVGrid`s under plain headers in
@@ -334,10 +401,16 @@ private struct ThemeRow: View {
         let colors = forcePlaceholder ? nil : model.themeColors[theme.name]
         let failed = forcePlaceholder || model.previewFailed(theme.name)
         let isCurrent = model.currentSelectedThemeNames.contains(theme.name)
+        // The one Apply / Favorite / Theme Options descriptor set (AE8), shared by the row
+        // and card so both read identical labels from a single pure source (R12).
+        let actions = ThemeActionPolicy.actions(
+            themeName: theme.name,
+            isFavorite: model.isFavorite(theme.name),
+            applyIdentityLabel: accessibilityLabel(isCurrent: isCurrent, colors: colors))
         Group {
             switch layout {
-            case .row: rowBody(colors: colors, failed: failed, isCurrent: isCurrent)
-            case .card: cardBody(colors: colors, failed: failed, isCurrent: isCurrent)
+            case .row: rowBody(colors: colors, failed: failed, isCurrent: isCurrent, actions: actions)
+            case .card: cardBody(colors: colors, failed: failed, isCurrent: isCurrent, actions: actions)
             }
         }
         .onAppear { if !forcePlaceholder { model.ensureColors(for: theme) } }
@@ -345,19 +418,23 @@ private struct ThemeRow: View {
 
     // MARK: - Row body (list)
 
-    private func rowBody(colors: ThemeColors?, failed: Bool, isCurrent: Bool) -> some View {
+    private func rowBody(colors: ThemeColors?, failed: Bool, isCurrent: Bool,
+                         actions: ThemeActionPolicy.Actions) -> some View {
         HStack(spacing: 8) {
+            // Apply: the preview/name IS the button; it announces the theme identity and
+            // carries "Apply this theme" as its hint — a distinct, single accessibility
+            // element (AE8), never merged with the star/options controls beside it.
             Button {
                 Task { await model.applyTheme(theme.name) }
             } label: {
                 rowLabel(colors: colors, failed: failed, isCurrent: isCurrent)
             }
             .buttonStyle(.plain)
-            .accessibilityLabel(accessibilityLabel(isCurrent: isCurrent, colors: colors))
-            .accessibilityHint("Apply this theme")
+            .accessibilityLabel(actions.apply.accessibilityLabel)
+            .accessibilityHint(actions.apply.accessibilityHint ?? "")
 
-            favoriteButton
-            pairingMenu
+            favoriteButton(actions.favorite)
+            pairingMenu(actions.options)
         }
         .padding(.vertical, RowMetrics.rowVerticalPadding)
         .padding(.horizontal, DesignTokens.Spacing.snug)
@@ -418,7 +495,8 @@ private struct ThemeRow: View {
 
     // MARK: - Card body (grid, U15)
 
-    private func cardBody(colors: ThemeColors?, failed: Bool, isCurrent: Bool) -> some View {
+    private func cardBody(colors: ThemeColors?, failed: Bool, isCurrent: Bool,
+                          actions: ThemeActionPolicy.Actions) -> some View {
         VStack(alignment: .leading, spacing: DesignTokens.Spacing.standard) {
             Button {
                 Task { await model.applyTheme(theme.name) }
@@ -439,22 +517,22 @@ private struct ThemeRow: View {
                     .contentShape(RoundedRectangle(cornerRadius: DesignTokens.Radius.card))
             }
             .buttonStyle(.plain)
-            .accessibilityLabel(accessibilityLabel(isCurrent: isCurrent, colors: colors))
-            .accessibilityHint("Apply this theme")
+            .accessibilityLabel(actions.apply.accessibilityLabel)
+            .accessibilityHint(actions.apply.accessibilityHint ?? "")
 
             HStack(spacing: 6) {
                 // Name + pill + badge repeat what the apply Button's `accessibilityLabel`
                 // already announces (unlike the list row, where they live *inside* the
                 // Button's label). Hidden from VoiceOver so a card is one announcement, not
-                // three; the star/pairing keep their own labels.
+                // three; the star/pairing keep their own labels (AE8: three separate elements).
                 Text(theme.name)
                     .fontWeight(isCurrent ? .semibold : .regular)
                     .lineLimit(1)
                     .accessibilityHidden(true)
                 if isCurrent { currentPill.accessibilityHidden(true) }
                 Spacer(minLength: 4)
-                favoriteButton
-                pairingMenu
+                favoriteButton(actions.favorite)
+                pairingMenu(actions.options)
             }
             .animation(MotionSystem.gated(MotionSystem.settle, reduceMotion: reduceMotion),
                        value: isCurrent)
@@ -523,7 +601,10 @@ private struct ThemeRow: View {
 
     // MARK: - Favorite + pairing controls (E4)
 
-    private var favoriteButton: some View {
+    /// The one Favorite control (AE8), driven by the shared `ThemeActionPolicy` descriptor so
+    /// the star glyph + label are identical in list and grid. State reads without color: the
+    /// filled/empty star and the "Star"/"Unstar" label both carry it (scenario 6).
+    private func favoriteButton(_ descriptor: ThemeActionPolicy.Descriptor) -> some View {
         let starred = model.isFavorite(theme.name)
         return Button {
             // TH-9: animate the section membership move (All ↔ Favorites) so the row
@@ -532,39 +613,42 @@ private struct ThemeRow: View {
                 model.toggleFavorite(theme.name)
             }
         } label: {
-            Image(systemName: starred ? "star.fill" : "star")
+            Image(systemName: descriptor.systemImage)
                 .foregroundStyle(starred ? AnyShapeStyle(.yellow) : AnyShapeStyle(.secondary))
         }
         .buttonStyle(.plain)
         // U16: dimmer at rest, full on hover — but never hidden, and a starred (yellow)
         // star stays legible even dimmed so the state reads without hovering.
         .opacity(hovering || starred ? 1 : 0.55)
-        .accessibilityLabel(starred ? "Unstar \(theme.name)" : "Star \(theme.name)")
+        .accessibilityLabel(descriptor.accessibilityLabel)
     }
 
-    /// A left-click button opening a pairing dialog to set this theme as the light
-    /// and/or dark member of a `light:…,dark:…` pairing. **Not** a borderless `Menu`:
-    /// an `NSMenu` runs a nested modal event loop that *consumes* the click dismissing
-    /// it, so applying a different theme while it was open took two clicks (U11/MO-1).
-    /// A `confirmationDialog` dismisses cleanly and each action applies on one click.
-    private var pairingMenu: some View {
+    /// The one Theme Options control (AE8), driven by the shared `ThemeActionPolicy`
+    /// descriptor. Its purpose is now *only* the light/dark pairing — the former "Use for
+    /// both" item was a hidden second Apply (identical to tapping the preview), the
+    /// duplicate/mystery action AE8 flags, so it's removed: Apply lives in exactly one place
+    /// (the preview button) and Theme Options is unambiguously "assign to a light/dark slot".
+    ///
+    /// A left-click button opening a `confirmationDialog` — **not** a borderless `Menu`: an
+    /// `NSMenu` runs a nested modal event loop that *consumes* the click dismissing it, so
+    /// applying a different theme while it was open took two clicks (U11/MO-1). A
+    /// `confirmationDialog` dismisses cleanly and each action applies on one click.
+    private func pairingMenu(_ descriptor: ThemeActionPolicy.Descriptor) -> some View {
         Button {
             showingPairing = true
         } label: {
-            Image(systemName: "ellipsis.circle").foregroundStyle(.secondary)
+            Image(systemName: descriptor.systemImage).foregroundStyle(.secondary)
         }
         .buttonStyle(.plain)
         // U16: dimmer at rest, full on hover — but always visible.
         .opacity(hovering ? 1 : 0.55)
-        .accessibilityLabel("Theme options for \(theme.name)")
+        .accessibilityLabel(descriptor.accessibilityLabel)
         .confirmationDialog("Use \(theme.name) for…",
                             isPresented: $showingPairing,
                             titleVisibility: .visible) {
             // CM-11/TH-8: action-first copy that reads back as a sentence with the title —
-            // "Use <name> for… Use for both / Use for Light mode / Use for Dark mode".
-            Button("Use for both") {
-                Task { await model.applyTheme(theme.name) }
-            }
+            // "Use <name> for… Use for Light mode / Use for Dark mode". "Use for both" is
+            // gone (it duplicated Apply); apply-as-single is the preview button.
             Button("Use for Light mode") {
                 Task { await model.applyThemeInPair(theme.name, as: .light) }
             }

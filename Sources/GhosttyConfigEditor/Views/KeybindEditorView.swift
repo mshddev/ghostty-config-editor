@@ -150,6 +150,69 @@ struct KeybindEditorView: View {
     }
 }
 
+/// A horizontal layout that wraps its subviews onto additional lines when they don't fit the
+/// proposed width, keeping every one visible and reachable — so a keyboard-shortcut row's
+/// chords (recorder + remove, the add "+", the ⋯ menu) move to a new line at narrow widths or
+/// under large Dynamic Type rather than squeezing the action title off the row (R12,
+/// scenario 2/5). Nothing is hidden behind an overflow menu, so Rebind / Disable / Add / More
+/// stay reachable at any width. Each line is trailing-aligned so a single-line row keeps the
+/// established right-hugging look; the layout fills the width it's offered so that alignment
+/// has room to work.
+struct ChordFlowLayout: Layout {
+    var spacing: CGFloat = 6
+    var lineSpacing: CGFloat = 6
+
+    private struct Line { var indices: [Int] = []; var width: CGFloat = 0; var height: CGFloat = 0 }
+
+    /// Break the subviews into lines that each fit `maxWidth`, measuring every subview at its
+    /// natural size (chords/menus are content-sized, so `.unspecified` is their intrinsic).
+    private func lines(_ subviews: Subviews, maxWidth: CGFloat) -> [Line] {
+        var lines: [Line] = []
+        var current = Line()
+        for index in subviews.indices {
+            let size = subviews[index].sizeThatFits(.unspecified)
+            let projected = current.indices.isEmpty ? size.width : current.width + spacing + size.width
+            if !current.indices.isEmpty, projected > maxWidth {
+                lines.append(current)
+                current = Line(indices: [index], width: size.width, height: size.height)
+            } else {
+                current.indices.append(index)
+                current.width = projected
+                current.height = max(current.height, size.height)
+            }
+        }
+        if !current.indices.isEmpty { lines.append(current) }
+        return lines
+    }
+
+    func sizeThatFits(proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) -> CGSize {
+        let maxWidth = proposal.width ?? .infinity
+        let lines = lines(subviews, maxWidth: maxWidth)
+        let contentWidth = lines.map(\.width).max() ?? 0
+        let height = lines.reduce(0) { $0 + $1.height } + lineSpacing * CGFloat(max(0, lines.count - 1))
+        // Fill a concrete offered width (so trailing alignment has room); report content width
+        // only when the proposal is unbounded (a measuring context).
+        let width = (maxWidth == .infinity) ? contentWidth : maxWidth
+        return CGSize(width: width, height: height)
+    }
+
+    func placeSubviews(in bounds: CGRect, proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) {
+        var y = bounds.minY
+        for line in lines(subviews, maxWidth: bounds.width) {
+            var x = bounds.maxX - line.width   // trailing-align each line
+            for index in line.indices {
+                let size = subviews[index].sizeThatFits(.unspecified)
+                subviews[index].place(
+                    at: CGPoint(x: x, y: y + (line.height - size.height) / 2),
+                    anchor: .topLeading,
+                    proposal: ProposedViewSize(size))
+                x += size.width + spacing
+            }
+            y += line.height + lineSpacing
+        }
+    }
+}
+
 /// One row: the action (the config item) on the left with an origin badge, and its
 /// chords on the right as capsules — each an **inline key recorder** (click and press
 /// the new chord to rebind) with a remove affordance, plus a trailing "+" to add another
@@ -184,9 +247,14 @@ private struct KeybindRow: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 6) {
-            HStack(spacing: 12) {
+            // The action title keeps its width (layoutPriority) and the chords fill the rest,
+            // wrapping to a new line at narrow widths (or large Dynamic Type) rather than
+            // squeezing the title into truncation (R12, scenario 2/5). The old `Spacer` is
+            // gone: the chord area itself fills the trailing space and right-aligns its
+            // capsules, so the layout still reads right-hugging while it can now wrap.
+            HStack(alignment: .top, spacing: 12) {
                 actionColumn
-                Spacer(minLength: 12)
+                    .layoutPriority(1)
                 chordArea
                     .popover(isPresented: $showingAddAnother, arrowEdge: .bottom) { addAnotherEditor }
                     .popover(item: $textEditChord, arrowEdge: .bottom) { chord in textEditor(chord) }
@@ -301,7 +369,11 @@ private struct KeybindRow: View {
     // MARK: Chord area (capsules + add + menu)
 
     private var chordArea: some View {
-        HStack(spacing: 6) {
+        // A wrapping layout (not an `HStack`) so many chords + the add "+" + the ⋯ menu flow
+        // onto a second line at narrow widths instead of stealing the action title's room
+        // (R12, scenario 2/5). Every control stays present and reachable — nothing collapses
+        // into a hidden overflow.
+        ChordFlowLayout(spacing: 6, lineSpacing: 6) {
             ForEach(group.chords) { chord in
                 chordCapsule(chord)
             }

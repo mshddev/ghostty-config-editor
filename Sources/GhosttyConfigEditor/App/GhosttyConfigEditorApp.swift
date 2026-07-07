@@ -21,28 +21,100 @@ enum WindowMetrics {
     static let defaultWidth: CGFloat = 780
     static let defaultHeight: CGFloat = 660
     /// Hard ceiling on how wide the window may get (drag-resize; zoom is disabled).
-    /// A settings utility has no use for a sprawling width — past here it's just void
-    /// beside a centered column. Height is generous for long option forms.
-    static let maxWidth: CGFloat = 900
+    /// Raised from 900 (R11/AE6): a form still centers at its readable measure, but Themes
+    /// and Keyboard Shortcuts now use a wider bounded canvas (`ContentWidthPolicy`), so a
+    /// maximized window must actually be wide enough to give the grid more columns and the
+    /// chords more room — otherwise "expand usefully" has nowhere to expand into. Still a
+    /// bound, not `.infinity`: a settings utility gains nothing from sprawling past this.
+    /// Height is generous for long option forms.
+    static let maxWidth: CGFloat = 1240
     static let maxHeight: CGFloat = 1300
-    /// The detail column caps here and centers, so a wide window never strands a
-    /// gap between each option's label and its right-aligned control.
+    /// A grouped form's readable measure — the width it caps at and centers within, so a
+    /// wide window never strands a gap between each option's label and its right-aligned
+    /// control. Retained as the single source for the form width (`ContentWidthPolicy`
+    /// reads it); Themes/Keyboard Shortcuts opt into the wider canvas instead (R11).
     static let contentMaxWidth: CGFloat = 640
 }
 
-/// Centers a surface in a fixed-width column (the System Settings idiom). Applied
-/// once to `mainColumn` so every surface caps uniformly; below the cap the content
-/// fills the column normally.
-private struct CappedContentColumn: ViewModifier {
+/// The identity of the surface currently shown in the detail column, for the per-surface
+/// width policy (KTD5/R11/AE6). Derived purely from the sidebar selection, the Status
+/// drill-down destination, and global-Find state so the width math is unit-testable without
+/// SwiftUI (KTD7).
+enum ContentSurface: Equatable {
+    /// A grouped option form (Recommended, a category, Customized, the Status hub, Problems,
+    /// or the Find results list): keeps a readable measure regardless of window width.
+    case form
+    /// The Themes browser: a wider bounded canvas so the grid gains columns at wide sizes.
+    case themes
+    /// The Keyboard Shortcuts editor: a wider bounded canvas so chords gain room at wide sizes.
+    case keyboardShortcuts
+
+    /// Resolve the surface from the model's navigation state. Global Find overlays every
+    /// surface with a results *list*, so it reads as a form-width surface regardless of what
+    /// is selected beneath it.
+    static func resolve(selection: SidebarSelection?,
+                        statusDestination: StatusDestination,
+                        isFinding: Bool) -> ContentSurface {
+        if isFinding { return .form }
+        switch selection {
+        case .themes: return .themes
+        case .category(let name) where name == OptionCategorizer.keybindingsCategory: return .keyboardShortcuts
+        default: return .form
+        }
+    }
+}
+
+/// Per-surface content-width policy (KTD5/R11/AE6). Grouped forms keep a readable measure so
+/// a maximized window never strands a tiny centered island; Themes and Keyboard Shortcuts use
+/// a wider bounded canvas so the grid gains columns and chords gain room. Replaces the old
+/// single 640-cap that every surface shared. Pure, so the AE6 width expectations are
+/// unit-testable without laying out SwiftUI (KTD7).
+enum ContentWidthPolicy {
+    /// The readable measure a grouped form caps at (single-sourced from `WindowMetrics` so
+    /// 640 lives in one place).
+    static let formMaxWidth: CGFloat = WindowMetrics.contentMaxWidth
+    /// The wider bound Themes + Keyboard Shortcuts fill. Bounded (not `.infinity`) so even a
+    /// maximized window keeps a purposeful density rather than sprawling edge to edge.
+    static let wideMaxWidth: CGFloat = 1000
+
+    /// The max width a surface's content column caps at — the value the live SwiftUI layout
+    /// feeds into `.frame(maxWidth:)`.
+    static func maxContentWidth(for surface: ContentSurface) -> CGFloat {
+        switch surface {
+        case .form: return formMaxWidth
+        case .themes, .keyboardShortcuts: return wideMaxWidth
+        }
+    }
+
+    /// Approximate width the sidebar column takes, so a resolved content width tracks the
+    /// detail pane rather than the whole window. Used only by the pure resolution below; the
+    /// live layout gets its real pane width from SwiftUI.
+    static let sidebarAllowance: CGFloat = 220
+
+    /// The width a surface's content resolves to inside a window of `windowWidth`, after the
+    /// sidebar takes its share and the per-surface cap applies. Pure, so AE6's "forms stay
+    /// readable while Themes and Keyboard Shortcuts expand" is directly assertable.
+    static func resolvedContentWidth(for surface: ContentSurface, windowWidth: CGFloat) -> CGFloat {
+        let available = max(0, windowWidth - sidebarAllowance)
+        return min(available, maxContentWidth(for: surface))
+    }
+}
+
+/// Centers a surface in a per-surface bounded column (KTD5/R11): forms cap at the readable
+/// measure, Themes/Keyboard Shortcuts at the wider canvas. Below the cap the content fills the
+/// column normally; above it the column centers so no surface strands a tiny island in a
+/// maximized window. Replaces the old uniform 640-cap applied to every destination.
+private struct SurfaceWidthColumn: ViewModifier {
+    let maxWidth: CGFloat
     func body(content: Content) -> some View {
         content
-            .frame(maxWidth: WindowMetrics.contentMaxWidth)
+            .frame(maxWidth: maxWidth)
             .frame(maxWidth: .infinity, alignment: .center)
     }
 }
 
 private extension View {
-    func cappedContentColumn() -> some View { modifier(CappedContentColumn()) }
+    func surfaceWidthColumn(_ maxWidth: CGFloat) -> some View { modifier(SurfaceWidthColumn(maxWidth: maxWidth)) }
 }
 
 /// Makes the window behave like macOS System Settings: no fullscreen, no zoom, and a
@@ -389,10 +461,19 @@ struct RootView: View {
         }
     }
 
-    /// The detail surface for the current selection, centered in a width-capped
-    /// column (LAYOUT-1). The cap is applied here — once — so every surface
-    /// (Options/Themes/Keybindings/Problems) caps uniformly rather than each view
-    /// re-solving its own width.
+    /// The surface identity of what's currently shown, for the per-surface width policy
+    /// (KTD5/R11). Derived from the model's navigation state so forms, Themes, and Keyboard
+    /// Shortcuts each get their own bounded column width.
+    private var currentContentSurface: ContentSurface {
+        ContentSurface.resolve(selection: model.selection,
+                               statusDestination: model.statusDestination,
+                               isFinding: model.isFinding)
+    }
+
+    /// The detail surface for the current selection, centered in a per-surface bounded
+    /// column (LAYOUT-1/R11). The cap is applied here — once — keyed to the current surface:
+    /// forms keep a readable measure while Themes and Keyboard Shortcuts fill a wider canvas,
+    /// so a maximized window no longer strands a tiny centered island (AE6).
     @ViewBuilder
     private func mainColumn(ghosttyVersion: String) -> some View {
         Group {
@@ -429,7 +510,7 @@ struct RootView: View {
         // sidebar navigation stays instant. Gated on Reduce Motion via the one U2 helper.
         .animation(MotionSystem.gated(MotionSystem.quickFade, reduceMotion: reduceMotion),
                    value: model.isFinding)
-        .cappedContentColumn()
+        .surfaceWidthColumn(ContentWidthPolicy.maxContentWidth(for: currentContentSurface))
         // Each surface titles itself in its in-content SurfaceHeader (C3); an explicit
         // empty title keeps the toolbar from falling back to the truncated app name.
         .navigationTitle("")
