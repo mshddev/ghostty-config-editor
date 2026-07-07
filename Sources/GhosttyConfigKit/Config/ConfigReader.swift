@@ -62,6 +62,72 @@ public struct MergedOption: Sendable, Identifiable {
     }
 }
 
+/// A control-ready value that keeps "what is in the file" separate from "what
+/// Ghostty effectively does". This prevents an empty catalog token from being
+/// rendered as an authoritative Off state when the real default is known elsewhere.
+public struct OptionValuePresentation: Sendable, Equatable {
+    public enum Origin: Sendable, Equatable {
+        case explicitValue
+        case defaultValue
+        case unresolvedDefault
+    }
+
+    public let value: String?
+    public let origin: Origin
+
+    public var isExplicit: Bool { origin == .explicitValue }
+
+    public var booleanValue: Bool? {
+        switch value?.trimmingCharacters(in: .whitespacesAndNewlines).lowercased() {
+        case "true": return true
+        case "false": return false
+        default: return nil
+        }
+    }
+
+    public init(value: String?, origin: Origin) {
+        self.value = value
+        self.origin = origin
+    }
+}
+
+/// How a boolean/boolean-ish option should render its on/off axis (R1, U2).
+///
+/// A plain two-state switch is only honest when the effective boolean value is
+/// known — either explicitly set or resolvable from a documented default. When
+/// neither is known, a bare switch would falsely read as an explicit Off, so the
+/// control must offer an explicit Default/On/Off choice instead.
+public enum BooleanControlStyle: Sendable, Equatable {
+    case `switch`
+    case defaultOnOffChoice
+}
+
+public extension MergedOption {
+    var valuePresentation: OptionValuePresentation {
+        if isSet {
+            return OptionValuePresentation(value: userValues.first ?? "", origin: .explicitValue)
+        }
+        if let effectiveDefault = option.presentation.effectiveDefault {
+            return OptionValuePresentation(value: effectiveDefault, origin: .defaultValue)
+        }
+        if !option.defaultValue.isEmpty {
+            return OptionValuePresentation(value: option.defaultValue, origin: .defaultValue)
+        }
+        return OptionValuePresentation(value: nil, origin: .unresolvedDefault)
+    }
+
+    /// A switch when the effective boolean is known (explicit value, or a
+    /// documented/curated default); otherwise an explicit Default/On/Off choice so
+    /// an unset option with an undocumented default never masquerades as Off (R1).
+    var booleanControlStyle: BooleanControlStyle {
+        // An explicit value is always known — the switch reflects it truthfully,
+        // even when it's a richer boolean-ish value (`left`, `always`, a radius).
+        if valuePresentation.isExplicit { return .switch }
+        // Unset: a switch is honest only when the effective boolean default resolves.
+        return valuePresentation.booleanValue != nil ? .switch : .defaultOnOffChoice
+    }
+}
+
 /// One selectable row in an enumerated option's dropdown (R1, R2, R3).
 public struct EnumChoice: Sendable, Equatable, Identifiable {
     public var id: String { value }

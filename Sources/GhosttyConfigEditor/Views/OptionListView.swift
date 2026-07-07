@@ -651,8 +651,18 @@ private struct OptionRowFeedback: View {
 /// announcement is identical whichever control renders.
 func optionControlA11yLabel(_ option: MergedOption) -> Text {
     var parts = [option.option.displayTitle]
-    if !option.option.defaultValue.isEmpty { parts.append("default \(option.option.defaultValue)") }
-    parts.append(option.state.displayName)
+    let presentation = option.valuePresentation
+    switch presentation.origin {
+    case .explicitValue:
+        parts.append(option.state == .setToDefault ? "explicitly set to default" : "customized")
+    case .defaultValue:
+        if let value = presentation.value {
+            let display = value == "true" ? "On" : (value == "false" ? "Off" : value)
+            parts.append("default \(display)")
+        }
+    case .unresolvedDefault:
+        parts.append("default value not documented")
+    }
     return Text(parts.joined(separator: ", "))
 }
 
@@ -701,7 +711,12 @@ private struct InlineOptionEditor: View {
             // "Boolean impostors" (accept true/false alongside richer values) render
             // toggle-first regardless of their inferred type, so the on/off axis is a
             // switch, not a text box reading `false` (B4).
-            BooleanishEditor(option: option, savedValue: currentValue, apply: { apply($0) })
+            BooleanishEditor(
+                option: option,
+                savedValue: currentValue,
+                apply: { apply($0) },
+                reset: { Task { await model.applyEdit(option: option, values: []) } }
+            )
         } else {
             typedControl
         }
@@ -852,7 +867,7 @@ private struct InlineOptionEditor: View {
     private var isDirty: Bool { draft != currentValue }
 
     private var currentValue: String {
-        option.isSet ? (option.userValues.first ?? "") : option.option.defaultValue
+        option.valuePresentation.value ?? ""
     }
 
     /// A hint for an empty field, via the shared kit fallback (CV-7): a docs example for
@@ -1392,12 +1407,58 @@ private struct BooleanishEditor: View {
     let option: MergedOption
     let savedValue: String
     let apply: (String) -> Void
+    /// Return the option to its unset/default state (used by the Default choice when
+    /// the effective boolean is undocumented, so "Default" is distinct from "Off").
+    let reset: () -> Void
 
     /// The last "on" (non-`false`) value seen, so Off→On restores it rather than
     /// snapping to a bare `true`. Seeded from the saved value and kept in sync with it.
     @State private var lastOnValue: String?
 
+    /// Default / On / Off, for options whose effective boolean can't be resolved (R1).
+    private enum TriState: Hashable { case unset, on, off }
+
     var body: some View {
+        Group {
+            if option.booleanControlStyle == .defaultOnOffChoice {
+                defaultOnOffPicker
+            } else {
+                switchWithExtras
+            }
+        }
+    }
+
+    /// An explicit three-way choice for an unset option with no documented default,
+    /// so the control never renders a bare Off it can't justify (R1, U2, AE-adjacent).
+    private var defaultOnOffPicker: some View {
+        Picker("", selection: triStateBinding) {
+            Text("Default").tag(TriState.unset)
+            Text("On").tag(TriState.on)
+            Text("Off").tag(TriState.off)
+        }
+        .labelsHidden()
+        .pickerStyle(.segmented)
+        .fixedSize()
+        .accessibilityLabel(optionControlA11yLabel(option))
+    }
+
+    private var triStateBinding: Binding<TriState> {
+        Binding(
+            get: {
+                if !option.isSet { return .unset }
+                return isOn(savedValue) ? .on : .off
+            },
+            set: { choice in
+                switch choice {
+                case .unset: reset()
+                case .on: apply(lastOnValue ?? "true")
+                case .off: apply("false")
+                }
+            }
+        )
+    }
+
+    private var switchWithExtras: some View {
         HStack(spacing: 6) {
             Toggle("", isOn: onBinding)
                 .labelsHidden()
@@ -2271,7 +2332,9 @@ private struct OptionInfoPopover: View {
                 }
             }
             LabeledRow("Default") {
-                metadataValue(option.option.defaultValue.isEmpty ? "—" : displayValue(option.option.defaultValue),
+                metadataValue(option.valuePresentation.origin == .unresolvedDefault
+                              ? "Not documented"
+                              : displayValue(option.option.presentation.effectiveDefault ?? option.option.defaultValue),
                               secondary: true)
             }
             if let source = option.sources.first {

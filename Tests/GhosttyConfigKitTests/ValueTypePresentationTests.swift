@@ -53,6 +53,69 @@ final class ValueTypePresentationTests: XCTestCase {
         }
     }
 
+    // MARK: - Effective/default value presentation (third-pass U2)
+
+    func testUnsetCursorBlinkPresentsItsEffectiveOnDefault() throws {
+        let option = try XCTUnwrap(referenceCatalog().option(named: "cursor-style-blink"))
+        let merged = MergedOption(option: option, state: .unset, userValues: [], sources: [])
+
+        XCTAssertEqual(merged.valuePresentation.value, "true")
+        XCTAssertEqual(merged.valuePresentation.booleanValue, true)
+        XCTAssertEqual(merged.valuePresentation.origin, .defaultValue)
+    }
+
+    func testUnsetPlainBooleansUseTheirDocumentedDefaults() throws {
+        let catalog = try referenceCatalog()
+        let trueOption = try XCTUnwrap(catalog.options.first {
+            $0.valueType == .boolean && $0.defaultValue == "true"
+        })
+        let falseOption = try XCTUnwrap(catalog.options.first {
+            $0.valueType == .boolean && $0.defaultValue == "false"
+        })
+
+        XCTAssertEqual(MergedOption(option: trueOption, state: .unset, userValues: [], sources: []).valuePresentation.booleanValue, true)
+        XCTAssertEqual(MergedOption(option: falseOption, state: .unset, userValues: [], sources: []).valuePresentation.booleanValue, false)
+    }
+
+    func testUnknownEmptyDefaultRemainsUnresolved() {
+        let option = CatalogOption(
+            name: "future-option", defaultValues: [""], documentation: "",
+            category: "Advanced", valueType: .unknown, enumValues: [], isRepeatable: false
+        )
+        let merged = MergedOption(option: option, state: .unset, userValues: [], sources: [])
+
+        XCTAssertNil(merged.valuePresentation.value)
+        XCTAssertEqual(merged.valuePresentation.origin, .unresolvedDefault)
+    }
+
+    func testExplicitValueEqualToDefaultStaysExplicit() throws {
+        let option = try XCTUnwrap(referenceCatalog().options.first { !$0.defaultValue.isEmpty })
+        let merged = MergedOption(
+            option: option, state: .setToDefault,
+            userValues: [option.defaultValue], sources: []
+        )
+
+        XCTAssertEqual(merged.valuePresentation.value, option.defaultValue)
+        XCTAssertEqual(merged.valuePresentation.origin, .explicitValue)
+        XCTAssertTrue(merged.valuePresentation.isExplicit)
+    }
+
+    func testUnresolvedBooleanishDefaultRequiresAThreeStateChoice() throws {
+        let option = try XCTUnwrap(referenceCatalog().options.first {
+            $0.isBooleanish && $0.defaultValue.isEmpty && $0.presentation.effectiveDefault == nil
+        })
+        let merged = MergedOption(option: option, state: .unset, userValues: [], sources: [])
+
+        XCTAssertEqual(merged.booleanControlStyle, .defaultOnOffChoice)
+    }
+
+    func testKnownBooleanDefaultCanUseSwitch() throws {
+        let option = try XCTUnwrap(referenceCatalog().option(named: "cursor-style-blink"))
+        let merged = MergedOption(option: option, state: .unset, userValues: [], sources: [])
+
+        XCTAssertEqual(merged.booleanControlStyle, .switch)
+    }
+
     // MARK: - Enum value labels (CONTENT-8)
 
     func testEnumValueLabelReturnsFriendlyThenHumanizesUncuratedValues() {
