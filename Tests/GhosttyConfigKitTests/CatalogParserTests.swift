@@ -13,8 +13,10 @@ final class CatalogParserTests: XCTestCase {
     func testParsesRepresentativeOptionCount() throws {
         let catalog = try realCatalog()
         // Real 1.3.1 output has 200 distinct option names; the macOS-scoped catalog
-        // (R1, R6) drops 27 Linux/GTK-only options, leaving 173.
-        XCTAssertEqual(catalog.options.count, 173)
+        // (R1, R6) drops 27 Linux/GTK-only options, leaving 173. The presentation
+        // layer then excludes one CLI-only option (`config-default-files`) that can't
+        // affect the app-managed config file (R2, AE4), leaving 172.
+        XCTAssertEqual(catalog.options.count, 172)
         XCTAssertEqual(catalog.version, "1.3.1")
     }
 
