@@ -79,6 +79,86 @@ enum OptionEditorRoute: Equatable {
     }
 }
 
+// MARK: - Shared transactional commit + stale recovery (U3/U4, R3/R4/R5)
+
+/// Commit + recovery contract shared by the text-bearing structured popovers (the scroll
+/// multiplier and path editors) so the stale-on-disk Reload & Review path can't drift out of
+/// them — they previously only `markFailed`, dead-ending an external-file conflict instead of
+/// offering recovery (R5/AE3). Mirrors `InlineOptionEditor`'s color/long-value contract.
+enum TransactionApply {
+    /// Apply the draft through the SAME safe write path (`model.applyEdit`), mapping the
+    /// outcome onto the transaction: success commits + closes; a stale conflict awaits an
+    /// explicit Reload & Review (never auto-retry, R5); any other rejection retains the draft
+    /// under a normalized message (R3). `beginApply` makes this one write despite repeated
+    /// draft callbacks.
+    @MainActor
+    static func commit(
+        _ transaction: Binding<EditTransaction>,
+        option: MergedOption,
+        values: [String],
+        model: AppModel,
+        close: @escaping () -> Void
+    ) {
+        guard transaction.wrappedValue.beginApply() else { return }
+        Task {
+            await model.applyEdit(option: option, values: values)
+            switch model.applyState {
+            case .succeeded:
+                transaction.wrappedValue.markCommitted()
+                close()
+            case .failed(let presentation) where presentation.offersReload:
+                transaction.wrappedValue.markStale(message: presentation.message)
+            case .failed(let presentation):
+                transaction.wrappedValue.markFailed(message: presentation.message)
+            default:
+                break
+            }
+        }
+    }
+
+    /// Stale recovery (F2/AE3): reload disk, then surface the externally-changed value beside
+    /// the retained draft so a SECOND explicit Apply reconciles; if the option vanished, stop
+    /// with an actionable message and leave Apply disabled rather than guessing a target.
+    @MainActor
+    static func reloadAndReview(
+        _ transaction: Binding<EditTransaction>,
+        optionName: String,
+        model: AppModel
+    ) {
+        Task {
+            await model.reloadFromDisk()
+            if let disk = model.savedValue(forOptionNamed: optionName) {
+                transaction.wrappedValue.reloadAndReview(refreshedDiskValue: disk)
+            } else {
+                transaction.wrappedValue.markTargetUnavailable(
+                    message: "This setting is no longer in your config. Close and reopen to continue.")
+            }
+        }
+    }
+}
+
+/// Shared inline status for a text-bearing popover (R3/R4/R5): the local/validation/stale
+/// message, a Reload & Review action for a stale conflict, and the side-by-side disk-vs-draft
+/// comparison after a reload. `reload` should run `TransactionApply.reloadAndReview`.
+@ViewBuilder
+func transactionStatusView(_ transaction: EditTransaction, reload: @escaping () -> Void) -> some View {
+    if let message = transaction.message {
+        Label(message, systemImage: transaction.isStale ? "arrow.triangle.2.circlepath"
+                                                        : "exclamationmark.triangle.fill")
+            .font(.caption)
+            .foregroundStyle(transaction.isStale ? Color.secondary : Color.red)
+            .fixedSize(horizontal: false, vertical: true)
+    }
+    if transaction.isStale {
+        Button("Reload & Review", action: reload).font(.caption)
+    }
+    if let disk = transaction.refreshedDiskValue, transaction.isDirty {
+        Text("Now on disk: \(disk) — Apply again to replace it with \(transaction.draft).")
+            .font(.caption2).foregroundStyle(.secondary)
+            .fixedSize(horizontal: false, vertical: true)
+    }
+}
+
 // MARK: - Keybind deep link
 
 /// keybind is edited on the dedicated Keyboard Shortcuts surface, so in a category/search row
@@ -345,7 +425,9 @@ struct ScrollMultiplierEditor: View {
             Text("Blank keeps Ghostty's default (×1 precision, ×3 discrete).")
                 .font(.caption2).foregroundStyle(.secondary)
                 .fixedSize(horizontal: false, vertical: true)
-            transactionFeedback
+            transactionStatusView(transaction) {
+                TransactionApply.reloadAndReview($transaction, optionName: option.option.name, model: model)
+            }
             HStack {
                 Spacer()
                 Button("Cancel") { showing = false }
@@ -376,30 +458,12 @@ struct ScrollMultiplierEditor: View {
         )
     }
 
-    @ViewBuilder private var transactionFeedback: some View {
-        if let message = transaction.message {
-            Label(message, systemImage: "exclamationmark.triangle.fill")
-                .font(.caption).foregroundStyle(.red)
-                .fixedSize(horizontal: false, vertical: true)
-        }
-    }
-
-    /// Commit the composite through the safe apply path; an empty result unsets the option.
+    /// Commit the composite through the shared safe apply path; an empty result unsets the
+    /// option. Routes stale-on-disk conflicts to Reload & Review like the color editor (R5).
     private func commit() {
-        guard transaction.beginApply() else { return }
-        let value = transaction.draft
-        Task {
-            await model.applyEdit(option: liveOption, values: value.isEmpty ? [] : [value])
-            switch model.applyState {
-            case .succeeded:
-                transaction.markCommitted()
-                showing = false
-            case .failed(let presentation):
-                transaction.markFailed(message: presentation.message)
-            default:
-                break
-            }
-        }
+        TransactionApply.commit($transaction, option: liveOption,
+                                values: transaction.draft.isEmpty ? [] : [transaction.draft],
+                                model: model, close: { showing = false })
     }
 }
 
@@ -548,7 +612,9 @@ struct PathChooserEditor: View {
             Text("A folder path, or a value like window-inherit-working-directory.")
                 .font(.caption2).foregroundStyle(.secondary)
                 .fixedSize(horizontal: false, vertical: true)
-            transactionFeedback
+            transactionStatusView(transaction) {
+                TransactionApply.reloadAndReview($transaction, optionName: option.option.name, model: model)
+            }
             HStack {
                 if liveOption.isSet {
                     Button("Reset") { apply([]) ; showing = false }
@@ -570,14 +636,6 @@ struct PathChooserEditor: View {
         Binding(get: { transaction.draft }, set: { transaction.edit($0) })
     }
 
-    @ViewBuilder private var transactionFeedback: some View {
-        if let message = transaction.message {
-            Label(message, systemImage: "exclamationmark.triangle.fill")
-                .font(.caption).foregroundStyle(.red)
-                .fixedSize(horizontal: false, vertical: true)
-        }
-    }
-
     private func chooseFolder() {
         let panel = NSOpenPanel()
         panel.canChooseFiles = false
@@ -595,21 +653,12 @@ struct PathChooserEditor: View {
         return path == last ? path : "…/\(last)"
     }
 
+    /// Commit the path through the shared safe apply path; routes stale-on-disk conflicts to
+    /// Reload & Review like the color editor (R5), not a dead-end error.
     private func commit() {
-        guard transaction.beginApply() else { return }
-        let value = transaction.draft
-        Task {
-            await model.applyEdit(option: liveOption, values: value.isEmpty ? [] : [value])
-            switch model.applyState {
-            case .succeeded:
-                transaction.markCommitted()
-                showing = false
-            case .failed(let presentation):
-                transaction.markFailed(message: presentation.message)
-            default:
-                break
-            }
-        }
+        TransactionApply.commit($transaction, option: liveOption,
+                                values: transaction.draft.isEmpty ? [] : [transaction.draft],
+                                model: model, close: { showing = false })
     }
 
     private func apply(_ values: [String]) {
