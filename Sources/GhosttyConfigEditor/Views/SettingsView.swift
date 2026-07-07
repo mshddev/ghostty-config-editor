@@ -2,9 +2,9 @@ import SwiftUI
 import AppKit
 import GhosttyConfigKit
 
-/// The in-window app-settings surface (G1). Replaces the removed near-empty ⌘,
-/// Preferences *window* — ⌘, now selects this pane in the sidebar (see
-/// `GhosttyConfigEditorApp`), cohering with the single-window model (G6).
+/// The in-window Status hub. It keeps infrequent environment and maintenance state out
+/// of the primary editing navigation while preserving one place to inspect Ghostty,
+/// Customized values, and Problems.
 ///
 /// Closes the "the not-found screen says set the binary path, but no UI sets it"
 /// dead-end (FEATURES-2/3, ONBOARD-2/8/12): a **Ghostty** section chooses the binary
@@ -12,7 +12,7 @@ import GhosttyConfigKit
 /// section reveals/creates the file, and **Behavior** carries the auto-reload toggle.
 /// Reads the shared `AppModel` from the environment (which the WindowGroup injects — no
 /// more cross-scene injection, since the separate `Settings` scene is gone).
-struct SettingsView: View {
+struct StatusView: View {
     @Environment(AppModel.self) private var model
     let ghosttyVersion: String
     @State private var confirmingReset = false
@@ -20,7 +20,7 @@ struct SettingsView: View {
     var body: some View {
         @Bindable var model = model
         VStack(spacing: 0) {
-            SurfaceHeader(title: "Settings")
+            SurfaceHeader(title: "Status")
             Divider()
             Form {
                 ghosttySection
@@ -32,6 +32,8 @@ struct SettingsView: View {
                         .foregroundStyle(.secondary)
                         .fixedSize(horizontal: false, vertical: true)
                 }
+                customizedSection
+                problemsSection
                 backupSection
                 resetSection
             }
@@ -50,6 +52,70 @@ struct SettingsView: View {
             Button("Cancel", role: .cancel) {}
         } message: {
             Text("Every option you've customized returns to its default. Your current config is backed up first, and you can undo this with ⌘Z.")
+        }
+    }
+
+    // MARK: - Configuration summaries
+
+    @ViewBuilder
+    private var customizedSection: some View {
+        Section("Customized") {
+            if model.customizedCount == 0 {
+                StatusSummaryRow(
+                    systemImage: "checkmark.circle.fill",
+                    tint: .green,
+                    title: "No customized options",
+                    detail: "Using Ghostty defaults."
+                )
+            } else {
+                let count = model.customizedCount
+                StatusSummaryRow(
+                    systemImage: "slider.horizontal.3",
+                    tint: DesignTokens.customizedTint,
+                    title: "\(count) customized option\(count == 1 ? "" : "s")",
+                    detail: "Review values that differ from Ghostty defaults.",
+                    actionTitle: "Review",
+                    action: { model.selection = .customized }
+                )
+            }
+        }
+    }
+
+    @ViewBuilder
+    private var problemsSection: some View {
+        Section("Problems") {
+            if model.configMissing {
+                StatusSummaryRow(
+                    systemImage: "exclamationmark.triangle.fill",
+                    tint: .orange,
+                    title: "Config file not found",
+                    detail: "Your first change can create it, or create it now.",
+                    actionTitle: "Create",
+                    action: { Task { await model.createConfigFileIfMissing() } }
+                )
+            } else if model.lintReport == nil {
+                HStack(spacing: DesignTokens.Spacing.standard) {
+                    ProgressView().controlSize(.small)
+                    Text("Checking configuration…").foregroundStyle(.secondary)
+                }
+            } else if model.problemCount > 0 {
+                let count = model.problemCount
+                StatusSummaryRow(
+                    systemImage: "exclamationmark.triangle.fill",
+                    tint: .orange,
+                    title: "\(count) problem\(count == 1 ? "" : "s") detected",
+                    detail: "Review validation errors and potentially unsafe settings.",
+                    actionTitle: "Review Problems",
+                    action: { model.selection = .problems }
+                )
+            } else {
+                StatusSummaryRow(
+                    systemImage: "checkmark.circle.fill",
+                    tint: .green,
+                    title: "No problems detected",
+                    detail: "Your configuration is valid."
+                )
+            }
         }
     }
 
@@ -94,7 +160,10 @@ struct SettingsView: View {
             }
             if let path = model.resolvedBinaryPath {
                 LabeledContent("Binary") {
-                    pathText(path)
+                    HStack(spacing: DesignTokens.Spacing.snug) {
+                        pathText(path)
+                        healthGlyph("checkmark.circle.fill", tint: .green, label: "Detected")
+                    }
                 }
                 if model.binaryOverride == nil {
                     Text("Detected automatically.")
@@ -102,9 +171,12 @@ struct SettingsView: View {
                         .foregroundStyle(.secondary)
                 }
             } else {
-                Label("Ghostty wasn't found automatically.", systemImage: "exclamationmark.triangle")
-                    .font(.callout)
-                    .foregroundStyle(.secondary)
+                LabeledContent("Binary") {
+                    HStack(spacing: DesignTokens.Spacing.snug) {
+                        Text("Not detected").foregroundStyle(.secondary)
+                        healthGlyph("exclamationmark.triangle.fill", tint: .orange, label: "Needs attention")
+                    }
+                }
             }
             if model.binaryOverride != nil {
                 Text("Using a binary you chose manually.")
@@ -127,7 +199,14 @@ struct SettingsView: View {
         Section("Config file") {
             if let path = model.configFilePath {
                 LabeledContent("Location") {
-                    pathText(path)
+                    HStack(spacing: DesignTokens.Spacing.snug) {
+                        pathText(path)
+                        healthGlyph(
+                            model.configMissing ? "exclamationmark.triangle.fill" : "checkmark.circle.fill",
+                            tint: model.configMissing ? .orange : .green,
+                            label: model.configMissing ? "Needs attention" : "Detected"
+                        )
+                    }
                 }
             }
             if model.configMissing {
@@ -155,6 +234,12 @@ struct SettingsView: View {
             .textSelection(.enabled)
     }
 
+    private func healthGlyph(_ systemImage: String, tint: Color, label: String) -> some View {
+        Image(systemName: systemImage)
+            .foregroundStyle(tint)
+            .accessibilityLabel(label)
+    }
+
     /// Choose the Ghostty binary and apply it. Persists through `setBinaryOverride`,
     /// which re-discovers the environment immediately.
     private func chooseBinary() {
@@ -163,7 +248,40 @@ struct SettingsView: View {
     }
 }
 
-/// Import/export of the whole config, shared by the Settings pane and the File menu (G4).
+/// One calm status line used by the Customized and Problems sections. The row stays
+/// informational; an explicit trailing button appears only when there is useful work.
+private struct StatusSummaryRow: View {
+    let systemImage: String
+    let tint: Color
+    let title: String
+    let detail: String
+    var actionTitle: String? = nil
+    var action: (() -> Void)? = nil
+
+    var body: some View {
+        HStack(alignment: .center, spacing: DesignTokens.Spacing.cozy) {
+            Image(systemName: systemImage)
+                .font(.title3)
+                .foregroundStyle(tint)
+                .accessibilityHidden(true)
+            VStack(alignment: .leading, spacing: 2) {
+                Text(title).font(.body.weight(.medium))
+                Text(detail)
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+            Spacer(minLength: DesignTokens.Spacing.standard)
+            if let actionTitle, let action {
+                Button(actionTitle, action: action)
+            }
+        }
+        .padding(.vertical, RowMetrics.rowVerticalPadding)
+        .accessibilityElement(children: .contain)
+    }
+}
+
+/// Import/export of the whole config, shared by the Status pane and the File menu (G4).
 /// Export writes the current bytes to a chosen file; import reads a file, confirms the
 /// replace (the write engine backs up the current config first and the import is
 /// undoable), and returns the text for `AppModel.importConfig` to validate + commit.
@@ -198,7 +316,7 @@ enum ConfigTransfer {
     }
 }
 
-/// A native file chooser for the Ghostty binary, shared by the Settings pane and the
+/// A native file chooser for the Ghostty binary, shared by the Status pane and the
 /// not-found/unsupported recovery screens (G1). If the user picks `Ghostty.app`, it
 /// resolves to the inner CLI binary the locator actually probes (`BinaryLocator` wants
 /// an executable, not the bundle).

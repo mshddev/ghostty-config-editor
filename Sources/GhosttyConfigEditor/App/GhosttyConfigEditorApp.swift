@@ -264,11 +264,11 @@ struct GhosttyConfigEditorApp: App {
             CommandGroup(replacing: .help) {
                 Button(AppInfo.welcomeTitle) { model.openWelcome() }
             }
-            // ⌘, still works, but there's no Preferences *window* anymore (G1/G6):
-            // it selects the in-window Settings pane instead, preserving the macOS
-            // muscle-memory affordance without a dead one-toggle window.
+            // ⌘, still works, but there's no Preferences window anymore (G1/G6): it
+            // selects the in-window Status hub, preserving the macOS muscle-memory
+            // affordance for maintenance controls without a separate window.
             CommandGroup(replacing: .appSettings) {
-                Button("Settings…") { model.selection = .settings }
+                Button("Settings…") { model.selection = .status }
                     .keyboardShortcut(",", modifiers: .command)
             }
         }
@@ -408,7 +408,7 @@ struct RootView: View {
                     case .recommended: RecommendedView()
                     case .problems: ProblemsView()
                     case .themes: ThemeBrowserView()
-                    case .settings: SettingsView(ghosttyVersion: ghosttyVersion)
+                    case .status: StatusView(ghosttyVersion: ghosttyVersion)
                     case .category(let name) where name == OptionCategorizer.keybindingsCategory: KeybindEditorView()
                     default: OptionListView()
                     }
@@ -483,8 +483,8 @@ struct RootView: View {
         }
     }
 
-    /// Find is the toolbar's sole global action. Environment metadata and auto-reload
-    /// state live in Settings, while health and Customized live in the sidebar (D1).
+    /// Find is the toolbar's sole global action. Environment metadata, behavior, health,
+    /// and the secondary Customized/Problems entry points live in Status.
     @ToolbarContentBuilder
     private func browserToolbar() -> some ToolbarContent {
         ToolbarItem(placement: .primaryAction) {

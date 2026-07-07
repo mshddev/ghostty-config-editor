@@ -396,6 +396,26 @@ struct SurfaceHeader: View {
     }
 }
 
+/// Shared return affordance for the secondary Customized and Problems drill-downs.
+/// Status remains highlighted in the sidebar, while this makes the parent relationship
+/// explicit and keyboard-accessible inside the content pane.
+struct StatusBackLink: View {
+    @Environment(AppModel.self) private var model
+
+    var body: some View {
+        HStack {
+            Button { model.selection = .status } label: {
+                Label("Back to Status", systemImage: "chevron.left")
+            }
+            .buttonStyle(.link)
+            Spacer(minLength: 0)
+        }
+        .padding(.horizontal, DesignTokens.Spacing.surface)
+        .padding(.vertical, DesignTokens.Spacing.standard)
+        .background(.quaternary.opacity(0.5))
+    }
+}
+
 /// A row that *navigates* to the surface which owns a setting rather than editing it
 /// inline — used where a value has a rich dedicated home: `theme` → the Themes browser,
 /// `keybind` → the Keyboard Shortcuts surface (F1 Recommended, F3 Customized). This

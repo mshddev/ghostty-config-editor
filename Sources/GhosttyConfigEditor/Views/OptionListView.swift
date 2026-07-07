@@ -23,6 +23,7 @@ struct OptionListView: View {
                 searchPrompt: "Search options or describe a behavior"
             )
             Divider()
+            statusBackLink
             appearanceCrossLink
             // A ScrollViewReader lets a `focus(optionNamed:)` deep-link (from a global
             // Find result, and later Customized/Problems) scroll its target into view.
@@ -54,6 +55,13 @@ struct OptionListView: View {
             Button("Cancel", role: .cancel) {}
         } message: {
             Text("Every option you've customized returns to its default. Your current config is backed up first, and you can undo this with ⌘Z.")
+        }
+    }
+
+    @ViewBuilder
+    private var statusBackLink: some View {
+        if model.selection == .customized {
+            StatusBackLink()
         }
     }
 
@@ -210,7 +218,7 @@ struct OptionListView: View {
         case .problems: return "Problems"
         case .themes: return "Themes"
         case .recommended: return "Recommended" // rendered by RecommendedView; here for exhaustiveness
-        case .settings: return "Settings" // rendered by SettingsView; here for exhaustiveness
+        case .status: return "Status" // rendered by StatusView; here for exhaustiveness
         case .none: return "Options"
         }
     }

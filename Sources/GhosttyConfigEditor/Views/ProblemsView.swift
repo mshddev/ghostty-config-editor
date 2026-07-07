@@ -11,6 +11,7 @@ struct ProblemsView: View {
         VStack(spacing: 0) {
             SurfaceHeader(title: "Problems")
             Divider()
+            StatusBackLink()
             content
         }
     }

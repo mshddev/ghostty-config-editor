@@ -8,17 +8,18 @@ import GhosttyConfigKit
 /// `.themes` is the launch default; `.recommended` is the curated "start here"
 /// surface (F1), pinned above Themes in Get started but *not* the launch default
 /// (the app keeps opening on Themes to preserve its identity). `.customized` and
-/// `.problems` are tagged Status rows; the rest map to option categories. A `nil`
-/// selection is a defensive fallback that shows the unfiltered option list.
+/// `.problems` are drill-down surfaces reached from `.status`; the rest map to option
+/// categories. A `nil` selection is a defensive fallback that shows the unfiltered
+/// option list.
 public enum SidebarSelection: Hashable {
     case recommended
     case customized
     case problems
     case themes
     case category(String)
-    /// The in-window app-settings pane (G1): Ghostty binary path, config-file location,
-    /// and behavior. Replaces the removed ⌘, `Settings` *window* — ⌘, now selects this.
-    case settings
+    /// The in-window status hub: Ghostty binary/config health, behavior, customizations,
+    /// and problems. Replaces the removed ⌘, `Settings` window — ⌘, now selects this.
+    case status
 }
 
 extension SidebarSelection {
@@ -28,10 +29,11 @@ extension SidebarSelection {
     var storageString: String {
         switch self {
         case .recommended: return "recommended"
-        case .customized: return "customized"
-        case .problems: return "problems"
+        // Customized and Problems are secondary drill-downs from Status. Restore the
+        // hub on the next launch instead of reopening a hidden navigation destination.
+        case .customized, .problems: return "status"
         case .themes: return "themes"
-        case .settings: return "settings"
+        case .status: return "status"
         case .category(let name): return "category:\(name)"
         }
     }
@@ -39,10 +41,9 @@ extension SidebarSelection {
     init?(storageString raw: String) {
         switch raw {
         case "recommended": self = .recommended
-        case "customized": self = .customized
-        case "problems": self = .problems
+        // Migrate previously persisted sidebar destinations into the new Status hub.
+        case "customized", "problems", "settings", "status": self = .status
         case "themes": self = .themes
-        case "settings": self = .settings
         default:
             let prefix = "category:"
             guard raw.hasPrefix(prefix) else { return nil }
@@ -274,7 +275,7 @@ public final class AppModel {
 
     /// Set (or clear, with nil) the manual Ghostty binary path, persist it, and
     /// re-discover the environment so the change takes effect immediately (G1). Backs the
-    /// Settings "Choose…"/"Use auto-detected" buttons and the "Choose Ghostty…" recovery
+    /// Status "Choose…"/"Use auto-detected" buttons and the "Choose Ghostty…" recovery
     /// on the not-found/unsupported screens. Re-evaluates the first-run welcome (a no-op
     /// after it's been seen) so a fresh discovery with no config still surfaces it.
     public func setBinaryOverride(_ path: String?) async {
@@ -533,9 +534,9 @@ public final class AppModel {
         await reloadFromDisk()
     }
 
-    // MARK: - Settings pane data (G1)
+    // MARK: - Status pane data (G1)
 
-    /// The resolved Ghostty binary path, shown in the Settings "Ghostty" section — nil
+    /// The resolved Ghostty binary path, shown in the Status "Ghostty" section — nil
     /// until discovery succeeds (the pane shows a not-found note + "Choose…" then).
     public var resolvedBinaryPath: String? {
         if case .ready(let environment) = environmentState { return environment.binaryPath }
@@ -543,7 +544,7 @@ public final class AppModel {
     }
 
     /// Where the primary config file lives (or *would* live on first write) — shown in
-    /// the Settings "Config file" section and used by Reveal-in-Finder / create (G1).
+    /// the Status "Config file" section and used by Reveal-in-Finder / create (G1).
     public var configFilePath: String? {
         browser?.merged.model.primary.path
     }
@@ -593,8 +594,8 @@ public final class AppModel {
         return browser.customizedOptions.filter { isPrimaryResident($0) }.count
     }
 
-    /// Total options that deviate from their defaults — the set the Customized surface
-    /// lists, and the number the sidebar's Customized badge shows (IA-9). Distinct from
+    /// Total options that deviate from their defaults — the set the Customized drill-down
+    /// lists, and the number the Status hub summarizes. Distinct from
     /// `resettableCount`, which counts only the primary-file subset a batch reset clears.
     /// Counts the merged set directly — `browser.customizedOptions` sorts a throwaway array
     /// we'd only take `.count` of, and this is read on every sidebar re-render.
@@ -1153,6 +1154,12 @@ public final class AppModel {
     /// Delegates to the kit so the count is derived in one tested place.
     public var problemCount: Int { lintReport?.problemCount ?? 0 }
 
+    /// Aggregate health shown by the Status sidebar icon. Customized values are not
+    /// problems; only missing environment/config prerequisites or lint findings warn.
+    public var statusNeedsAttention: Bool {
+        resolvedBinaryPath == nil || configMissing || problemCount > 0
+    }
+
     // MARK: - Derived view data
 
     public var categories: [String] {
@@ -1183,8 +1190,8 @@ public final class AppModel {
             return [] // rendered by ThemeBrowserView
         case .recommended:
             return [] // rendered by RecommendedView
-        case .settings:
-            return [] // rendered by SettingsView (G1)
+        case .status:
+            return [] // rendered by StatusView
         case .none:
             // Defensive fallback only — the sidebar always keeps a row selected,
             // so this nil branch isn't reachable through normal navigation.
