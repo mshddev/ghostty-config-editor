@@ -139,6 +139,20 @@ final class ValueTypePresentationTests: XCTestCase {
         XCTAssertTrue(orphans.isEmpty, "enum-value-labels.json has option keys absent from the catalog: \(orphans.sorted())")
     }
 
+    // MARK: - Color editor detection for all color-valued options (U4, R7)
+
+    // Scenario 5: options whose value is a color but whose empty catalog default the parser
+    // can't type as `.color` (their names lack a color cue) carry an explicit `.color` editor
+    // kind, so the UI still routes them to the shared color editor rather than plain text.
+    func testColorValuedOptionsResolveToColorEditorKind() throws {
+        let catalog = try referenceCatalog()
+        for name in ["unfocused-split-fill", "selection-background", "selection-foreground"] {
+            let option = try XCTUnwrap(catalog.option(named: name))
+            XCTAssertEqual(option.presentation.editorKind, .color,
+                           "\(name) should use the shared color editor kind")
+        }
+    }
+
     private func referenceCatalog() throws -> OptionCatalog {
         CatalogParser.parse(try Fixture.text("show-config-default-docs", "txt"))
     }

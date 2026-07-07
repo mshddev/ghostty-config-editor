@@ -8,7 +8,7 @@ public enum OptionEditability: String, Codable, Sendable, Equatable {
 }
 
 /// The semantic editor selected before SwiftUI renders an option row.
-public enum OptionEditorKind: String, Codable, Sendable, Equatable {
+public enum OptionEditorKind: String, Codable, Sendable, Equatable, CaseIterable {
     case automatic
     case dedicated
     case repeatableList

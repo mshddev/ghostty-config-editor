@@ -474,33 +474,27 @@ struct OptionRow: View {
         }
     }
 
-    /// Repeatable keys (keybind, palette, …) can't be edited from a single inline
-    /// control, so those rows show no editor — their values are summarised in the
-    /// subtitle and edited via "Reveal in editor" in the info popover.
-    ///
-    /// `font-family` and its bold/italic variants are the exception: they're
-    /// repeatable (primary + fallbacks, e.g. a Nerd Font for icons), but a font is
-    /// something you pick from a list, so they get a dedicated font picker instead.
-    /// Repeatable keys that get a dedicated multi-value editor (B8). `config-file`
-    /// stays plain advanced text — a generic list editor would invite arbitrary
-    /// includes the reader follows (out of scope). `keybind` is edited on its own
-    /// surface, not here.
-    private static let listEditorOptions: Set<String> = ["env"]
-
+    /// The editor rendered on this row, chosen by the pure `OptionEditorRoute` policy (U4)
+    /// so every editable repeatable resolves to a real editor — never an info-only dead row
+    /// (R6). Dedicated names (fonts/palette/keybind) still win; structured kinds
+    /// (scroll multiplier, bell flag-set, color, path) get their semantic controls (R7); and
+    /// any other repeatable falls back to the lossless generic add/remove list (KTD3, R8).
+    /// `.color` and `.inline` both render `InlineOptionEditor`, which shows the shared color
+    /// swatch when the option's editor kind is `.color` even if its inferred type isn't.
     @ViewBuilder
     private var editor: some View {
-        if option.option.name.hasPrefix("font-family") {
-            FontFamilyEditor(option: option)
-        } else if option.option.name == "palette" {
-            PaletteEditor(option: option)
-        } else if option.option.name == "font-feature" {
-            // Toggle-first Ligatures control (U8), with the generic per-tag list demoted
-            // to a "Customize…" disclosure for stylistic sets.
-            FontFeatureEditor(option: option)
-        } else if Self.listEditorOptions.contains(option.option.name) {
-            ListValueEditor(option: option)
-        } else if !option.option.isRepeatable {
-            InlineOptionEditor(option: option)
+        switch OptionEditorRoute.resolve(for: option.option) {
+        case .fontFamily: FontFamilyEditor(option: option)
+        case .palette: PaletteEditor(option: option)
+        case .fontFeature: FontFeatureEditor(option: option)
+        case .scrollMultiplier: ScrollMultiplierEditor(option: option)
+        case .bellFeatures: BellFeaturesEditor(option: option)
+        case .pathChooser: PathChooserEditor(option: option)
+        case .pathList: RepeatableListEditor(option: option, allowsPathChooser: true)
+        case .repeatableList: RepeatableListEditor(option: option)
+        case .keybindDeepLink: KeybindDeepLinkButton(option: option)
+        case .color, .inline: InlineOptionEditor(option: option)
+        case .infoOnly: EmptyView()   // read-only/excluded rows only — never an editable repeatable
         }
     }
 
@@ -686,9 +680,10 @@ private struct InlineOptionEditor: View {
 
     /// Long scalar options whose value is awkward in a 160pt field — edited in a wide
     /// multi-line popover instead (B7). `config-file` / `font-feature` are *repeatable*
-    /// and handled by their own editors (B8), so they're deliberately absent here.
+    /// and handled by their own editors (B8); `working-directory` is a `.path` kind routed
+    /// to the folder chooser (U4), so they're deliberately absent here.
     private static let longValueOptions: Set<String> = [
-        "command", "initial-command", "working-directory", "custom-shader",
+        "command", "initial-command", "custom-shader",
     ]
 
     var body: some View {
@@ -727,71 +722,87 @@ private struct InlineOptionEditor: View {
 
     @ViewBuilder
     private var typedControl: some View {
-        switch option.option.valueType {
-        case .boolean:
-            Toggle("", isOn: boolBinding)
+        if usesColorEditor {
+            // Any option whose editor kind is `.color` uses the shared color swatch even when
+            // its inferred type isn't `.color` (U4/R7) — e.g. `selection-background`,
+            // `selection-foreground`, `unfocused-split-fill`, whose empty catalog default the
+            // parser types `.unknown`.
+            colorSwatchControl
+        } else {
+            switch option.option.valueType {
+            case .boolean:
+                Toggle("", isOn: boolBinding)
+                    .labelsHidden()
+                    .toggleStyle(.switch)
+                    .controlSize(.small)   // matched to sibling controls (was .mini) (B4)
+                    .accessibilityLabel(optionControlA11yLabel(option))
+            case .enumeration:
+                // Rows come from the kit helper (not raw enumValues) so a saved
+                // out-of-enum value stays selectable and is never silently dropped.
+                // Seed from `currentValue` (the saved value), never `draft`.
+                Picker("", selection: enumBinding) {
+                    ForEach(option.enumChoices(current: currentValue)) { choice in
+                        Text(choice.label).tag(choice.value)
+                    }
+                }
                 .labelsHidden()
-                .toggleStyle(.switch)
-                .controlSize(.small)   // matched to sibling controls (was .mini) (B4)
+                .pickerStyle(.menu)
+                // Cap + right-align instead of `.fixedSize()`: in the grouped Form's
+                // constrained trailing slot a fixed-size menu grew to its longest value
+                // and overflowed the card; a bounded frame truncates the label instead.
+                .frame(maxWidth: 220, alignment: .trailing)
                 .accessibilityLabel(optionControlA11yLabel(option))
-        case .enumeration:
-            // Rows come from the kit helper (not raw enumValues) so a saved
-            // out-of-enum value stays selectable and is never silently dropped.
-            // Seed from `currentValue` (the saved value), never `draft`.
-            Picker("", selection: enumBinding) {
-                ForEach(option.enumChoices(current: currentValue)) { choice in
-                    Text(choice.label).tag(choice.value)
+            case .number:
+                NumericOptionEditor(
+                    option: option,
+                    draft: $draft,
+                    savedValue: currentValue,
+                    placeholder: fieldPlaceholder,
+                    apply: { apply($0) }
+                )
+            default:
+                if Self.longValueOptions.contains(option.option.name) {
+                    longValueButton
+                } else {
+                    freeTextField
                 }
-            }
-            .labelsHidden()
-            .pickerStyle(.menu)
-            // Cap + right-align instead of `.fixedSize()`: in the grouped Form's
-            // constrained trailing slot a fixed-size menu grew to its longest value
-            // and overflowed the card; a bounded frame truncates the label instead.
-            .frame(maxWidth: 220, alignment: .trailing)
-            .accessibilityLabel(optionControlA11yLabel(option))
-        case .number:
-            NumericOptionEditor(
-                option: option,
-                draft: $draft,
-                savedValue: currentValue,
-                placeholder: fieldPlaceholder,
-                apply: { apply($0) }
-            )
-        case .color:
-            // The swatch opens our own color popover — anchored to the row, and with
-            // a text input built in so any value Ghostty accepts (hex, an X11 name,
-            // or cell-foreground / cell-background) is resolvable in the same place
-            // you pick one visually. We roll our own because the system's color well
-            // popover is closed (no text field) and SwiftUI's ColorPicker floats the
-            // shared panel at a screen corner.
-            Button { showingColorPopover.toggle() } label: { swatch }
-                .buttonStyle(.plain)
-                .help("Edit color")
-                // A swatch is pure color — VoiceOver would otherwise announce nothing but
-                // "button", so name+state+the color value are made explicit here (H1).
-                .accessibilityLabel(optionControlA11yLabel(option))
-                .accessibilityValue(Text(currentValue.isEmpty ? "not set" : currentValue))
-                .popover(isPresented: $showingColorPopover, arrowEdge: .bottom) {
-                    colorEditor
-                }
-                // Seed a fresh transaction from the saved value each time the popover
-                // opens. Incidental dismissal (Escape / click-outside) follows Cancel — it
-                // must NEVER commit a draft (R4/AE2); the explicit Apply button is now the
-                // sole write path, replacing the old commit-on-close footgun. A successful
-                // Apply has already written before it sets this closed, so the cancel here
-                // is then a harmless reset of spent state.
-                .onChange(of: showingColorPopover) { _, isOpen in
-                    if isOpen { transaction = EditTransaction(savedValue: currentValue) }
-                    else { transaction.cancel() }
-                }
-        default:
-            if Self.longValueOptions.contains(option.option.name) {
-                longValueButton
-            } else {
-                freeTextField
             }
         }
+    }
+
+    /// True when this row should render the shared color editor: an inferred color type, or an
+    /// explicit `.color` editor-kind override whose empty default the parser couldn't type as
+    /// color (U4/R7). Consistent color detection across every color-valued option.
+    private var usesColorEditor: Bool {
+        option.option.valueType == .color || option.option.presentation.editorKind == .color
+    }
+
+    /// The swatch opens our own color popover — anchored to the row, and with a text input
+    /// built in so any value Ghostty accepts (hex, an X11 name, or cell-foreground /
+    /// cell-background) is resolvable in the same place you pick one visually. We roll our own
+    /// because the system's color well popover is closed (no text field) and SwiftUI's
+    /// ColorPicker floats the shared panel at a screen corner.
+    private var colorSwatchControl: some View {
+        Button { showingColorPopover.toggle() } label: { swatch }
+            .buttonStyle(.plain)
+            .help("Edit color")
+            // A swatch is pure color — VoiceOver would otherwise announce nothing but
+            // "button", so name+state+the color value are made explicit here (H1).
+            .accessibilityLabel(optionControlA11yLabel(option))
+            .accessibilityValue(Text(currentValue.isEmpty ? "not set" : currentValue))
+            .popover(isPresented: $showingColorPopover, arrowEdge: .bottom) {
+                colorEditor
+            }
+            // Seed a fresh transaction from the saved value each time the popover opens.
+            // Incidental dismissal (Escape / click-outside) follows Cancel — it must NEVER
+            // commit a draft (R4/AE2); the explicit Apply button is now the sole write path,
+            // replacing the old commit-on-close footgun. A successful Apply has already
+            // written before it sets this closed, so the cancel here is then a harmless
+            // reset of spent state.
+            .onChange(of: showingColorPopover) { _, isOpen in
+                if isOpen { transaction = EditTransaction(savedValue: currentValue) }
+                else { transaction.cancel() }
+            }
     }
 
     /// The inline free-text field for ordinary scalar values. Commits on Return *and*
@@ -2144,140 +2155,6 @@ private struct PaletteEditor: View {
 
     private func applyNow(_ values: [String]) {
         Task { await model.applyEdit(option: liveOption, values: values) }
-    }
-}
-
-// MARK: - Repeatable list editor (U14)
-
-/// An add/remove list for repeatable text options (`env`, `font-feature`) — the
-/// proven "Edit…" popover pattern over a list of value rows, each write routed
-/// through the safe repeatable path (B8).
-private struct ListValueEditor: View {
-    @Environment(AppModel.self) private var model
-    let option: MergedOption
-    /// A fixed button label — e.g. font-feature's "Customize…" disclosure — instead of
-    /// the default "Add…"/"N set" count (U8).
-    var customLabel: String? = nil
-    @State private var showing = false
-    @State private var newEntry = ""
-
-    private var liveOption: MergedOption {
-        model.browser?.merged.option(named: option.option.name) ?? option
-    }
-    private var entries: [String] { liveOption.isSet ? liveOption.userValues : [] }
-
-    var body: some View {
-        Button { showing.toggle() } label: {
-            Text(customLabel ?? (entries.isEmpty ? "Add…" : "\(entries.count) set"))
-        }
-        .buttonStyle(.bordered)
-        .controlSize(.small)
-        .help("Edit \(option.option.displayTitle)")
-        .popover(isPresented: $showing, arrowEdge: .bottom) { editor }
-    }
-
-    private var editor: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            Text(option.option.displayTitle).font(.callout.weight(.semibold)).lineLimit(1)
-            if entries.isEmpty {
-                Text("No entries yet.").font(.caption).foregroundStyle(.secondary)
-            } else {
-                ForEach(Array(entries.enumerated()), id: \.offset) { index, entry in
-                    HStack(spacing: 6) {
-                        Text(entry)
-                            .font(.callout.monospaced())
-                            .lineLimit(1).truncationMode(.middle)
-                        Spacer(minLength: 4)
-                        Button { remove(at: index) } label: {
-                            Image(systemName: "minus.circle")
-                        }
-                        .buttonStyle(.plain)
-                        .foregroundStyle(.secondary)
-                        .help("Remove")
-                        .accessibilityLabel("Remove \(entry)")
-                    }
-                }
-            }
-            Divider()
-            HStack(spacing: 6) {
-                TextField(placeholder, text: $newEntry)
-                    .textFieldStyle(.roundedBorder)
-                    .onSubmit { add() }
-                Button("Add") { add() }
-                    .disabled(newEntry.trimmingCharacters(in: .whitespaces).isEmpty)
-            }
-        }
-        .padding(12)
-        .frame(width: 320)
-    }
-
-    private var placeholder: String {
-        if option.option.name == "env" { return "KEY=VALUE" }
-        return LabelCatalog.fieldPlaceholder(
-            name: option.option.name,
-            title: option.option.displayTitle,
-            documentation: option.option.documentation,
-            defaultValue: option.option.defaultValue
-        )
-    }
-
-    private func add() {
-        let entry = newEntry.trimmingCharacters(in: .whitespaces)
-        guard !entry.isEmpty else { return }
-        apply(entries + [entry])
-        newEntry = ""
-    }
-
-    private func remove(at index: Int) {
-        var next = entries
-        guard next.indices.contains(index) else { return }
-        next.remove(at: index)
-        apply(next)
-    }
-
-    private func apply(_ values: [String]) {
-        Task { await model.applyEdit(option: liveOption, values: values) }
-    }
-}
-
-// MARK: - Font-feature (Ligatures) editor
-
-/// `font-feature` (titled "Ligatures") rendered toggle-first (CV-9): the common case is
-/// "ligatures on or off", so a switch drives that — On strips Ghostty's `-calt, -liga,
-/// -dlig` disable set, Off writes it — over the kit `FontFeatures` tag arithmetic that
-/// preserves any user-added stylistic tags. The full per-tag list stays reachable behind
-/// a secondary "Customize…" disclosure for `ss01`-style sets.
-private struct FontFeatureEditor: View {
-    @Environment(AppModel.self) private var model
-    let option: MergedOption
-
-    /// Read the value in force from the live merged model, so the toggle reflects an
-    /// external edit or a just-applied write.
-    private var liveOption: MergedOption {
-        model.browser?.merged.option(named: option.option.name) ?? option
-    }
-    private var values: [String] { liveOption.isSet ? liveOption.userValues : [] }
-
-    var body: some View {
-        HStack(spacing: 6) {
-            Toggle("", isOn: ligatureBinding)
-                .labelsHidden()
-                .toggleStyle(.switch)
-                .controlSize(.small)
-                .accessibilityLabel(optionControlA11yLabel(option))
-            ListValueEditor(option: option, customLabel: "Customize…")
-        }
-    }
-
-    private var ligatureBinding: Binding<Bool> {
-        Binding(
-            get: { FontFeatures.ligaturesEnabled(values) },
-            set: { on in
-                let next = on ? FontFeatures.enablingLigatures(values)
-                              : FontFeatures.disablingLigatures(values)
-                Task { await model.applyEdit(option: liveOption, values: next) }
-            }
-        )
     }
 }
 
