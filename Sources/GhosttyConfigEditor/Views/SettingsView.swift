@@ -14,6 +14,7 @@ import GhosttyConfigKit
 /// more cross-scene injection, since the separate `Settings` scene is gone).
 struct SettingsView: View {
     @Environment(AppModel.self) private var model
+    let ghosttyVersion: String
     @State private var confirmingReset = false
 
     var body: some View {
@@ -86,9 +87,19 @@ struct SettingsView: View {
     @ViewBuilder
     private var ghosttySection: some View {
         Section("Ghostty") {
+            LabeledContent("Version") {
+                Text(ghosttyVersion)
+                    .foregroundStyle(.secondary)
+                    .textSelection(.enabled)
+            }
             if let path = model.resolvedBinaryPath {
                 LabeledContent("Binary") {
                     pathText(path)
+                }
+                if model.binaryOverride == nil {
+                    Text("Detected automatically.")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
                 }
             } else {
                 Label("Ghostty wasn't found automatically.", systemImage: "exclamationmark.triangle")

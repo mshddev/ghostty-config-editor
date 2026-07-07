@@ -82,69 +82,43 @@ private struct WindowConfigurator: NSViewRepresentable {
     }
 }
 
-/// One top-bar chip, so identity/health/Customized share a single shape (LAYOUT-6).
-/// With an `action` it renders as a bordered, hover-highlighting button (so an
-/// actionable chip *looks* actionable) with an optional trailing chevron; without
-/// one it's a plain label (identity). The `tint` colors only the leading glyph, so a
-/// health chip can carry a red/orange status icon without dyeing its whole label.
-private struct ToolbarChip: View {
-    var systemImage: String? = nil
-    var tint: Color = .secondary
+/// The toolbar's compact interactive control. A leading icon names the action while a
+/// separated trailing value communicates its shortcut. Keeping that secondary
+/// information in its own visual column makes the bar scan cleanly.
+private struct ToolbarControl: View {
+    let systemImage: String
     let title: String
+    let trailingText: String
     var isActive: Bool = false
-    var showsChevron: Bool = false
-    var action: (() -> Void)? = nil
+    let action: () -> Void
+    @State private var isHovering = false
 
     var body: some View {
-        if let action {
-            Button(action: action) {
-                chipContent
-            }
-            .buttonStyle(.plain)
-            .accessibilityAddTraits(isActive ? .isSelected : [])
-        } else {
-            content.foregroundStyle(.secondary)
-        }
-    }
-
-    /// The actionable chip's own chrome. The label stays `.primary` — accent tints only
-    /// the glyph (DS-6), so "on" doesn't read as a hyperlink. A hairline border is always
-    /// present so it reads as clickable regardless of state, and an *active* chip fills
-    /// with a subtle accent tint (not border-only) so the on-state survives focus loss
-    /// instead of riding on accent alone (CB-10).
-    private var chipContent: some View {
-        let shape = RoundedRectangle(cornerRadius: DesignTokens.Radius.standard, style: .continuous)
-        return content
-            .foregroundStyle(.primary)
-            .padding(.horizontal, 8)
-            .padding(.vertical, 3)
-            .background {
-                ZStack {
-                    shape.fill(isActive ? AnyShapeStyle(DesignTokens.accentFill) : AnyShapeStyle(Color.clear))
-                    shape.strokeBorder(
-                        isActive ? AnyShapeStyle(Color.accentColor.opacity(0.45)) : AnyShapeStyle(.quaternary),
-                        lineWidth: 1)
-                }
-            }
-            .contentShape(shape)
-    }
-
-    private var content: some View {
-        HStack(spacing: 5) {
-            if let systemImage {
+        Button(action: action) {
+            HStack(spacing: DesignTokens.Spacing.standard) {
                 Image(systemName: systemImage)
-                    .foregroundStyle(tint)
+                    .foregroundStyle(isActive ? Color.accentColor : Color.secondary)
                     .accessibilityHidden(true)
+                Text(title)
+                    .foregroundStyle(.primary)
+                Divider()
+                    .frame(height: 16)
+                Text(trailingText)
+                    .foregroundStyle(isActive ? Color.accentColor : Color.secondary)
             }
-            Text(title)
-            if showsChevron {
-                Image(systemName: "chevron.right")
-                    .font(.caption2)
-                    .foregroundStyle(.tertiary)
-                    .accessibilityHidden(true)
-            }
+            .font(.caption)
+            .fontWeight(.medium)
+            // The macOS toolbar supplies the enclosing material and interaction shape.
+            // Adding another rounded background here produces a pill-inside-pill on
+            // current macOS, so hierarchy comes from spacing, tint, and the divider.
+            .padding(.horizontal, DesignTokens.Spacing.tight)
+            .padding(.vertical, 2)
+            .contentShape(Rectangle())
         }
-        .font(.caption)
+        .buttonStyle(.plain)
+        .opacity(isHovering ? 1 : 0.92)
+        .onHover { isHovering = $0 }
+        .accessibilityAddTraits(isActive ? .isSelected : [])
     }
 }
 
@@ -420,7 +394,7 @@ struct RootView: View {
     /// (Options/Themes/Keybindings/Problems) caps uniformly rather than each view
     /// re-solving its own width.
     @ViewBuilder
-    private var mainColumn: some View {
+    private func mainColumn(ghosttyVersion: String) -> some View {
         Group {
             if model.isFinding {
                 // Global Find (⌘F) overlays option results *regardless* of the current
@@ -434,7 +408,7 @@ struct RootView: View {
                     case .recommended: RecommendedView()
                     case .problems: ProblemsView()
                     case .themes: ThemeBrowserView()
-                    case .settings: SettingsView()
+                    case .settings: SettingsView(ghosttyVersion: ghosttyVersion)
                     case .category(let name) where name == OptionCategorizer.keybindingsCategory: KeybindEditorView()
                     default: OptionListView()
                     }
@@ -465,7 +439,7 @@ struct RootView: View {
                 // A plain first-run explanation while no config exists yet (F2), above
                 // whatever surface is showing. Disappears once the first change lands.
                 if model.configMissing { FirstRunBanner() }
-                mainColumn
+                mainColumn(ghosttyVersion: environment.version)
             }
         }
         // Changing surface clears any lingering apply feedback so the next surface
@@ -497,18 +471,24 @@ struct RootView: View {
             Task { await model.syncFromDiskIfChanged() }
         }
         .toolbar {
-            // Identity ("which Ghostty") + the auto-reload status chip. Health and
-            // Customized moved into the sidebar's Status section (D1); the top bar now
-            // carries identity, at-a-glance auto-reload state, and Find.
-            ToolbarItem(placement: .status) {
-                identityChip(environment)
+            if #available(macOS 26.0, *) {
+                browserToolbar()
+                    // Tahoe adds a shared rounded material behind toolbar groups by
+                    // default. The controls already communicate their grouping, so the
+                    // extra enclosure reads as the pill border this design avoids.
+                    .sharedBackgroundVisibility(.hidden)
+            } else {
+                browserToolbar()
             }
-            ToolbarItem(placement: .status) {
-                autoReloadChip()
-            }
-            ToolbarItem(placement: .primaryAction) {
-                findButton()
-            }
+        }
+    }
+
+    /// Find is the toolbar's sole global action. Environment metadata and auto-reload
+    /// state live in Settings, while health and Customized live in the sidebar (D1).
+    @ToolbarContentBuilder
+    private func browserToolbar() -> some ToolbarContent {
+        ToolbarItem(placement: .primaryAction) {
+            findButton()
         }
     }
 
@@ -518,13 +498,13 @@ struct RootView: View {
     private func findButton() -> some View {
         // ⌘F lives on the View-menu Find command now (G2), so the shortcut isn't declared
         // twice; this stays a click affordance for pointer users. Routed through the
-        // active-capable chip (U20/IA-3) so Find-mode is legible *in the chrome*: the chip
-        // fills when a Find is in progress, and clicking it again ends Find. Toggle trait
-        // for VoiceOver.
-        ToolbarChip(
+        // active-capable control (U20/IA-3) so Find-mode is legible *in the chrome*: its
+        // icon and shortcut tint when Find is in progress, and clicking it again ends Find.
+        // Toggle trait remains explicit for VoiceOver.
+        ToolbarControl(
             systemImage: "magnifyingglass",
-            tint: model.isFinding ? .accentColor : .secondary,
             title: "Find",
+            trailingText: "⌘F",
             isActive: model.isFinding,
             action: { model.isFinding ? model.endFind() : model.beginFind() }
         )
@@ -534,30 +514,4 @@ struct RootView: View {
         .accessibilityAddTraits(.isToggle)
     }
 
-    /// Identity: which Ghostty this is managing. A plain label — the version is
-    /// information, not a status — so the old green seal (which falsely read as a
-    /// health check) is gone; config health now lives on the Problems sidebar row (D1).
-    private func identityChip(_ environment: GhosttyEnvironment) -> some View {
-        ToolbarChip(title: "Ghostty \(environment.version)")
-            .help("The Ghostty this app is configuring")
-    }
-
-    /// A clickable auto-reload status chip (G1): at-a-glance state plus a one-click
-    /// toggle, so the setting isn't only reachable from the Settings pane. The pane's
-    /// toggle and this chip bind the same stored `autoReloadEnabled`, so they stay in
-    /// sync. Exposed to VoiceOver as a switch (not a bare button) per KTD7.
-    private func autoReloadChip() -> some View {
-        let on = model.autoReloadEnabled
-        return ToolbarChip(
-            systemImage: "arrow.clockwise",
-            tint: on ? .accentColor : .secondary,
-            title: on ? "Auto-reload: On" : "Auto-reload: Off",
-            isActive: on,
-            action: { model.autoReloadEnabled.toggle() }
-        )
-        .help("Automatically reload Ghostty after each change")
-        .accessibilityLabel("Auto-reload")
-        .accessibilityValue(on ? "On" : "Off")
-        .accessibilityAddTraits(.isToggle)
-    }
 }
