@@ -1,0 +1,28 @@
+{
+  "options": {
+    "bell-features": { "editorKind": "flagSet", "semanticGroup": "flags" },
+    "clipboard-codepoint-map": { "editorKind": "dedicated" },
+    "command-palette-entry": { "editorKind": "repeatableList" },
+    "config-default-files": { "editability": "excluded" },
+    "config-file": { "editorKind": "pathList", "semanticGroup": "paths" },
+    "cursor-style-blink": { "effectiveDefault": "true" },
+    "env": { "editorKind": "dedicated" },
+    "font-codepoint-map": { "editorKind": "dedicated" },
+    "font-family": { "editorKind": "dedicated" },
+    "font-family-bold": { "editorKind": "dedicated" },
+    "font-family-bold-italic": { "editorKind": "dedicated" },
+    "font-family-italic": { "editorKind": "dedicated" },
+    "font-feature": { "editorKind": "dedicated" },
+    "font-variation": { "editorKind": "dedicated" },
+    "font-variation-bold": { "editorKind": "dedicated" },
+    "font-variation-bold-italic": { "editorKind": "dedicated" },
+    "font-variation-italic": { "editorKind": "dedicated" },
+    "keybind": { "editorKind": "dedicated" },
+    "mouse-scroll-multiplier": { "editorKind": "scrollMultiplier", "semanticGroup": "composite" },
+    "palette": { "editorKind": "dedicated" },
+    "selection-background": { "editorKind": "color", "semanticGroup": "colors" },
+    "selection-foreground": { "editorKind": "color", "semanticGroup": "colors" },
+    "unfocused-split-fill": { "editorKind": "color", "semanticGroup": "colors" },
+    "working-directory": { "editorKind": "path", "semanticGroup": "paths" }
+  }
+}

@@ -33,5 +33,9 @@ let package = Package(
             dependencies: ["GhosttyConfigKit"],
             resources: [.copy("Fixtures")]
         ),
+        .testTarget(
+            name: "GhosttyConfigEditorTests",
+            dependencies: ["GhosttyConfigEditor", "GhosttyConfigKit"]
+        ),
     ]
 )

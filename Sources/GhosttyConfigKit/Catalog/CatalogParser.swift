@@ -107,7 +107,11 @@ public enum CatalogParser {
         var documentation: String
     }
 
-    public static func parse(_ text: String, version: String? = nil) -> OptionCatalog {
+    public static func parse(
+        _ text: String,
+        version: String? = nil,
+        applyingPresentationExclusions: Bool = true
+    ) -> OptionCatalog {
         var order: [String] = []
         var builders: [String: Builder] = [:]
 
@@ -161,6 +165,10 @@ public enum CatalogParser {
             // Linux/GTK so they never surface in browse/search/discovery. See
             // `MacOSCatalogScope`.
             guard !MacOSCatalogScope.excludes(name) else { return nil }
+            if applyingPresentationExclusions,
+               OptionPresentationCatalog.bundled.presentation(name: name, isRepeatable: false).editability == .excluded {
+                return nil
+            }
             let defaultValue = b.defaultValues.first ?? ""
             let enums = resolvedEnumValues(name: name, default: defaultValue, documentation: b.documentation)
             let repeatable = b.defaultValues.count > 1 || knownRepeatableKeys.contains(name)
