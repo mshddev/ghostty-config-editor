@@ -587,12 +587,12 @@ private struct OptionRowFeedback: View {
         case .succeeded(let headline, _, _, _):
             succeeded(headline: headline)
                 .transition(.opacity.combined(with: .move(edge: .top)))
-        case .failed(_, let offersReload):
+        case .failed(let presentation):
             HStack(alignment: .firstTextBaseline, spacing: 8) {
                 ApplyFeedbackContent(state: model.applyState)
                 // Stale-on-disk is the one failure a reload fixes — offer it inline right
                 // where the error shows, so "reload and try again" is one click (G3).
-                if offersReload {
+                if presentation.offersReload {
                     Button("Reload") { Task { await model.reloadFromDisk() } }
                         .buttonStyle(.link).font(.caption2)
                 }
@@ -672,9 +672,12 @@ private struct InlineOptionEditor: View {
     @State private var draft: String = ""
     /// Drives the color-editing popover anchored to the row's swatch.
     @State private var showingColorPopover = false
-    /// The color value already written in this popover session, so committing on
-    /// close doesn't re-write a value a preset/Set/wheel already saved (B6).
-    @State private var committedColor: String = ""
+    /// The transactional state for the text-bearing popovers — the color editor and the
+    /// long-value editor (KTD2/U3, R4/R5). Apply commits, Cancel discards, and incidental
+    /// dismissal (Escape / click-outside) follows Cancel: it NEVER commits. A stale write
+    /// stays reviewable and a rejected write retains the draft. Discrete controls above
+    /// (toggle, picker, stepper) stay immediate and use `draft` directly, not this.
+    @State private var transaction = EditTransaction(savedValue: "")
     /// Drives the wide multi-line editor for long scalar values (B7).
     @State private var showingLongEditor = false
     /// Tracks the inline free-text field's focus so a blurred, dirty field commits
@@ -772,17 +775,15 @@ private struct InlineOptionEditor: View {
                 .popover(isPresented: $showingColorPopover, arrowEdge: .bottom) {
                     colorEditor
                 }
-                // Seed the draft from the saved value each time the popover opens, so
-                // it never shows a stale (or first-open empty) value. On close, commit
-                // whatever the wheel/hex field left in the draft (B6: commit-on-blur),
-                // deduped against what a preset/Set already wrote this session.
+                // Seed a fresh transaction from the saved value each time the popover
+                // opens. Incidental dismissal (Escape / click-outside) follows Cancel — it
+                // must NEVER commit a draft (R4/AE2); the explicit Apply button is now the
+                // sole write path, replacing the old commit-on-close footgun. A successful
+                // Apply has already written before it sets this closed, so the cancel here
+                // is then a harmless reset of spent state.
                 .onChange(of: showingColorPopover) { _, isOpen in
-                    if isOpen {
-                        draft = currentValue
-                        committedColor = currentValue
-                    } else {
-                        requestColorApply(draft)
-                    }
+                    if isOpen { transaction = EditTransaction(savedValue: currentValue) }
+                    else { transaction.cancel() }
                 }
         default:
             if Self.longValueOptions.contains(option.option.name) {
@@ -841,26 +842,38 @@ private struct InlineOptionEditor: View {
         .accessibilityValue(Text(currentValue.isEmpty ? "not set" : currentValue))
         .popover(isPresented: $showingLongEditor, arrowEdge: .bottom) { longValueEditor }
         .onChange(of: showingLongEditor) { _, open in
-            if open { draft = currentValue } else { commit() }   // commit on close
+            // Same transactional contract as the color popover: Apply commits, incidental
+            // dismissal discards. Replaces the old commit-on-close (R4).
+            if open { transaction = EditTransaction(savedValue: currentValue) }
+            else { transaction.cancel() }
         }
     }
 
     private var longValueEditor: some View {
         VStack(alignment: .leading, spacing: 8) {
             Text(option.option.displayTitle).font(.callout.weight(.semibold)).lineLimit(1)
-            TextField(fieldPlaceholder, text: $draft, axis: .vertical)
+            TextField(fieldPlaceholder, text: longDraftBinding, axis: .vertical)
                 .textFieldStyle(.roundedBorder)
                 .font(.callout.monospaced())
                 .lineLimit(3...10)
                 .frame(width: 360)
+            transactionFeedback
             HStack {
                 Spacer()
-                Button("Done") { showingLongEditor = false }
+                Button("Cancel") { showingLongEditor = false }
+                Button("Apply") { commitTransaction(closing: $showingLongEditor) }
                     .keyboardShortcut(.defaultAction)
+                    .disabled(!transaction.canApply)
             }
         }
         .padding(12)
         .frame(width: 384)
+    }
+
+    /// The long-value draft binding, routed through the transaction (no local syntax gate —
+    /// a shell command / path / shader is free-form and validated by Ghostty on Apply).
+    private var longDraftBinding: Binding<String> {
+        Binding(get: { transaction.draft }, set: { transaction.edit($0) })
     }
 
     /// True when the field holds an unsaved edit — drives the "Return to save" hint.
@@ -990,35 +1003,32 @@ private struct InlineOptionEditor: View {
     private var colorEditor: some View {
         VStack(alignment: .leading, spacing: 10) {
             HStack(spacing: 10) {
-                colorFill(draft)
+                colorFill(transaction.draft)
                     .frame(width: 36, height: 36)
                     .clipShape(RoundedRectangle(cornerRadius: 6))
                     .overlay { swatchRing(cornerRadius: 6) }
                 VStack(alignment: .leading, spacing: 2) {
                     Text(option.option.displayTitle).font(.callout.weight(.semibold)).lineLimit(1)
-                    Text(draft.isEmpty ? "no value" : draft)
+                    Text(transaction.draft.isEmpty ? "no value" : transaction.draft)
                         .font(.caption.monospaced()).foregroundStyle(.secondary).lineLimit(1)
                 }
                 Spacer(minLength: 4)
                 // The native color wheel + eyedropper. Opacity is off so we never emit
-                // an `#rrggbbaa` that a non-background color option would reject; the
-                // wheel edits the draft live and commits when the popover closes.
+                // an `#rrggbbaa` that a non-background color option would reject; the wheel
+                // edits the draft live as a preview and no longer writes on close — Apply is
+                // the sole commit (R4).
                 ColorPicker("", selection: colorWellBinding, supportsOpacity: false)
                     .labelsHidden()
                     .help("Pick with the color wheel or eyedropper")
             }
-            HStack(spacing: 6) {
-                TextField("#1e1e2e, tomato, cell-foreground", text: $draft)
-                    .textFieldStyle(.roundedBorder)
-                    .onSubmit { requestColorApply(draft); showingColorPopover = false }
-                Button("Set") { requestColorApply(draft); showingColorPopover = false }
-                    .disabled(!canApplyColorDraft)
-            }
+            TextField("#1e1e2e, tomato, cell-foreground", text: colorDraftBinding)
+                .textFieldStyle(.roundedBorder)
+                .onSubmit { commitTransaction(closing: $showingColorPopover) }
             LazyVGrid(columns: Array(repeating: GridItem(.fixed(22), spacing: 5), count: 8), spacing: 5) {
                 ForEach(Self.colorPresets, id: \.self) { hex in
                     Button {
-                        draft = hex
-                        requestColorApply(hex)
+                        // A preset sets the draft (live preview); Apply commits it (R4).
+                        transaction.edit(hex, locallyValid: colorDraftLocallyValid(hex))
                     } label: {
                         RoundedRectangle(cornerRadius: 4)
                             .fill(Color(hex: hex) ?? .gray)
@@ -1040,44 +1050,129 @@ private struct InlineOptionEditor: View {
                     .accessibilityAddTraits(isSelectedPreset(hex) ? .isSelected : [])
                 }
             }
-            Text("Type a hex code, an X11 color name, or cell-foreground / cell-background. Changes save when you close this.")
+            transactionFeedback
+            Text("Type a hex code, an X11 color name, or cell-foreground / cell-background.")
                 .font(.caption2).foregroundStyle(.secondary)
                 .fixedSize(horizontal: false, vertical: true)
+            HStack {
+                Spacer()
+                Button("Cancel") { showingColorPopover = false }
+                Button("Apply") { commitTransaction(closing: $showingColorPopover) }
+                    .keyboardShortcut(.defaultAction)
+                    .disabled(!transaction.canApply)
+            }
         }
         .padding(12)
         .frame(width: 250)
     }
 
+    /// The hex/name field binding, routed through the transaction with a local color-syntax
+    /// gate so an obviously-malformed hex (`#zzzzzz`) disables Apply and shows the reason
+    /// inside the editor (AE2) instead of round-tripping to Ghostty.
+    private var colorDraftBinding: Binding<String> {
+        Binding(
+            get: { transaction.draft },
+            set: { newValue in
+                // An empty field is *incomplete*, not invalid: Apply stays disabled but no
+                // error text shows (so a freshly-opened editor for an unset color reads
+                // clean, not as a failure). A non-empty malformed value shows the reason.
+                let isBlank = newValue.trimmingCharacters(in: .whitespaces).isEmpty
+                transaction.edit(newValue,
+                                 locallyValid: colorDraftLocallyValid(newValue),
+                                 invalidMessage: isBlank ? nil : "That isn't a valid color.")
+            }
+        )
+    }
+
+    /// A local syntax gate for a color draft (R4): reject an empty value or a malformed hex
+    /// outright; an X11 name or `cell-*` token can't be verified locally, so it passes here
+    /// and Ghostty validates it on Apply (unknown/future tokens still round-trip, R8).
+    private func colorDraftLocallyValid(_ s: String) -> Bool {
+        let t = s.trimmingCharacters(in: .whitespaces)
+        if t.isEmpty { return false }
+        if t.hasPrefix("#") { return Color(hex: t) != nil }
+        return true
+    }
+
     /// Two-way bridge to the native picker: read the draft as a Color, and write a
-    /// wheel/eyedropper pick back as a `#rrggbb` draft (live preview; commit on close).
+    /// wheel/eyedropper pick back as a `#rrggbb` draft (live preview; Apply commits).
     private var colorWellBinding: Binding<Color> {
         Binding(
-            get: { Color(hex: draft) ?? Color(nsColor: .textColor) },
+            get: { Color(hex: transaction.draft) ?? Color(nsColor: .textColor) },
             set: { newColor in
-                if let hex = newColor.ghosttyHex { draft = hex }
+                if let hex = newColor.ghosttyHex { transaction.edit(hex, locallyValid: true) }
             }
         )
     }
 
     private func isSelectedPreset(_ hex: String) -> Bool {
-        hex.caseInsensitiveCompare(currentValue) == .orderedSame
+        hex.caseInsensitiveCompare(transaction.draft) == .orderedSame
     }
 
-    /// A blank field or one that matches the saved value is never a valid write.
-    private var canApplyColorDraft: Bool {
-        let trimmed = draft.trimmingCharacters(in: .whitespaces)
-        return !trimmed.isEmpty && trimmed != currentValue
+    // MARK: Transactional apply (shared by the color + long-value popovers, U3)
+
+    /// Shared inline status for the text-bearing popovers (R3/R4/R5): the local/validation/
+    /// stale message, a Reload & Review action for a stale conflict (F2), and the
+    /// side-by-side disk-vs-draft comparison after a reload. Reads as an error unless it's
+    /// the neutral stale-review hint.
+    @ViewBuilder private var transactionFeedback: some View {
+        if let message = transaction.message {
+            Label(message, systemImage: transaction.isStale ? "arrow.triangle.2.circlepath"
+                                                            : "exclamationmark.triangle.fill")
+                .font(.caption)
+                .foregroundStyle(transaction.isStale ? Color.secondary : Color.red)
+                .fixedSize(horizontal: false, vertical: true)
+        }
+        if transaction.isStale {
+            Button("Reload & Review") { reloadAndReview() }
+                .font(.caption)
+        }
+        if let disk = transaction.refreshedDiskValue, transaction.isDirty {
+            Text("Now on disk: \(disk) — Apply again to replace it with \(transaction.draft).")
+                .font(.caption2).foregroundStyle(.secondary)
+                .fixedSize(horizontal: false, vertical: true)
+        }
     }
 
-    /// Apply a color value at most once per distinct value in a popover session, so
-    /// the wheel's live edits, a preset, "Set", and the on-close commit never stack
-    /// into repeated writes (and reloads) of the same value (B6).
-    private func requestColorApply(_ value: String) {
-        let v = value.trimmingCharacters(in: .whitespaces)
-        guard !v.isEmpty, v != currentValue, v != committedColor else { return }
-        committedColor = v
-        if v != draft { draft = v }
-        apply(v)
+    /// Apply the transaction's draft through the SAME safe-write path (`model.applyEdit`),
+    /// then map the outcome back onto the transaction: success commits and closes; a stale
+    /// conflict retains the draft and awaits an explicit Reload & Review (never auto-retry,
+    /// R5); any other rejection retains the draft under a normalized message (R3). The
+    /// reducer's `beginApply` guard makes this one write despite repeated draft callbacks.
+    private func commitTransaction(closing isPresented: Binding<Bool>) {
+        guard transaction.beginApply() else { return }
+        let value = transaction.draft
+        Task {
+            await model.applyEdit(option: option, values: [value])
+            switch model.applyState {
+            case .succeeded:
+                transaction.markCommitted()
+                isPresented.wrappedValue = false
+            case .failed(let presentation) where presentation.offersReload:
+                transaction.markStale(message: presentation.message)
+            case .failed(let presentation):
+                transaction.markFailed(message: presentation.message)
+            default:
+                break
+            }
+        }
+    }
+
+    /// Stale recovery (F2/AE3): reload disk into the model, then refresh the transaction's
+    /// saved value so the externally-changed value shows beside the retained draft and a
+    /// SECOND explicit Apply can commit. If the option vanished, stop with an actionable
+    /// message and leave Apply disabled rather than guessing a target.
+    private func reloadAndReview() {
+        let name = option.option.name
+        Task {
+            await model.reloadFromDisk()
+            if let disk = model.savedValue(forOptionNamed: name) {
+                transaction.reloadAndReview(refreshedDiskValue: disk)
+            } else {
+                transaction.markTargetUnavailable(
+                    message: "This setting is no longer in your config. Close and reopen to continue.")
+            }
+        }
     }
 }
 

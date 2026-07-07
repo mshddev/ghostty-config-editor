@@ -309,10 +309,49 @@ struct ApplyFeedbackContent: View {
                         .font(.caption2).foregroundStyle(.secondary)
                 }
             }
-        case .failed(let message, _):
-            Label(message, systemImage: state.feedbackSymbol)
-                .foregroundStyle(state.feedbackTint).font(.caption)
+        case .failed(let presentation):
+            FailedFeedbackLine(presentation: presentation,
+                               symbol: state.feedbackSymbol,
+                               tint: state.feedbackTint)
+        }
+    }
+}
+
+/// The failure line (KTD4/R3): the normalized plain-language `message` as the headline,
+/// plus — only when the writer kept raw diagnostic `detail` — a small info button that
+/// reveals it in a popover for troubleshooting. The raw Ghostty text lives in the
+/// info/detail context, never in the row headline, so an implementation error string can
+/// never masquerade as committed feedback.
+private struct FailedFeedbackLine: View {
+    let presentation: EditErrorPresentation
+    let symbol: String
+    let tint: Color
+    @State private var showingDetail = false
+
+    var body: some View {
+        HStack(alignment: .firstTextBaseline, spacing: 4) {
+            Label(presentation.message, systemImage: symbol)
+                .foregroundStyle(tint).font(.caption)
                 .fixedSize(horizontal: false, vertical: true)
+            if let detail = presentation.detail, !detail.isEmpty {
+                Button { showingDetail.toggle() } label: {
+                    Image(systemName: "info.circle").font(.caption2)
+                }
+                .buttonStyle(.plain)
+                .foregroundStyle(.secondary)
+                .help("Show the raw message from Ghostty")
+                .accessibilityLabel("Show error details")
+                .popover(isPresented: $showingDetail, arrowEdge: .bottom) {
+                    ScrollView {
+                        Text(detail)
+                            .font(.caption.monospaced())
+                            .textSelection(.enabled)
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                            .padding(12)
+                    }
+                    .frame(width: 320).frame(maxHeight: 200)
+                }
+            }
         }
     }
 }
@@ -497,12 +536,12 @@ struct SurfaceFeedbackBar: View {
                     }
                 }
             }
-        case .failed(_, let offersReload):
+        case .failed(let presentation):
             bar {
                 HStack(alignment: .top, spacing: 8) {
                     ApplyFeedbackContent(state: applyState)
                     // Stale-on-disk: the fix is a reload, so offer it right on the banner (G3).
-                    if offersReload {
+                    if presentation.offersReload {
                         Spacer(minLength: 8)
                         Button("Reload") { Task { await model.reloadFromDisk() } }
                             .buttonStyle(.link).font(.caption)

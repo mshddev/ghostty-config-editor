@@ -110,11 +110,12 @@ public final class AppModel {
         /// auto-reload outcome whose kit-derived caption the views stack beneath the
         /// notice (R1, R6 — see `GhosttyReloader`).
         case succeeded(headline: String, notice: String?, gitTracked: Bool, reload: ReloadOutcome)
-        /// A write/validation failure. `offersReload` is true only for the stale-on-disk
-        /// case, where re-reading disk is the actual fix — so the surface can show an inline
-        /// "Reload" (the message says "reload" and now something does, G3/GAP-2). All other
-        /// failures pass `false`.
-        case failed(String, offersReload: Bool)
+        /// A write/validation failure, normalized at the boundary (KTD4/R3): the presentation
+        /// carries the plain-language `message`, the raw diagnostic as secondary `detail`,
+        /// and `offersReload` (true only for stale-on-disk, where re-reading disk is the fix
+        /// — so the surface can show an inline "Reload", G3/GAP-2). Raw Ghostty diagnostics
+        /// and implementation type names never reach row feedback.
+        case failed(EditErrorPresentation)
     }
 
     public private(set) var environmentState: EnvironmentState = .loading
@@ -414,6 +415,8 @@ public final class AppModel {
     private func performApplyEdit(optionName: String, values: [String]) async {
         guard let environment, let browser,
               let option = browser.merged.option(named: optionName) else { return }
+        // A color option's failures speak "color" through the normalizer (KTD4/R3).
+        let valueKind: EditValueKind = option.option.valueType == .color ? .color : .generic
         applyingOptionName = optionName
         applyState = .applying
         let writer = ConfigWriter()
@@ -437,14 +440,11 @@ public final class AppModel {
             // above — and never downgrades a successful save to a failure (R5/KTD5).
             let reload = reloader.reload(enabled: autoReloadEnabled)
             applyState = .succeeded(headline: "Saved", notice: option.option.applyNotice, gitTracked: gitTracked, reload: reload)
-        } catch ConfigWriteError.validationFailed(let messages) {
-            applyState = .failed(messages.first?.message ?? "The change didn't validate.", offersReload: false)
-        } catch ConfigWriteError.staleOnDisk {
-            applyState = .failed("This file changed on disk since it was read. Reload and try again.", offersReload: true)
-        } catch ConfigWriteError.invalidValue {
-            applyState = .failed("That value can't contain a line break.", offersReload: false)
         } catch {
-            applyState = .failed(error.localizedDescription, offersReload: false)
+            // Normalize every failure at the boundary (KTD4/R3): validation diagnostics,
+            // stale-on-disk, line-break refusals, and any other error become plain language
+            // with the raw text kept as secondary detail — no impl type name leaks to a row.
+            applyState = .failed(EditErrorPresentation.present(error, kind: valueKind))
         }
     }
 
@@ -489,7 +489,7 @@ public final class AppModel {
             // revert message (CM-6); the reload caption still rides beneath if present.
             applyState = .succeeded(headline: "Reverted", notice: nil, gitTracked: false, reload: reload)
         } catch {
-            applyState = .failed(error.localizedDescription, offersReload: false)
+            applyState = .failed(EditErrorPresentation.present(error))
         }
     }
 
@@ -696,14 +696,10 @@ public final class AppModel {
             await refreshConfig(environment: environment, catalog: catalog)
             let reload = reloader.reload(enabled: autoReloadEnabled)
             applyState = .succeeded(headline: "Saved", notice: notice, gitTracked: gitTracked, reload: reload)
-        } catch ConfigWriteError.validationFailed(let messages) {
-            applyState = .failed(messages.first?.message ?? "The change didn't validate.", offersReload: false)
-        } catch ConfigWriteError.staleOnDisk {
-            applyState = .failed("This file changed on disk since it was read. Reload and try again.", offersReload: true)
-        } catch ConfigWriteError.invalidValue {
-            applyState = .failed("That value can't contain a line break.", offersReload: false)
         } catch {
-            applyState = .failed(error.localizedDescription, offersReload: false)
+            // Batch/import writes carry no single option, so the generic vocabulary applies;
+            // still normalized so no raw diagnostic reaches the feedback bar (KTD4/R3).
+            applyState = .failed(EditErrorPresentation.present(error))
         }
     }
 
@@ -1099,7 +1095,7 @@ public final class AppModel {
         let action = action.trimmingCharacters(in: .whitespaces)
         let issues = KeybindValidation.validate(trigger: trigger, action: action, knownActions: keybindActionNames)
         if let hardError = issues.first(where: { $0.severity == .error }) {
-            applyState = .failed(hardError.message, offersReload: false)
+            applyState = .failed(EditErrorPresentation(message: hardError.message))
             return
         }
         await writeKeybinds { $0.updating(originalTrigger: originalTrigger, trigger: trigger, action: action) }
@@ -1114,7 +1110,7 @@ public final class AppModel {
         let action = action.trimmingCharacters(in: .whitespaces)
         let issues = KeybindValidation.validate(trigger: newTrigger, action: action, knownActions: keybindActionNames)
         if let hardError = issues.first(where: { $0.severity == .error }) {
-            applyState = .failed(hardError.message, offersReload: false)
+            applyState = .failed(EditErrorPresentation(message: hardError.message))
             return
         }
         await writeKeybinds { $0.movingDefault(fromTrigger: oldTrigger, toTrigger: newTrigger, action: action) }
@@ -1136,7 +1132,7 @@ public final class AppModel {
     /// no-op (no needless write/backup).
     private func writeKeybinds(_ transform: (TargetScopedBindings) -> [String]) async {
         guard let option = keybindOption, let target = keybindTargetPath else {
-            applyState = .failed("Couldn't locate the keybind setting in the catalog.", offersReload: false)
+            applyState = .failed(EditErrorPresentation(message: "Couldn't locate the keybind setting in the catalog."))
             return
         }
         let scoped = TargetScopedBindings(
@@ -1253,6 +1249,16 @@ public final class AppModel {
     /// button (G5); unmapped rows keep their "Reveal in editor" fallback.
     public func hasOption(named name: String) -> Bool {
         browser?.merged.option(named: name) != nil
+    }
+
+    /// The value an option now shows after a disk reload — the input a stale edit's Reload
+    /// & Review compares the retained draft against (F2/R5/AE3). Returns the effective
+    /// (explicit or default) presentation value; `nil` only when the option is no longer in
+    /// the catalog at all, which the caller treats as "target disappeared" and disables
+    /// Apply rather than guessing. Never itself writes.
+    public func savedValue(forOptionNamed name: String) -> String? {
+        guard let option = browser?.merged.option(named: name) else { return nil }
+        return option.valuePresentation.value ?? ""
     }
 
     public func selectedOption() -> MergedOption? {

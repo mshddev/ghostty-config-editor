@@ -14,6 +14,110 @@ public enum ConfigWriteError: Error, Equatable, Sendable {
     case invalidValue(String)
 }
 
+/// The kind of value being edited, so the error normalizer can speak in the editor's
+/// own vocabulary (a bad color says "color", a generic value stays generic) (KTD4).
+public enum EditValueKind: Sendable, Equatable {
+    case color
+    case generic
+}
+
+/// Plain-language presentation of a write/validation failure (KTD4, R3).
+///
+/// The single application-boundary normalizer: it turns `ConfigWriteError` cases and raw
+/// Ghostty diagnostics (`error.InvalidCharacter`, `unknown error error.…`) into a concise
+/// user-facing `message` while keeping the raw text as secondary `detail` for the
+/// info/detail context. No `message` it produces ever prints an implementation type name.
+public struct EditErrorPresentation: Equatable, Sendable {
+    /// The concise, user-facing sentence — never contains an impl type name (R3).
+    public let message: String
+    /// The raw diagnostic/text, retained as secondary detail for troubleshooting. Nil when
+    /// there is nothing beyond the message.
+    public let detail: String?
+    /// True only for stale-on-disk, where re-reading the file is the actual fix, so a
+    /// surface can offer an inline "Reload" (mirrors `ApplyState.failed`'s old flag).
+    public let offersReload: Bool
+
+    public init(message: String, detail: String? = nil, offersReload: Bool = false) {
+        self.message = message
+        self.detail = detail
+        self.offersReload = offersReload
+    }
+
+    /// Normalize any thrown error at the write boundary. A `ConfigWriteError` maps by case;
+    /// anything else keeps its raw description as `detail` under a generic headline so the
+    /// old raw-`localizedDescription` leak (KTD4/R3) can never reach row feedback.
+    public static func present(_ error: Error, kind: EditValueKind = .generic) -> EditErrorPresentation {
+        if let writeError = error as? ConfigWriteError {
+            return present(writeError, kind: kind)
+        }
+        return EditErrorPresentation(
+            message: "Something went wrong saving the change.",
+            detail: error.localizedDescription,
+            offersReload: false
+        )
+    }
+
+    /// Normalize a `ConfigWriteError` case into plain language (KTD4).
+    public static func present(_ error: ConfigWriteError, kind: EditValueKind = .generic) -> EditErrorPresentation {
+        switch error {
+        case .validationFailed(let messages):
+            let raw = messages.first?.message.trimmingCharacters(in: .whitespaces) ?? ""
+            let message = raw.isEmpty ? "The change didn't validate." : humanize(diagnostic: raw, kind: kind)
+            return EditErrorPresentation(message: message, detail: raw.isEmpty ? nil : raw, offersReload: false)
+        case .staleOnDisk:
+            return EditErrorPresentation(
+                message: "This file changed on disk since it was read. Reload and try again.",
+                detail: nil, offersReload: true)
+        case .invalidValue:
+            return EditErrorPresentation(message: "That value can't contain a line break.",
+                                         detail: nil, offersReload: false)
+        case .backupFailed(let raw):
+            return EditErrorPresentation(message: "Couldn't back up the current config, so nothing was changed.",
+                                         detail: raw, offersReload: false)
+        case .stageFailed(let raw):
+            return EditErrorPresentation(message: "Couldn't write the change safely, so nothing was changed.",
+                                         detail: raw, offersReload: false)
+        case .renameFailed(let raw):
+            return EditErrorPresentation(message: "Couldn't save the change to disk.",
+                                         detail: raw, offersReload: false)
+        }
+    }
+
+    /// Turn a raw Ghostty diagnostic into plain language, in the editor's own vocabulary.
+    /// Strips the `unknown error ` noise prefix, maps the known `error.InvalidCharacter`
+    /// token, and — as a backstop — replaces ANY remaining Zig-style `error.<Name>` token
+    /// (an implementation type name) with a generic sentence so no impl name ever surfaces.
+    static func humanize(diagnostic raw: String, kind: EditValueKind) -> String {
+        let trimmed = raw.trimmingCharacters(in: .whitespaces)
+        let prefix = "unknown error "
+        let stripped = trimmed.lowercased().hasPrefix(prefix)
+            ? String(trimmed.dropFirst(prefix.count))
+            : trimmed
+        let lower = stripped.lowercased()
+
+        if lower.contains("error.invalidcharacter") {
+            return kind == .color ? "That isn't a valid color."
+                                  : "That value has a character Ghostty can't read."
+        }
+        if containsImplementationErrorToken(stripped) {
+            // An unmapped Zig error token — never surface it verbatim.
+            return kind == .color ? "That isn't a valid color."
+                                  : "Ghostty couldn't read that value."
+        }
+        // Already human-readable (e.g. "unknown field") and free of an impl type name.
+        return stripped
+    }
+
+    /// Whether a string contains a Zig-style `error.<Identifier>` implementation token.
+    private static func containsImplementationErrorToken(_ s: String) -> Bool {
+        guard let regex = try? NSRegularExpression(pattern: #"\berror\.[A-Za-z_][A-Za-z0-9_]*"#) else {
+            return s.lowercased().contains("error.")
+        }
+        let range = NSRange(s.startIndex..<s.endIndex, in: s)
+        return regex.firstMatch(in: s, range: range) != nil
+    }
+}
+
 /// The outcome of a successful write, carrying everything needed to undo it (R24).
 public struct WriteReceipt: Sendable {
     public let resolvedPath: String
