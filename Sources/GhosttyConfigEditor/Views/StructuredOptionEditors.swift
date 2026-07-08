@@ -397,7 +397,10 @@ struct ScrollMultiplierEditor: View {
         .popover(isPresented: $showing, arrowEdge: .bottom) { editor }
         .onChange(of: showing) { _, open in
             if open { transaction = EditTransaction(savedValue: savedValue) }
-            else { transaction.cancel() }
+            else {
+                transaction.cancel()
+                model.dismissApplyFailure(forOptionNamed: option.option.name)   // A-2
+            }
         }
     }
 
@@ -597,7 +600,10 @@ struct PathChooserEditor: View {
         .popover(isPresented: $showing, arrowEdge: .bottom) { editor }
         .onChange(of: showing) { _, open in
             if open { transaction = EditTransaction(savedValue: savedValue) }
-            else { transaction.cancel() }
+            else {
+                transaction.cancel()
+                model.dismissApplyFailure(forOptionNamed: option.option.name)   // A-2
+            }
         }
     }
 

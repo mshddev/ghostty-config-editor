@@ -794,7 +794,16 @@ private struct InlineOptionEditor: View {
             }
         }
         .onChange(of: textFieldFocused) { _, focused in
-            if !focused { commit() }   // commit-on-blur
+            guard !focused else { return }
+            if draft != currentValue {
+                commit()   // commit-on-blur (B7)
+            } else {
+                // Nothing to save — the field already holds the saved value (either
+                // untouched, or snapped back after a rejected write). Blurring here is the
+                // inline field's "abandon", so clear a stale validation error it left on the
+                // row (A-2). No-op when there's no failure or it belongs to another option.
+                model.dismissApplyFailure(forOptionNamed: option.option.name)
+            }
         }
     }
 
@@ -818,7 +827,10 @@ private struct InlineOptionEditor: View {
             // Same transactional contract as the color popover: Apply commits, incidental
             // dismissal discards. Replaces the old commit-on-close (R4).
             if open { transaction = EditTransaction(savedValue: currentValue) }
-            else { transaction.cancel() }
+            else {
+                transaction.cancel()
+                model.dismissApplyFailure(forOptionNamed: option.option.name)   // A-2
+            }
         }
     }
 
@@ -1030,7 +1042,12 @@ private struct ColorOptionEditor: View {
             // then a harmless reset of spent state.
             .onChange(of: showing) { _, isOpen in
                 if isOpen { transaction = EditTransaction(savedValue: currentValue) }
-                else { transaction.cancel() }
+                else {
+                    transaction.cancel()
+                    // Abandoning the edit also clears any error the last Apply left on the
+                    // row (A-2) — otherwise the global `.failed` outlives the popover.
+                    model.dismissApplyFailure(forOptionNamed: option.option.name)
+                }
             }
     }
 

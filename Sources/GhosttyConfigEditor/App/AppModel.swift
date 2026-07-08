@@ -527,6 +527,18 @@ public final class AppModel {
         redoableApply = nil
     }
 
+    /// Clear a lingering validation error the moment its edit is abandoned (A-2). A
+    /// `.failed` apply-state is global and, unlike `.succeeded`, never auto-collapses — so
+    /// cancelling an editor popover (or blurring an inline field back to its saved value)
+    /// used to leave the red error stranded on the row until the next apply or surface
+    /// switch. This dismisses it, but ONLY when the failure belongs to `name`: a
+    /// `.succeeded`/`.applying` state, or a `.failed` for a *different* option, is left
+    /// untouched so one editor's cancel can't wipe another's feedback.
+    public func dismissApplyFailure(forOptionNamed name: String) {
+        guard case .failed = applyState, applyingOptionName == name else { return }
+        resetApplyState()
+    }
+
     // MARK: - Reload from disk (G3)
 
     /// Re-read the config from disk and rebuild the browser, reusing the already-
