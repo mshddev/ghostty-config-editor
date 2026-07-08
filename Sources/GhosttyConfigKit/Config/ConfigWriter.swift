@@ -12,6 +12,10 @@ public enum ConfigWriteError: Error, Equatable, Sendable {
     /// A key or value contained a newline — writing it would split into extra
     /// config directives (e.g. an injected `config-file`), so it is refused (R8).
     case invalidValue(String)
+    /// The write would produce a zero-byte config. Ghostty's `+validate-config`
+    /// rejects an empty file with exit 1 and no diagnostic, so we refuse it up
+    /// front with a clear message instead of the opaque "didn't validate" (A).
+    case emptyConfig
 }
 
 /// The kind of value being edited, so the error normalizer can speak in the editor's
@@ -71,6 +75,10 @@ public struct EditErrorPresentation: Equatable, Sendable {
         case .invalidValue:
             return EditErrorPresentation(message: "That value can't contain a line break.",
                                          detail: nil, offersReload: false)
+        case .emptyConfig:
+            return EditErrorPresentation(
+                message: "A config file can't be empty. Reset options to defaults instead of clearing the file.",
+                detail: nil, offersReload: false)
         case .backupFailed(let raw):
             return EditErrorPresentation(message: "Couldn't back up the current config, so nothing was changed.",
                                          detail: raw, offersReload: false)
@@ -267,6 +275,7 @@ public struct ConfigWriter: Sendable {
     public func apply(optionName: String, values: [String], isRepeatable: Bool, in model: ConfigModel) throws -> WriteReceipt {
         try Self.rejectLineBreaks(key: optionName, values: values)
         let edited = editedFile(setting: optionName, to: values, isRepeatable: isRepeatable, in: model)
+        try Self.rejectEmptyConfig(edited)
         return try commit(edited)
     }
 
@@ -279,6 +288,16 @@ public struct ConfigWriter: Sendable {
         for value in values where hasBreak(value) {
             throw ConfigWriteError.invalidValue(value)
         }
+    }
+
+    /// Refuse a write whose serialized result is zero bytes. Ghostty accepts a
+    /// whitespace- or comment-only config (exit 0), and rejects *only* a truly empty
+    /// file — with exit 1 and no diagnostic, which the presenter can only render as the
+    /// opaque "The change didn't validate." So the check is strictly `.isEmpty` to match
+    /// Ghostty exactly, and it runs before validation so the clear message wins and the
+    /// binary is never asked (A). Also a `performCommit` backstop: no path writes empty.
+    private static func rejectEmptyConfig(_ file: ConfigFile) throws {
+        if file.serialized().isEmpty { throw ConfigWriteError.emptyConfig }
     }
 
     /// Validate the proposed change against the live binary BEFORE writing, then
@@ -295,6 +314,7 @@ public struct ConfigWriter: Sendable {
     ) async throws -> WriteReceipt {
         try Self.rejectLineBreaks(key: optionName, values: values)
         let edited = editedFile(setting: optionName, to: values, isRepeatable: isRepeatable, in: model)
+        try Self.rejectEmptyConfig(edited)
         if let cli {
             let validation = try await validatePreview(edited: edited, model: model, cli: cli, linter: linter)
             guard validation.isValid else {
@@ -316,6 +336,7 @@ public struct ConfigWriter: Sendable {
     ) async throws -> WriteReceipt {
         for op in operations { try Self.rejectLineBreaks(key: op.key, values: op.values) }
         let edited = editedFile(applying: operations, in: model)
+        try Self.rejectEmptyConfig(edited)
         if let cli {
             let validation = try await validatePreview(edited: edited, model: model, cli: cli, linter: linter)
             guard validation.isValid else {
@@ -343,6 +364,7 @@ public struct ConfigWriter: Sendable {
         let primary = model.primary
         var newFile = ConfigFile.parse(text: text, path: primary.path, resolvedPath: primary.resolvedPath)
         newFile.identity = FileIdentity.capture(path: primary.resolvedPath, fileManager: fileManager)
+        try Self.rejectEmptyConfig(newFile)
         if let cli {
             let validation = try await validatePreview(edited: newFile, model: model, cli: cli, linter: linter)
             guard validation.isValid else {
@@ -411,6 +433,10 @@ public struct ConfigWriter: Sendable {
     }
 
     private func performCommit(_ newFile: ConfigFile, realPath: String, fileManager: FileManager) throws -> WriteReceipt {
+        // Backstop for direct `commit()` callers: never let a zero-byte config reach disk,
+        // independent of what's on disk. The validated entry points already reject empty
+        // before validation; this guarantees the invariant for every path (A).
+        try Self.rejectEmptyConfig(newFile)
         // ONE read of the live file drives both the stale check and the backup,
         // so there is no window for an external write to slip between them (H1).
         let existing = fileManager.contents(atPath: realPath)

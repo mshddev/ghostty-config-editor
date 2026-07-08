@@ -451,6 +451,99 @@ final class ConfigWriterTests: XCTestCase {
                        "cursor-style = bar\n")
     }
 
+    // MARK: - Empty-config guard (A · would-be-empty write)
+    //
+    // Ghostty's `+validate-config` rejects a *zero-byte* config with exit 1 and no
+    // diagnostic, which the presenter can only render as the opaque "The change didn't
+    // validate." The writer intercepts a would-be-empty result up front — strictly
+    // `.isEmpty`, since Ghostty accepts whitespace/comment-only files — so the clear
+    // message wins and no zero-byte file ever reaches disk. These are hermetic: the guard
+    // fires before validation, so no live binary is needed.
+
+    func testImportingEmptyTextIsRejected() async throws {
+        let dir = try tempDir()
+        let m = model("font-size = 16\n", path: dir.appendingPathComponent("config").path)
+        do {
+            _ = try await makeWriter().validateAndImport(text: "", into: m, cli: nil)
+            XCTFail("importing an empty config should be rejected")
+        } catch {
+            XCTAssertEqual(error as? ConfigWriteError, .emptyConfig)
+        }
+    }
+
+    func testUnsettingTheLastOptionOnANoTrailingNewlineFileIsRejected() throws {
+        let dir = try tempDir()
+        let path = dir.appendingPathComponent("config")
+        try "font-size = 16".write(to: path, atomically: true, encoding: .utf8) // no trailing newline
+        let m = try ConfigReader().readModel(primaryPath: path.path)
+
+        XCTAssertThrowsError(try makeWriter().apply(optionName: "font-size", values: [], isRepeatable: false, in: m)) {
+            XCTAssertEqual($0 as? ConfigWriteError, .emptyConfig)
+        }
+        // The guard fires before any write — the live file is byte-intact.
+        XCTAssertEqual(try String(contentsOf: path, encoding: .utf8), "font-size = 16")
+    }
+
+    func testBatchThatEmptiesTheFileIsRejected() async throws {
+        let dir = try tempDir()
+        let path = dir.appendingPathComponent("config")
+        try "font-size = 16".write(to: path, atomically: true, encoding: .utf8) // no trailing newline
+        let m = try ConfigReader().readModel(primaryPath: path.path)
+
+        do {
+            _ = try await makeWriter().validateAndApplyBatch(
+                operations: [.unset("font-size", isRepeatable: false)], in: m, cli: nil)
+            XCTFail("a batch that empties the file should be rejected")
+        } catch {
+            XCTAssertEqual(error as? ConfigWriteError, .emptyConfig)
+        }
+        XCTAssertEqual(try String(contentsOf: path, encoding: .utf8), "font-size = 16")
+    }
+
+    func testCommitOfAZeroByteFileIsRejectedAsBackstop() throws {
+        // Direct-`commit()` callers hit the performCommit backstop even without the
+        // per-entry-point guard, so no path can put a zero-byte file on disk.
+        let dir = try tempDir()
+        let path = dir.appendingPathComponent("config").path
+        let empty = ConfigFile.parse(text: "", path: path, resolvedPath: path)
+        XCTAssertThrowsError(try makeWriter().commit(empty)) {
+            XCTAssertEqual($0 as? ConfigWriteError, .emptyConfig)
+        }
+        XCTAssertFalse(FileManager.default.fileExists(atPath: path), "no zero-byte file should be created")
+    }
+
+    func testCommentOnlyResultIsNotRejected() throws {
+        // Unsetting the only setting leaves a comment-only file — valid to Ghostty, so
+        // the strictly-zero-byte guard must let it persist.
+        let dir = try tempDir()
+        let path = dir.appendingPathComponent("config")
+        try write("# just a comment\nfont-size = 16\n", dir, "config")
+        let m = try ConfigReader().readModel(primaryPath: path.path)
+
+        try makeWriter().apply(optionName: "font-size", values: [], isRepeatable: false, in: m)
+        XCTAssertEqual(try String(contentsOf: path, encoding: .utf8), "# just a comment\n")
+    }
+
+    func testUnsettingLastOptionOnTrailingNewlineFileLeavesABlankLine() throws {
+        // Removing the last line of a newline-terminated file leaves "\n" (not zero bytes),
+        // which Ghostty accepts — so the guard must let it through unchanged.
+        let dir = try tempDir()
+        let path = dir.appendingPathComponent("config")
+        try write("font-size = 16\n", dir, "config")
+        let m = try ConfigReader().readModel(primaryPath: path.path)
+
+        try makeWriter().apply(optionName: "font-size", values: [], isRepeatable: false, in: m)
+        XCTAssertEqual(try String(contentsOf: path, encoding: .utf8), "\n")
+    }
+
+    func testEmptyConfigPresentsAClearMessage() {
+        let presentation = EditErrorPresentation.present(ConfigWriteError.emptyConfig)
+        XCTAssertEqual(presentation.message,
+                       "A config file can't be empty. Reset options to defaults instead of clearing the file.")
+        XCTAssertNil(presentation.detail)
+        XCTAssertFalse(presentation.offersReload)
+    }
+
     // MARK: - Helpers
 
     /// A writer whose backups go to a fresh temp dir outside any config dir.
