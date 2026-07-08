@@ -162,7 +162,7 @@ public extension MergedOption {
     func enumChoices(current: String) -> [EnumChoice] {
         let values = option.enumValues
         // Row text is the *friendly* label (A4/B4) while the tag stays the raw token,
-        // so a cryptic value like `osc8` reads as "Only OSC 8 hyperlinks" but still
+        // so a cryptic value like `osc8` reads as "OSC 8 only" but still
         // writes `osc8`.
         if !current.isEmpty, values.contains(current) {
             // The saved value is a listed choice — just mark it selected.

@@ -24,7 +24,7 @@ final class EnumValueLabelTests: XCTestCase {
 
     func testCuratedLabelWinsOverFallback() {
         // A bespoke phrase beats the humanizer...
-        XCTAssertEqual(bundled.label(option: "link-previews", value: "osc8"), "Only OSC 8 hyperlinks")
+        XCTAssertEqual(bundled.label(option: "link-previews", value: "osc8"), "OSC 8 only")
         XCTAssertEqual(bundled.label(option: "cursor-style", value: "block_hollow"), "Hollow block")
         // ...and a curated boolean beats the generic On/Off.
         XCTAssertEqual(bundled.label(option: "link-previews", value: "true"), "Always")

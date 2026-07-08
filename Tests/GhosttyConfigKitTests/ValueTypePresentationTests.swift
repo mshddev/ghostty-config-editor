@@ -122,7 +122,7 @@ final class ValueTypePresentationTests: XCTestCase {
         // U3 (CV-1/CM-1): an uncurated value is HUMANIZED, never rendered as its raw
         // token — a config token must never surface as a user-facing value.
         let labels = EnumValueLabels.bundled
-        XCTAssertEqual(labels.label(option: "link-previews", value: "osc8"), "Only OSC 8 hyperlinks")
+        XCTAssertEqual(labels.label(option: "link-previews", value: "osc8"), "OSC 8 only")
         XCTAssertEqual(labels.label(option: "link-previews", value: "weird"), "Weird")   // uncurated value → humanized
         XCTAssertEqual(labels.label(option: "no-such-option", value: "x"), "X")           // uncurated option → humanized
     }

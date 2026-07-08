@@ -1629,10 +1629,16 @@ private struct BooleanishEditor: View {
             // appears only while the switch is on. Two or more extras keep the menu.
             if isOn(savedValue), let single = singleExtra {
                 Toggle(isOn: extraBinding(single)) {
-                    Text(single.label).font(.callout)
+                    // Short, one-line label ("Always") so the long qualifier
+                    // ("Always, even when unfocused") can't wrap almost vertically in the
+                    // cramped trailing slot (E2); the full text stays on hover and in ⓘ.
+                    Text(shortLabel(single.label)).font(.callout)
                 }
                 .toggleStyle(.checkbox)
                 .controlSize(.small)
+                .lineLimit(1)
+                .fixedSize()
+                .help(single.label)
             } else if extraChoices.count >= 2 {
                 extrasMenu
             }
@@ -1674,6 +1680,14 @@ private struct BooleanishEditor: View {
     /// The sole extra state when there's exactly one, rendered as a checkbox (CV-5).
     private var singleExtra: EnumChoice? {
         extraChoices.count == 1 ? extraChoices.first : nil
+    }
+
+    /// A compact one-line checkbox label: the primary term before any ", …" qualifier
+    /// ("Always, even when unfocused" → "Always"). The full label stays in the checkbox's
+    /// tooltip and the ⓘ info, so the narrow trailing slot can't wrap it near-vertically (E2).
+    private func shortLabel(_ label: String) -> String {
+        guard let comma = label.firstIndex(of: ",") else { return label }
+        return String(label[..<comma]).trimmingCharacters(in: .whitespaces)
     }
 
     /// Checkbox binding for the single extra: checked applies the extra value ("always"),
