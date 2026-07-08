@@ -115,7 +115,7 @@ final class KeyRecorderNSView: NSView {
         // the focused-but-idle state needs its own visible affordance.
         focusRingType = .exterior
         // Layer-backed so the border/fill can cross-fade on the recording toggle (MO-7)
-        // rather than snapping; the text/pencil/chip still draw in `draw(_:)`.
+        // rather than snapping; the text/chip still draw in `draw(_:)`.
         wantsLayer = true
         layer?.cornerRadius = DesignTokens.Radius.standard
         layer?.borderWidth = 1
@@ -437,9 +437,6 @@ final class KeyRecorderNSView: NSView {
         let size = attributed.size()
         // Center vertically (isFlipped, so y grows downward from the top).
         attributed.draw(at: NSPoint(x: bounds.minX + 10, y: bounds.midY - size.height / 2))
-        if !displayToken.isEmpty {
-            drawEditAffordance(in: bounds)
-        }
     }
 
     /// The recording state's compact in-capsule mark: a small accent dot at the leading edge
@@ -452,33 +449,12 @@ final class KeyRecorderNSView: NSView {
         NSBezierPath(ovalIn: rect).fill()
     }
 
-    /// A dimmed pencil at the trailing edge (KB-6): a *persistent* signal the bound capsule
-    /// is clickable to re-record, brightening slightly on hover — no need to hover to learn
-    /// it's editable.
-    private func drawEditAffordance(in bounds: NSRect) {
-        let side: CGFloat = 12
-        let rect = NSRect(x: bounds.maxX - side - 6, y: bounds.midY - side / 2, width: side, height: side)
-        let config = NSImage.SymbolConfiguration(pointSize: 10, weight: .regular)
-        guard let pencil = NSImage(systemSymbolName: "pencil", accessibilityDescription: nil)?
-            .withSymbolConfiguration(config) else { return }
-        let alpha: CGFloat = isHovering ? 0.85 : 0.45
-        // Tint the template symbol to a secondary label color, then draw at reduced opacity.
-        let tinted = NSImage(size: rect.size, flipped: false) { drawRect in
-            pencil.draw(in: drawRect)
-            NSColor.secondaryLabelColor.set()
-            drawRect.fill(using: .sourceAtop)
-            return true
-        }
-        tinted.draw(in: rect, from: .zero, operation: .sourceOver, fraction: alpha)
-    }
-
     override var intrinsicContentSize: NSSize {
         // Sized to the *idle* content only — recording shows a compact in-capsule dot (not a
         // wider prompt), so the width never changes on the recording toggle. 10pt padding
-        // each side, plus room for the trailing pencil on a bound chord.
+        // each side.
         let content = idleContent
         let textWidth = ceil((content.text as NSString).size(withAttributes: [.font: content.font]).width)
-        let pencil: CGFloat = displayToken.isEmpty ? 0 : 22
-        return NSSize(width: min(max(textWidth + 20 + pencil, 54), 220), height: 30)
+        return NSSize(width: min(max(textWidth + 20, 54), 220), height: 30)
     }
 }
