@@ -1,7 +1,7 @@
 import SwiftUI
 import GhosttyConfigKit
 
-/// The global **Find** overlay (⌘F — U20, search tier 2). Unlike a surface's own local
+/// The global **Find** overlay (⇧⌘F — U20, search tier 2). Unlike a surface's own local
 /// filter (which narrows *that* surface), Find searches **every** option — by name,
 /// description, and described behavior (the intent map) — from anywhere in the app, and
 /// presents ranked results with provenance: a category pill on every row, and for a
@@ -9,7 +9,7 @@ import GhosttyConfigKit
 /// to that option via the shared `focus(optionNamed:)` navigation primitive (D1).
 ///
 /// The field is a plain `TextField` driven by `@FocusState` — not `.searchable`, which
-/// exposes no programmatic-focus API — so opening Find (⌘F or the toolbar button) can
+/// exposes no programmatic-focus API — so opening Find (⇧⌘F or the toolbar button) can
 /// deterministically place the caret here.
 struct GlobalFindView: View {
     @Environment(AppModel.self) private var model
@@ -48,7 +48,7 @@ struct GlobalFindView: View {
                     .keyboardShortcut(.cancelAction)   // Esc closes Find
             }
             SurfaceSearchField(prompt: "Find any setting — name, description, or behavior",
-                               text: query, focus: $fieldFocused)
+                               text: query, focus: $fieldFocused, shortcutHint: "⇧⌘F")
         }
         .padding(.horizontal, DesignTokens.Spacing.surface)
         .padding(.top, DesignTokens.Spacing.large)

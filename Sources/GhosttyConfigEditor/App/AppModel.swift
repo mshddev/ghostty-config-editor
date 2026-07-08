@@ -806,7 +806,7 @@ public final class AppModel {
     /// only an `onAppear` that consults this flag will scroll (D1/D2).
     public var pendingFocusScroll = false
 
-    /// Whether the global ⌘F Find overlay is showing. Distinct from a surface's own
+    /// Whether the global ⇧⌘F Find overlay is showing. Distinct from a surface's own
     /// local filter (`query`/`themeQuery`): Find searches *all* options regardless of
     /// the current surface, so the two search tiers never mean the same thing (U20).
     public var isFinding = false
@@ -853,7 +853,7 @@ public final class AppModel {
         browser?.searchHits(findQuery) ?? []
     }
 
-    /// Open the global Find overlay (⌘F / the toolbar Find button).
+    /// Open the global Find overlay (⇧⌘F / the toolbar Find button).
     public func beginFind() { isFinding = true }
 
     /// Dismiss the global Find overlay and clear its query.

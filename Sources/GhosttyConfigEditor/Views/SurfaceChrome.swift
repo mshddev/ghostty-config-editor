@@ -226,6 +226,11 @@ struct SurfaceSearchField: View {
     let prompt: String
     @Binding var text: String
     var focus: FocusState<Bool>.Binding? = nil
+    /// A keyboard-shortcut hint (e.g. "⌘F") shown as a keycap at the trailing edge while the
+    /// field is empty, so the shortcut that reaches this search is discoverable at the field
+    /// itself (B1). It yields to the clear button the moment the user types — the two are
+    /// mutually exclusive on `text.isEmpty`, so they never collide. Nil renders no hint.
+    var shortcutHint: String? = nil
 
     var body: some View {
         HStack(spacing: DesignTokens.Spacing.snug) {
@@ -240,6 +245,17 @@ struct SurfaceSearchField: View {
                 }
                 .buttonStyle(.plain)
                 .accessibilityLabel("Clear search")
+            } else if let shortcutHint {
+                Text(shortcutHint)
+                    .font(.caption2.weight(.medium))
+                    .foregroundStyle(.tertiary)
+                    .padding(.horizontal, 5)
+                    .padding(.vertical, 1.5)
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 4)
+                            .strokeBorder(Color.secondary.opacity(0.25))
+                    )
+                    .accessibilityHidden(true)
             }
         }
         .padding(.horizontal, DesignTokens.Spacing.standard)
@@ -360,9 +376,9 @@ private struct FailedFeedbackLine: View {
 /// per-surface search field, and an optional info button. The search field is **one
 /// component bound per-surface** (Options→`query`, Themes→`themeQuery`, Keybindings→
 /// its filter) — it filters the *current* surface, never a single global query that
-/// means two things at once (the global ⌘F Find is a separate affordance, D2).
+/// means two things at once (the global ⇧⌘F Find is a separate affordance, D2).
 /// A "focus this surface's filter field" action, published to the focused scene so the
-/// View menu's "Filter Current List" (⌘L) can jump keyboard focus into the per-surface
+/// View menu's "Find…" (⌘F) can jump keyboard focus into the per-surface
 /// search without the mouse — the keyboard gap System Settings never closed (U26/GAP-2).
 /// Only a surface that actually HAS a filter publishes it, so the command disables
 /// elsewhere. A menu route (not focus-on-surface-entry) is deliberate: auto-focusing on
@@ -407,7 +423,8 @@ struct SurfaceHeader: View {
                 }
             }
             if let searchText {
-                SurfaceSearchField(prompt: searchPrompt, text: searchText, focus: $searchFocused)
+                SurfaceSearchField(prompt: searchPrompt, text: searchText, focus: $searchFocused,
+                                   shortcutHint: "⌘F")
                     // Publish a keyboard route to this filter while the surface is showing.
                     .focusedSceneValue(\.focusSurfaceFilter, { searchFocused = true })
             }

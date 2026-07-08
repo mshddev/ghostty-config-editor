@@ -264,7 +264,7 @@ struct GhosttyConfigEditorApp: App {
     @NSApplicationDelegateAdaptor(AppDelegate.self) private var appDelegate
     @State private var model = AppModel()
     /// The current surface's "focus filter field" action, if it has a filter (U26). Drives
-    /// the "Filter Current List" (⌘L) menu command; nil ⇒ the command disables.
+    /// the "Find…" (⌘F) menu command; nil ⇒ the command disables (B1).
     @FocusedValue(\.focusSurfaceFilter) private var focusSurfaceFilter
 
     var body: some Scene {
@@ -295,18 +295,20 @@ struct GhosttyConfigEditorApp: App {
                 Button("Redo") { smartRedo() }
                     .keyboardShortcut("z", modifiers: [.command, .shift])
             }
-            // Reload from disk (⌘R, G3) and Find (⌘F, D2) in the View menu, so both are
-            // discoverable in the menu bar, not just via the toolbar/keyboard.
+            // Reload from disk (⌘R, G3) and the two search tiers in the View menu, so all
+            // are discoverable in the menu bar, not just via the toolbar/keyboard.
             CommandGroup(after: .sidebar) {
                 Button("Reload from Disk") { Task { await model.reloadFromDisk() } }
                     .keyboardShortcut("r", modifiers: .command)
-                Button("Find…") { model.beginFind() }
+                // Standard editor convention (Xcode/VS Code): plain ⌘F searches the
+                // *current* section, ⇧⌘F widens to a global search (B1). ⌘F focuses the
+                // surface's own filter field (U26) and disables where there is none
+                // (Status/Welcome); ⌘⇧F opens the all-options Find overlay (D2).
+                Button("Find…") { focusSurfaceFilter?() }
                     .keyboardShortcut("f", modifiers: .command)
-                // Jump keyboard focus into the current surface's filter field, when it has
-                // one (U26): the per-surface search is otherwise only mouse-reachable.
-                Button("Filter Current List") { focusSurfaceFilter?() }
-                    .keyboardShortcut("l", modifiers: .command)
                     .disabled(focusSurfaceFilter == nil)
+                Button("Find in All Sections…") { model.beginFind() }
+                    .keyboardShortcut("f", modifiers: [.command, .shift])
             }
             // Import / export / copy the whole config in the File menu (G4). Import is
             // replace-with-backup (confirmed + undoable); the model validates before writing.
@@ -467,7 +469,7 @@ struct RootView: View {
     private func mainColumn(ghosttyVersion: String) -> some View {
         Group {
             if model.isFinding {
-                // Global Find (⌘F) overlays option results *regardless* of the current
+                // Global Find (⇧⌘F) overlays option results *regardless* of the current
                 // surface (D2), so it replaces the detail column while active rather
                 // than filtering whatever surface happens to be selected.
                 GlobalFindView()
@@ -570,23 +572,23 @@ struct RootView: View {
         }
     }
 
-    /// Global Find (⌘F): the second search tier (U20). Distinct from each surface's
+    /// Global Find (⇧⌘F): the second search tier (U20). Distinct from each surface's
     /// own local filter — it searches *all* options regardless of the current surface
-    /// and opens a results overlay. Clickable (for pointer users) with a ⌘F equivalent.
+    /// and opens a results overlay. Clickable (for pointer users) with a ⇧⌘F equivalent.
     private func findButton() -> some View {
-        // ⌘F lives on the View-menu Find command now (G2), so the shortcut isn't declared
-        // twice; this stays a click affordance for pointer users. Routed through the
-        // active-capable control (U20/IA-3) so Find-mode is legible *in the chrome*: its
-        // icon and shortcut tint when Find is in progress, and clicking it again ends Find.
-        // Toggle trait remains explicit for VoiceOver.
+        // ⇧⌘F lives on the View-menu "Find in All Sections" command now (B1/G2), so the
+        // shortcut isn't declared twice; this stays a click affordance for pointer users.
+        // Routed through the active-capable control (U20/IA-3) so Find-mode is legible *in
+        // the chrome*: its icon and shortcut tint when Find is in progress, and clicking it
+        // again ends Find. Toggle trait remains explicit for VoiceOver.
         ToolbarControl(
             systemImage: "magnifyingglass",
             title: "Find",
-            trailingText: "⌘F",
+            trailingText: "⇧⌘F",
             isActive: model.isFinding,
             action: { model.isFinding ? model.endFind() : model.beginFind() }
         )
-        .help("Find any setting (⌘F)")
+        .help("Find any setting (⇧⌘F)")
         .accessibilityLabel("Find settings")
         .accessibilityValue(model.isFinding ? "Active" : "")
         .accessibilityAddTraits(.isToggle)
