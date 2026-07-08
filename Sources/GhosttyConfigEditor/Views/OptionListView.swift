@@ -485,8 +485,8 @@ struct OptionRow: View {
     /// (R6). Dedicated names (fonts/palette/keybind) still win; structured kinds
     /// (scroll multiplier, bell flag-set, color, path) get their semantic controls (R7); and
     /// any other repeatable falls back to the lossless generic add/remove list (KTD3, R8).
-    /// `.color` and `.inline` both render `InlineOptionEditor`, which shows the shared color
-    /// swatch when the option's editor kind is `.color` even if its inferred type isn't.
+    /// `.color` renders the dedicated `ColorOptionEditor` (any color-valued option, even one
+    /// whose inferred type isn't `.color`); `.inline` renders `InlineOptionEditor` for scalars.
     @ViewBuilder
     private var editor: some View {
         switch OptionEditorRoute.resolve(for: option.option) {
@@ -499,7 +499,8 @@ struct OptionRow: View {
         case .pathList: RepeatableListEditor(option: option, allowsPathChooser: true)
         case .repeatableList: RepeatableListEditor(option: option)
         case .keybindDeepLink: KeybindDeepLinkButton(option: option)
-        case .color, .inline: InlineOptionEditor(option: option)
+        case .color: ColorOptionEditor(option: option)
+        case .inline: InlineOptionEditor(option: option)
         case .infoOnly: EmptyView()   // read-only/excluded rows only — never an editable repeatable
         }
     }
@@ -670,13 +671,11 @@ private struct InlineOptionEditor: View {
     @Environment(AppModel.self) private var model
     let option: MergedOption
     @State private var draft: String = ""
-    /// Drives the color-editing popover anchored to the row's swatch.
-    @State private var showingColorPopover = false
-    /// The transactional state for the text-bearing popovers — the color editor and the
-    /// long-value editor (KTD2/U3, R4/R5). Apply commits, Cancel discards, and incidental
-    /// dismissal (Escape / click-outside) follows Cancel: it NEVER commits. A stale write
-    /// stays reviewable and a rejected write retains the draft. Discrete controls above
-    /// (toggle, picker, stepper) stay immediate and use `draft` directly, not this.
+    /// The transactional state for the long-value popover (KTD2/U3, R4/R5): Apply commits,
+    /// Cancel discards, and incidental dismissal (Escape / click-outside) follows Cancel — it
+    /// NEVER commits. A stale write stays reviewable and a rejected write retains the draft.
+    /// Discrete controls above (toggle, picker, stepper) stay immediate and use `draft`
+    /// directly, not this. (Color-valued options render their own `ColorOptionEditor`.)
     @State private var transaction = EditTransaction(savedValue: "")
     /// Drives the wide multi-line editor for long scalar values (B7).
     @State private var showingLongEditor = false
@@ -728,87 +727,44 @@ private struct InlineOptionEditor: View {
 
     @ViewBuilder
     private var typedControl: some View {
-        if usesColorEditor {
-            // Any option whose editor kind is `.color` uses the shared color swatch even when
-            // its inferred type isn't `.color` (U4/R7) — e.g. `selection-background`,
-            // `selection-foreground`, `unfocused-split-fill`, whose empty catalog default the
-            // parser types `.unknown`.
-            colorSwatchControl
-        } else {
-            switch option.option.valueType {
-            case .boolean:
-                Toggle("", isOn: boolBinding)
-                    .labelsHidden()
-                    .toggleStyle(.switch)
-                    .controlSize(.small)   // matched to sibling controls (was .mini) (B4)
-                    .accessibilityLabel(optionControlA11yLabel(option))
-            case .enumeration:
-                // Rows come from the kit helper (not raw enumValues) so a saved
-                // out-of-enum value stays selectable and is never silently dropped.
-                // Seed from `currentValue` (the saved value), never `draft`.
-                Picker("", selection: enumBinding) {
-                    ForEach(option.enumChoices(current: currentValue)) { choice in
-                        Text(choice.label).tag(choice.value)
-                    }
-                }
+        switch option.option.valueType {
+        case .boolean:
+            Toggle("", isOn: boolBinding)
                 .labelsHidden()
-                .pickerStyle(.menu)
-                // Cap + right-align instead of `.fixedSize()`: in the grouped Form's
-                // constrained trailing slot a fixed-size menu grew to its longest value
-                // and overflowed the card; a bounded frame truncates the label instead.
-                .frame(maxWidth: 220, alignment: .trailing)
+                .toggleStyle(.switch)
+                .controlSize(.small)   // matched to sibling controls (was .mini) (B4)
                 .accessibilityLabel(optionControlA11yLabel(option))
-            case .number:
-                NumericOptionEditor(
-                    option: option,
-                    draft: $draft,
-                    savedValue: currentValue,
-                    placeholder: fieldPlaceholder,
-                    apply: { apply($0) }
-                )
-            default:
-                if Self.longValueOptions.contains(option.option.name) {
-                    longValueButton
-                } else {
-                    freeTextField
+        case .enumeration:
+            // Rows come from the kit helper (not raw enumValues) so a saved
+            // out-of-enum value stays selectable and is never silently dropped.
+            // Seed from `currentValue` (the saved value), never `draft`.
+            Picker("", selection: enumBinding) {
+                ForEach(option.enumChoices(current: currentValue)) { choice in
+                    Text(choice.label).tag(choice.value)
                 }
+            }
+            .labelsHidden()
+            .pickerStyle(.menu)
+            // Cap + right-align instead of `.fixedSize()`: in the grouped Form's
+            // constrained trailing slot a fixed-size menu grew to its longest value
+            // and overflowed the card; a bounded frame truncates the label instead.
+            .frame(maxWidth: 220, alignment: .trailing)
+            .accessibilityLabel(optionControlA11yLabel(option))
+        case .number:
+            NumericOptionEditor(
+                option: option,
+                draft: $draft,
+                savedValue: currentValue,
+                placeholder: fieldPlaceholder,
+                apply: { apply($0) }
+            )
+        default:
+            if Self.longValueOptions.contains(option.option.name) {
+                longValueButton
+            } else {
+                freeTextField
             }
         }
-    }
-
-    /// True when this row should render the shared color editor: an inferred color type, or an
-    /// explicit `.color` editor-kind override whose empty default the parser couldn't type as
-    /// color (U4/R7). Consistent color detection across every color-valued option.
-    private var usesColorEditor: Bool {
-        option.option.valueType == .color || option.option.presentation.editorKind == .color
-    }
-
-    /// The swatch opens our own color popover — anchored to the row, and with a text input
-    /// built in so any value Ghostty accepts (hex, an X11 name, or cell-foreground /
-    /// cell-background) is resolvable in the same place you pick one visually. We roll our own
-    /// because the system's color well popover is closed (no text field) and SwiftUI's
-    /// ColorPicker floats the shared panel at a screen corner.
-    private var colorSwatchControl: some View {
-        Button { showingColorPopover.toggle() } label: { swatch }
-            .buttonStyle(.plain)
-            .help("Edit color")
-            // A swatch is pure color — VoiceOver would otherwise announce nothing but
-            // "button", so name+state+the color value are made explicit here (H1).
-            .accessibilityLabel(optionControlA11yLabel(option))
-            .accessibilityValue(Text(currentValue.isEmpty ? "not set" : currentValue))
-            .popover(isPresented: $showingColorPopover, arrowEdge: .bottom) {
-                colorEditor
-            }
-            // Seed a fresh transaction from the saved value each time the popover opens.
-            // Incidental dismissal (Escape / click-outside) follows Cancel — it must NEVER
-            // commit a draft (R4/AE2); the explicit Apply button is now the sole write path,
-            // replacing the old commit-on-close footgun. A successful Apply has already
-            // written before it sets this closed, so the cancel here is then a harmless
-            // reset of spent state.
-            .onChange(of: showingColorPopover) { _, isOpen in
-                if isOpen { transaction = EditTransaction(savedValue: currentValue) }
-                else { transaction.cancel() }
-            }
     }
 
     /// The inline free-text field for ordinary scalar values. Commits on Return *and*
@@ -957,176 +913,7 @@ private struct InlineOptionEditor: View {
         )
     }
 
-    // MARK: Color editing
-
-    /// The row's color chip: the saved color as a fill, a *labeled* chip for values a
-    /// swatch can't render (an X11 name, `cell-foreground` / `cell-background`), or a
-    /// neutral fill only when truly unset — so a named value never reads as empty (B6).
-    private var swatch: some View {
-        colorFill(currentValue)
-            .frame(width: 44, height: 22)
-            .clipShape(RoundedRectangle(cornerRadius: 5))
-            .overlay { swatchRing(cornerRadius: 5) }
-            .contentShape(RoundedRectangle(cornerRadius: 5))
-    }
-
-    /// A fill for a color value: the resolved color when it's a hex the swatch can
-    /// render; otherwise a labeled chip showing the token (X11 name / `cell-*`) so it
-    /// reads as *set to something*; and only a neutral gray when the value is empty.
-    @ViewBuilder
-    private func colorFill(_ value: String) -> some View {
-        let trimmed = value.trimmingCharacters(in: .whitespaces)
-        if let color = Color(hex: value) {
-            color
-        } else if !trimmed.isEmpty {
-            ZStack {
-                Color(nsColor: .controlBackgroundColor)
-                Text(trimmed)
-                    .font(.caption2)
-                    .lineLimit(1)
-                    .minimumScaleFactor(0.6)
-                    .padding(.horizontal, 3)
-                    .foregroundStyle(.secondary)
-            }
-        } else {
-            Color(nsColor: .quaternaryLabelColor)
-        }
-    }
-
-    /// The one swatch-edge rule (DS-2): a two-layer hairline — a dark ring at the very
-    /// edge over a light ring one point inside — so a swatch's boundary stays visible
-    /// against *any* fill in *either* card appearance. A near-black color on a dark card
-    /// no longer reads as an unset/empty swatch, and a white color on a light card still
-    /// shows an edge. The explicit light+dark pair is deliberate (not a dark-assumed
-    /// alpha): whichever one the fill/background swallows, the other contrasts. Applied
-    /// identically at every swatch site.
-    private func swatchRing(cornerRadius r: CGFloat) -> some View {
-        RoundedRectangle(cornerRadius: r)
-            .strokeBorder(Color.black.opacity(0.28), lineWidth: 1)
-            .overlay(
-                RoundedRectangle(cornerRadius: r)
-                    .inset(by: 1)
-                    .strokeBorder(Color.white.opacity(0.30), lineWidth: 1)
-            )
-    }
-
-    /// A curated spread of neutrals and hues for one-click picking. The text field
-    /// covers everything else — any hex, plus the values a swatch can't express.
-    private static let colorPresets: [String] = [
-        "#000000", "#1e1e2e", "#282c34", "#3b4252", "#4c566a", "#7f849c", "#abb2bf", "#ffffff",
-        "#e06c75", "#d19a66", "#e5c07b", "#98c379", "#56b6c2", "#61afef", "#c678dd", "#ff79c6",
-    ]
-
-    private var colorEditor: some View {
-        VStack(alignment: .leading, spacing: 10) {
-            HStack(spacing: 10) {
-                colorFill(transaction.draft)
-                    .frame(width: 36, height: 36)
-                    .clipShape(RoundedRectangle(cornerRadius: 6))
-                    .overlay { swatchRing(cornerRadius: 6) }
-                VStack(alignment: .leading, spacing: 2) {
-                    Text(option.option.displayTitle).font(.callout.weight(.semibold)).lineLimit(1)
-                    Text(transaction.draft.isEmpty ? "no value" : transaction.draft)
-                        .font(.caption.monospaced()).foregroundStyle(.secondary).lineLimit(1)
-                }
-                Spacer(minLength: 4)
-                // The native color wheel + eyedropper. Opacity is off so we never emit
-                // an `#rrggbbaa` that a non-background color option would reject; the wheel
-                // edits the draft live as a preview and no longer writes on close — Apply is
-                // the sole commit (R4).
-                ColorPicker("", selection: colorWellBinding, supportsOpacity: false)
-                    .labelsHidden()
-                    .help("Pick with the color wheel or eyedropper")
-            }
-            TextField("#1e1e2e, tomato, cell-foreground", text: colorDraftBinding)
-                .textFieldStyle(.roundedBorder)
-                .onSubmit { commitTransaction(closing: $showingColorPopover) }
-            LazyVGrid(columns: Array(repeating: GridItem(.fixed(22), spacing: 5), count: 8), spacing: 5) {
-                ForEach(Self.colorPresets, id: \.self) { hex in
-                    Button {
-                        // A preset sets the draft (live preview); Apply commits it (R4).
-                        transaction.edit(hex, locallyValid: colorDraftLocallyValid(hex))
-                    } label: {
-                        RoundedRectangle(cornerRadius: 4)
-                            .fill(Color(hex: hex) ?? .gray)
-                            .frame(width: 22, height: 22)
-                            .overlay {
-                                if isSelectedPreset(hex) {
-                                    RoundedRectangle(cornerRadius: 4)
-                                        .strokeBorder(Color.accentColor, lineWidth: 2)
-                                } else {
-                                    swatchRing(cornerRadius: 4)
-                                }
-                            }
-                    }
-                    .buttonStyle(.plain)
-                    .help(hex)
-                    // A preset swatch is pure color — VoiceOver gets the hex as its name
-                    // and the selected one is announced as selected (H3, A11Y-6).
-                    .accessibilityLabel("Color \(hex)")
-                    .accessibilityAddTraits(isSelectedPreset(hex) ? .isSelected : [])
-                }
-            }
-            transactionFeedback
-            Text("Type a hex code, an X11 color name, or cell-foreground / cell-background.")
-                .font(.caption2).foregroundStyle(.secondary)
-                .fixedSize(horizontal: false, vertical: true)
-            HStack {
-                Spacer()
-                Button("Cancel") { showingColorPopover = false }
-                Button("Apply") { commitTransaction(closing: $showingColorPopover) }
-                    .keyboardShortcut(.defaultAction)
-                    .disabled(!transaction.canApply)
-            }
-        }
-        .padding(12)
-        .frame(width: 250)
-    }
-
-    /// The hex/name field binding, routed through the transaction with a local color-syntax
-    /// gate so an obviously-malformed hex (`#zzzzzz`) disables Apply and shows the reason
-    /// inside the editor (AE2) instead of round-tripping to Ghostty.
-    private var colorDraftBinding: Binding<String> {
-        Binding(
-            get: { transaction.draft },
-            set: { newValue in
-                // An empty field is *incomplete*, not invalid: Apply stays disabled but no
-                // error text shows (so a freshly-opened editor for an unset color reads
-                // clean, not as a failure). A non-empty malformed value shows the reason.
-                let isBlank = newValue.trimmingCharacters(in: .whitespaces).isEmpty
-                transaction.edit(newValue,
-                                 locallyValid: colorDraftLocallyValid(newValue),
-                                 invalidMessage: isBlank ? nil : "That isn't a valid color.")
-            }
-        )
-    }
-
-    /// A local syntax gate for a color draft (R4): reject an empty value or a malformed hex
-    /// outright; an X11 name or `cell-*` token can't be verified locally, so it passes here
-    /// and Ghostty validates it on Apply (unknown/future tokens still round-trip, R8).
-    private func colorDraftLocallyValid(_ s: String) -> Bool {
-        let t = s.trimmingCharacters(in: .whitespaces)
-        if t.isEmpty { return false }
-        if t.hasPrefix("#") { return Color(hex: t) != nil }
-        return true
-    }
-
-    /// Two-way bridge to the native picker: read the draft as a Color, and write a
-    /// wheel/eyedropper pick back as a `#rrggbb` draft (live preview; Apply commits).
-    private var colorWellBinding: Binding<Color> {
-        Binding(
-            get: { Color(hex: transaction.draft) ?? Color(nsColor: .textColor) },
-            set: { newColor in
-                if let hex = newColor.ghosttyHex { transaction.edit(hex, locallyValid: true) }
-            }
-        )
-    }
-
-    private func isSelectedPreset(_ hex: String) -> Bool {
-        hex.caseInsensitiveCompare(transaction.draft) == .orderedSame
-    }
-
-    // MARK: Transactional apply (shared by the color + long-value popovers, U3)
+    // MARK: Transactional apply (long-value popover, U3)
 
     /// Shared inline status for the text-bearing popovers (R3/R4/R5): the local/validation/
     /// stale message, a Reload & Review action for a stale conflict (F2), and the
@@ -1190,6 +977,237 @@ private struct InlineOptionEditor: View {
                     message: "This setting is no longer in your config. Close and reopen to continue.")
             }
         }
+    }
+}
+
+// MARK: - Color editor (U4/R7)
+
+/// The dedicated editor for any color-valued option — an inferred `.color` type OR an explicit
+/// `.color` editor-kind override whose empty catalog default the parser couldn't type as color
+/// (e.g. `selection-background`, `selection-foreground`, `unfocused-split-fill`). Extracted from
+/// `InlineOptionEditor` so the scalar inline controls and the color subsystem no longer share
+/// one oversized view: the `.color` route renders this, `.inline` renders the other.
+///
+/// The row swatch opens our OWN popover — anchored to the row, with a built-in text field — so
+/// any value Ghostty accepts (a hex, an X11 name, or `cell-foreground` / `cell-background`) is
+/// resolvable in the same place you pick one visually. We roll our own because the system color
+/// well's popover has no text field and SwiftUI's `ColorPicker` floats the shared panel at a
+/// screen corner. Text-bearing, so it uses the U3 transaction via the shared `TransactionApply`:
+/// Apply commits, Cancel and incidental dismissal discard and NEVER write (R4/AE2).
+private struct ColorOptionEditor: View {
+    @Environment(AppModel.self) private var model
+    let option: MergedOption
+    @State private var showing = false
+    @State private var transaction = EditTransaction(savedValue: "")
+
+    /// A curated spread of neutrals and hues for one-click picking. The text field covers
+    /// everything else — any hex, plus the values a swatch can't express.
+    private static let colorPresets: [String] = [
+        "#000000", "#1e1e2e", "#282c34", "#3b4252", "#4c566a", "#7f849c", "#abb2bf", "#ffffff",
+        "#e06c75", "#d19a66", "#e5c07b", "#98c379", "#56b6c2", "#61afef", "#c678dd", "#ff79c6",
+    ]
+
+    private var currentValue: String { option.valuePresentation.value ?? "" }
+
+    private var isApplyingThis: Bool {
+        model.applyingOptionName == option.option.name && model.applyState == .applying
+    }
+
+    var body: some View {
+        Button { showing.toggle() } label: { swatch }
+            .buttonStyle(.plain)
+            .disabled(isApplyingThis)
+            .help("Edit color")
+            // A swatch is pure color — VoiceOver would otherwise announce nothing but
+            // "button", so name+state+the color value are made explicit here (H1).
+            .accessibilityLabel(optionControlA11yLabel(option))
+            .accessibilityValue(Text(currentValue.isEmpty ? "not set" : currentValue))
+            .popover(isPresented: $showing, arrowEdge: .bottom) { editor }
+            // Seed a fresh transaction from the saved value each time the popover opens.
+            // Incidental dismissal (Escape / click-outside) follows Cancel — it must NEVER
+            // commit a draft (R4/AE2); the explicit Apply button is the sole write path. A
+            // successful Apply has already written before it closes, so the cancel here is
+            // then a harmless reset of spent state.
+            .onChange(of: showing) { _, isOpen in
+                if isOpen { transaction = EditTransaction(savedValue: currentValue) }
+                else { transaction.cancel() }
+            }
+    }
+
+    // MARK: Swatch
+
+    /// The row's color chip: the saved color as a fill, a *labeled* chip for values a swatch
+    /// can't render (an X11 name, `cell-foreground` / `cell-background`), or a neutral fill only
+    /// when truly unset — so a named value never reads as empty (B6).
+    private var swatch: some View {
+        colorFill(currentValue)
+            .frame(width: 44, height: 22)
+            .clipShape(RoundedRectangle(cornerRadius: 5))
+            .overlay { swatchRing(cornerRadius: 5) }
+            .contentShape(RoundedRectangle(cornerRadius: 5))
+    }
+
+    /// A fill for a color value: the resolved color when it's a hex the swatch can render;
+    /// otherwise a labeled chip showing the token (X11 name / `cell-*`) so it reads as *set to
+    /// something*; and only a neutral gray when the value is empty.
+    @ViewBuilder
+    private func colorFill(_ value: String) -> some View {
+        let trimmed = value.trimmingCharacters(in: .whitespaces)
+        if let color = Color(hex: value) {
+            color
+        } else if !trimmed.isEmpty {
+            ZStack {
+                Color(nsColor: .controlBackgroundColor)
+                Text(trimmed)
+                    .font(.caption2)
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.6)
+                    .padding(.horizontal, 3)
+                    .foregroundStyle(.secondary)
+            }
+        } else {
+            Color(nsColor: .quaternaryLabelColor)
+        }
+    }
+
+    /// The one swatch-edge rule (DS-2): a two-layer hairline — a dark ring at the very edge over
+    /// a light ring one point inside — so a swatch's boundary stays visible against *any* fill in
+    /// *either* card appearance. A near-black color on a dark card no longer reads as an
+    /// unset/empty swatch, and a white color on a light card still shows an edge. The explicit
+    /// light+dark pair is deliberate (not a dark-assumed alpha): whichever one the fill/background
+    /// swallows, the other contrasts.
+    private func swatchRing(cornerRadius r: CGFloat) -> some View {
+        RoundedRectangle(cornerRadius: r)
+            .strokeBorder(Color.black.opacity(0.28), lineWidth: 1)
+            .overlay(
+                RoundedRectangle(cornerRadius: r)
+                    .inset(by: 1)
+                    .strokeBorder(Color.white.opacity(0.30), lineWidth: 1)
+            )
+    }
+
+    // MARK: Editor popover
+
+    private var editor: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            HStack(spacing: 10) {
+                colorFill(transaction.draft)
+                    .frame(width: 36, height: 36)
+                    .clipShape(RoundedRectangle(cornerRadius: 6))
+                    .overlay { swatchRing(cornerRadius: 6) }
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(option.option.displayTitle).font(.callout.weight(.semibold)).lineLimit(1)
+                    Text(transaction.draft.isEmpty ? "no value" : transaction.draft)
+                        .font(.caption.monospaced()).foregroundStyle(.secondary).lineLimit(1)
+                }
+                Spacer(minLength: 4)
+                // The native color wheel + eyedropper. Opacity is off so we never emit an
+                // `#rrggbbaa` that a non-background color option would reject; the wheel edits the
+                // draft live as a preview and no longer writes on close — Apply is the sole
+                // commit (R4).
+                ColorPicker("", selection: colorWellBinding, supportsOpacity: false)
+                    .labelsHidden()
+                    .help("Pick with the color wheel or eyedropper")
+            }
+            TextField("#1e1e2e, tomato, cell-foreground", text: colorDraftBinding)
+                .textFieldStyle(.roundedBorder)
+                .onSubmit { commit() }
+            LazyVGrid(columns: Array(repeating: GridItem(.fixed(22), spacing: 5), count: 8), spacing: 5) {
+                ForEach(Self.colorPresets, id: \.self) { hex in
+                    Button {
+                        // A preset sets the draft (live preview); Apply commits it (R4).
+                        transaction.edit(hex, locallyValid: colorDraftLocallyValid(hex))
+                    } label: {
+                        RoundedRectangle(cornerRadius: 4)
+                            .fill(Color(hex: hex) ?? .gray)
+                            .frame(width: 22, height: 22)
+                            .overlay {
+                                if isSelectedPreset(hex) {
+                                    RoundedRectangle(cornerRadius: 4)
+                                        .strokeBorder(Color.accentColor, lineWidth: 2)
+                                } else {
+                                    swatchRing(cornerRadius: 4)
+                                }
+                            }
+                    }
+                    .buttonStyle(.plain)
+                    .help(hex)
+                    // A preset swatch is pure color — VoiceOver gets the hex as its name and the
+                    // selected one is announced as selected (H3, A11Y-6).
+                    .accessibilityLabel("Color \(hex)")
+                    .accessibilityAddTraits(isSelectedPreset(hex) ? .isSelected : [])
+                }
+            }
+            transactionStatusView(transaction) {
+                TransactionApply.reloadAndReview($transaction, optionName: option.option.name, model: model)
+            }
+            Text("Type a hex code, an X11 color name, or cell-foreground / cell-background.")
+                .font(.caption2).foregroundStyle(.secondary)
+                .fixedSize(horizontal: false, vertical: true)
+            HStack {
+                Spacer()
+                Button("Cancel") { showing = false }
+                Button("Apply") { commit() }
+                    .keyboardShortcut(.defaultAction)
+                    .disabled(!transaction.canApply)
+            }
+        }
+        .padding(12)
+        .frame(width: 250)
+    }
+
+    // MARK: Bindings + commit
+
+    /// The hex/name field binding, routed through the transaction with a local color-syntax gate
+    /// so an obviously-malformed hex (`#zzzzzz`) disables Apply and shows the reason inside the
+    /// editor (AE2) instead of round-tripping to Ghostty.
+    private var colorDraftBinding: Binding<String> {
+        Binding(
+            get: { transaction.draft },
+            set: { newValue in
+                // An empty field is *incomplete*, not invalid: Apply stays disabled but no
+                // error text shows (so a freshly-opened editor for an unset color reads clean,
+                // not as a failure). A non-empty malformed value shows the reason.
+                let isBlank = newValue.trimmingCharacters(in: .whitespaces).isEmpty
+                transaction.edit(newValue,
+                                 locallyValid: colorDraftLocallyValid(newValue),
+                                 invalidMessage: isBlank ? nil : "That isn't a valid color.")
+            }
+        )
+    }
+
+    /// A local syntax gate for a color draft (R4): reject an empty value or a malformed hex
+    /// outright; an X11 name or `cell-*` token can't be verified locally, so it passes here and
+    /// Ghostty validates it on Apply (unknown/future tokens still round-trip, R8).
+    private func colorDraftLocallyValid(_ s: String) -> Bool {
+        let t = s.trimmingCharacters(in: .whitespaces)
+        if t.isEmpty { return false }
+        if t.hasPrefix("#") { return Color(hex: t) != nil }
+        return true
+    }
+
+    /// Two-way bridge to the native picker: read the draft as a Color, and write a
+    /// wheel/eyedropper pick back as a `#rrggbb` draft (live preview; Apply commits).
+    private var colorWellBinding: Binding<Color> {
+        Binding(
+            get: { Color(hex: transaction.draft) ?? Color(nsColor: .textColor) },
+            set: { newColor in
+                if let hex = newColor.ghosttyHex { transaction.edit(hex, locallyValid: true) }
+            }
+        )
+    }
+
+    private func isSelectedPreset(_ hex: String) -> Bool {
+        hex.caseInsensitiveCompare(transaction.draft) == .orderedSame
+    }
+
+    /// Commit the draft through the shared safe-write path (the same `TransactionApply` the
+    /// scroll/path editors use): success closes; a stale conflict routes to Reload & Review; any
+    /// other rejection retains the draft under a normalized message (R3/R5).
+    private func commit() {
+        TransactionApply.commit($transaction, option: option,
+                                values: [transaction.draft],
+                                model: model, close: { showing = false })
     }
 }
 
