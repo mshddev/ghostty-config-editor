@@ -13,10 +13,20 @@ struct KeybindEditorView: View {
     @Environment(AppModel.self) private var model
     @State private var didLoad = false
     @State private var filter = ""
+    /// The selected section-filter pill (D); `nil` = "All". View-local like `filter`, so it
+    /// resets when the user navigates to another sidebar surface.
+    @State private var selectedSection: String? = nil
 
     var body: some View {
         let all = model.keybindGroups
-        let groups = filtered(all)
+        // The section pills are derived from the *full* set (not the text-filtered one) so the
+        // bar stays stable as the user types — one pill per section that actually has actions.
+        let sectionItems = ActionCategoryCatalog.bundled.sections(for: all)
+            .map { SectionFilterBar.Item(id: $0.id, title: $0.title) }
+        // Compose the two filters: text search first, then narrow to the selected section.
+        let textFiltered = filtered(all)
+        let groups = selectedSection.map { ActionCategoryCatalog.bundled.groups(textFiltered, inSection: $0) }
+            ?? textFiltered
         // Which base actions carry >1 distinct param, so their param folds into the title
         // (goto_tab:1…8) rather than reading as a lone caption (copy_to_clipboard:mixed).
         // Computed over the *full* set so filtering never changes a row's title (KB-4).
@@ -28,6 +38,12 @@ struct KeybindEditorView: View {
                 searchText: $filter,
                 searchPrompt: "Filter by action or shortcut"
             )
+            // A horizontal section filter for quick jumps to a group (D). Only once loaded and
+            // when there's more than one section to choose between.
+            if didLoad && sectionItems.count > 1 {
+                SectionFilterBar(items: sectionItems, selection: $selectedSection)
+                    .padding(.bottom, DesignTokens.Spacing.standard)
+            }
             keybindHint
             Divider()
             if !didLoad {
@@ -95,12 +111,20 @@ struct KeybindEditorView: View {
         let sections = ActionCategoryCatalog.bundled.sections(for: groups)
         return List {
             ForEach(sections) { section in
-                Section(section.title) {
+                Section {
                     ForEach(section.groups) { group in
                         KeybindRow(group: group,
                                    foldParams: foldParams,
                                    canRestoreDefault: restorable.contains(group.action))
                     }
+                } header: {
+                    // A prominent group heading (D) — the default List section header reads
+                    // too muted to anchor a group. Primary color + headline weight, and
+                    // `.textCase(nil)` keeps the curated casing ("Splits", not "SPLITS").
+                    Text(section.title)
+                        .font(.headline)
+                        .foregroundStyle(.primary)
+                        .textCase(nil)
                 }
             }
         }

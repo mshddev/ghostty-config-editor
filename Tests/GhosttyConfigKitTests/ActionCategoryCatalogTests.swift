@@ -81,6 +81,21 @@ final class ActionCategoryCatalogTests: XCTestCase {
         XCTAssertEqual(sections.map(\.id), ["editing_clipboard"], "only the section with a row shows")
     }
 
+    // MARK: - Section filter (D)
+
+    func testGroupsInSectionKeepsOnlyThatSectionPreservingOrderAndStrippingParams() {
+        let catalog = ActionCategoryCatalog.bundled
+        // new_window + goto_tab:3 → Windows & Tabs; new_split → Splits; search → Search.
+        let input = [group("new_window"), group("new_split"), group("search"), group("goto_tab:3")]
+
+        XCTAssertEqual(catalog.groups(input, inSection: "windows_tabs").map(\.action),
+                       ["new_window", "goto_tab:3"],
+                       "keeps only Windows & Tabs actions, in input order, with params stripped for matching")
+        XCTAssertEqual(catalog.groups(input, inSection: "splits").map(\.action), ["new_split"])
+        XCTAssertTrue(catalog.groups(input, inSection: "font").isEmpty,
+                      "a section with no matching input yields an empty list")
+    }
+
     // MARK: - Coverage
 
     func testEveryDefaultBoundActionLandsInACuratedSection() throws {

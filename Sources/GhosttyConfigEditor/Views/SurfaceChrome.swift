@@ -204,6 +204,57 @@ struct Pill: View {
     }
 }
 
+/// A horizontally-scrolling row of filter pills — a leading "All" pill plus one per section
+/// — for narrowing a long list to a single group (D). Shared chrome so the Keyboard
+/// Shortcuts editor (and later surfaces that want the same horizontal filter) present one
+/// consistent control instead of a rigid segmented Picker that can't hold many long titles.
+/// `selection` is the chosen section id; `nil` means the "All" pill (show everything).
+struct SectionFilterBar: View {
+    struct Item: Identifiable, Equatable {
+        let id: String
+        let title: String
+    }
+
+    let items: [Item]
+    @Binding var selection: String?
+    /// The label of the "show everything" pill.
+    var allTitle: String = "All"
+
+    var body: some View {
+        ScrollView(.horizontal) {
+            HStack(spacing: DesignTokens.Spacing.standard) {
+                pill(title: allTitle, isSelected: selection == nil) { selection = nil }
+                ForEach(items) { item in
+                    pill(title: item.title, isSelected: selection == item.id) { selection = item.id }
+                }
+            }
+            .padding(.horizontal, DesignTokens.Spacing.surface)
+            .padding(.vertical, 2)
+        }
+        .scrollIndicators(.hidden)
+        .accessibilityLabel("Filter by section")
+    }
+
+    private func pill(title: String, isSelected: Bool, action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            Text(title)
+                // Bold, high-contrast pills: a readable body-ish size, an unselected label in
+                // full primary (not muted secondary), and the selected one filled with the
+                // accent in white (KTD4: accent reserved for selection) — a clear, tappable
+                // control that holds its own beside the prominent section header.
+                .font(.callout.weight(isSelected ? .semibold : .medium))
+                .foregroundStyle(isSelected ? AnyShapeStyle(.white) : AnyShapeStyle(.primary))
+                .padding(.horizontal, DesignTokens.Spacing.large)
+                .padding(.vertical, DesignTokens.Spacing.standard)
+                .background(isSelected ? AnyShapeStyle(Color.accentColor) : AnyShapeStyle(DesignTokens.subtleFill),
+                            in: Capsule())
+                .contentShape(Capsule())
+        }
+        .buttonStyle(.plain)
+        .accessibilityAddTraits(isSelected ? [.isButton, .isSelected] : [.isButton])
+    }
+}
+
 /// A Form-row button that reads unambiguously destructive — **explicit** red, because
 /// macOS grouped Forms drop `role: .destructive`-only styling (DS-7). The reset-all rows
 /// consume it (U24).

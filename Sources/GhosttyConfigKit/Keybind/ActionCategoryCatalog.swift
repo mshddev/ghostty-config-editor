@@ -109,6 +109,13 @@ public struct ActionCategoryCatalog: Sendable {
         return result
     }
 
+    /// The subset of `groups` belonging to a single section id (params stripped), preserving
+    /// the input order. Powers the Keybindings section-filter pills (D) — a coarse filter that
+    /// composes with the row text search — without re-partitioning the whole set.
+    public func groups(_ groups: [KeybindActionGroup], inSection sectionID: String) -> [KeybindActionGroup] {
+        groups.filter { self.sectionID(forAction: $0.action) == sectionID }
+    }
+
     // MARK: - Bundled resource
 
     private struct File: Codable {
