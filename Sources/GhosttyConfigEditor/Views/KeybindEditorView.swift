@@ -16,6 +16,10 @@ struct KeybindEditorView: View {
     /// The selected section-filter pill (D); `nil` = "All". View-local like `filter`, so it
     /// resets when the user navigates to another sidebar surface.
     @State private var selectedSection: String? = nil
+    /// A captured chord to search by (D) — the canonical trigger of a shortcut the user
+    /// *pressed* rather than typed; `nil` = not chord-searching. Mutually exclusive with the
+    /// text `filter` (capturing clears the text).
+    @State private var chordFilter: String? = nil
 
     var body: some View {
         let all = model.keybindGroups
@@ -23,10 +27,10 @@ struct KeybindEditorView: View {
         // bar stays stable as the user types — one pill per section that actually has actions.
         let sectionItems = ActionCategoryCatalog.bundled.sections(for: all)
             .map { SectionFilterBar.Item(id: $0.id, title: $0.title) }
-        // Compose the two filters: text search first, then narrow to the selected section.
-        let textFiltered = filtered(all)
-        let groups = selectedSection.map { ActionCategoryCatalog.bundled.groups(textFiltered, inSection: $0) }
-            ?? textFiltered
+        // Compose the filters: a captured chord (exact match) OR the text search, then narrow
+        // to the selected section. Chord and text are mutually exclusive in the search bar.
+        let base = chordFilter.map { KeybindSearch.groups(all, matchingChord: $0) } ?? filtered(all)
+        let groups = selectedSection.map { ActionCategoryCatalog.bundled.groups(base, inSection: $0) } ?? base
         // Which base actions carry >1 distinct param, so their param folds into the title
         // (goto_tab:1…8) rather than reading as a lone caption (copy_to_clipboard:mixed).
         // Computed over the *full* set so filtering never changes a row's title (KB-4).
@@ -34,10 +38,13 @@ struct KeybindEditorView: View {
         return VStack(spacing: 0) {
             SurfaceHeader(
                 title: OptionCategorizer.keybindingsCategory,
-                subtitle: didLoad ? countSummary(all) : nil,
-                searchText: $filter,
-                searchPrompt: "Filter by action or shortcut"
+                subtitle: didLoad ? countSummary(all) : nil
             )
+            // The search bar: text filter + a "press keys" chord capture (D).
+            if didLoad {
+                KeybindSearchBar(text: $filter, chord: $chordFilter)
+                    .padding(.bottom, DesignTokens.Spacing.standard)
+            }
             // A horizontal section filter for quick jumps to a group (D). Only once loaded and
             // when there's more than one section to choose between.
             if didLoad && sectionItems.count > 1 {
@@ -50,7 +57,7 @@ struct KeybindEditorView: View {
                 ProgressView("Loading keybindings…")
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
             } else if groups.isEmpty {
-                ContentUnavailableView.search(text: filter)
+                emptyState
             } else {
                 bindingList(groups, foldParams: foldParams)
             }
@@ -60,6 +67,23 @@ struct KeybindEditorView: View {
         .task {
             await model.loadKeybindReferenceIfNeeded()
             didLoad = true
+        }
+        // A chord search is a global "what's bound to these keys?" query, so it drops any
+        // active section filter (the chord may live in a different section).
+        .onChange(of: chordFilter) { _, new in if new != nil { selectedSection = nil } }
+    }
+
+    /// The empty result — chord-aware: a pressed combo that matches nothing is *useful*
+    /// signal (that shortcut is free), so it says so rather than a generic "no results".
+    @ViewBuilder private var emptyState: some View {
+        if let chordFilter {
+            ContentUnavailableView {
+                Label("Nothing uses \(KeybindTrigger.displaySymbol(for: chordFilter))", systemImage: "keyboard")
+            } description: {
+                Text("That shortcut isn't bound to anything — it's free to use.")
+            }
+        } else {
+            ContentUnavailableView.search(text: filter)
         }
     }
 
@@ -171,6 +195,89 @@ struct KeybindEditorView: View {
         case .warning: return .orange
         case .info: return .secondary
         }
+    }
+}
+
+/// The Keyboard Shortcuts search bar (D): the usual text filter with a trailing "press keys"
+/// button that flips the field into a chord-capture mode, so a shortcut can be found by
+/// *pressing* it, not just typing its name. Three states — text / capturing / captured-chord
+/// — styled to match the shared `SurfaceSearchField`. The capture reuses the proven
+/// `KeyRecorderView` (autostart, so it opens already listening; a click still works if focus
+/// didn't land), and hands back the same canonical token the rebind capsules produce.
+private struct KeybindSearchBar: View {
+    @Binding var text: String
+    /// The captured canonical trigger (nil = plain text search). Set on capture, cleared by
+    /// the ✕ (or replaced when a fresh capture starts).
+    @Binding var chord: String?
+    @State private var capturing = false
+    @FocusState private var textFocused: Bool
+
+    var body: some View {
+        HStack(spacing: DesignTokens.Spacing.snug) {
+            Image(systemName: (capturing || chord != nil) ? "keyboard" : "magnifyingglass")
+                .foregroundStyle(capturing ? AnyShapeStyle(.tint) : AnyShapeStyle(.secondary))
+                .font(.callout)
+                .accessibilityHidden(true)
+            content
+        }
+        .padding(.horizontal, DesignTokens.Spacing.cozy)
+        .padding(.vertical, DesignTokens.Spacing.snug)
+        .background(DesignTokens.subtleFill, in: RoundedRectangle(cornerRadius: DesignTokens.Radius.field))
+        .padding(.horizontal, DesignTokens.Spacing.surface)
+        // Preserve the ⌘F route (B1): focus this surface's search — dropping any chord capture
+        // and returning to the text field.
+        .focusedSceneValue(\.focusSurfaceFilter, {
+            chord = nil
+            capturing = false
+            textFocused = true
+        })
+    }
+
+    @ViewBuilder private var content: some View {
+        if capturing {
+            Text("Press a shortcut…").foregroundStyle(.secondary)
+            KeyRecorderView(token: "", onCapture: { token in
+                guard !token.isEmpty else { return }   // Delete clears the recorder; ignore here
+                chord = token
+                capturing = false
+            }, onRecordingChanged: { recording in
+                // Recording ending without a capture (Escape, focus loss) exits capture mode
+                // rather than stranding the field in a dead "Press a shortcut…" state.
+                if !recording { capturing = false }
+            }, autostart: true)
+            Spacer(minLength: 0)
+            clearButton("Cancel") { capturing = false }
+        } else if let chord {
+            Text(KeybindTrigger.displaySymbol(for: chord))
+                .font(.callout.weight(.medium))
+                .accessibilityLabel("Searching for the shortcut \(KeybindTrigger.displaySymbol(for: chord))")
+            Spacer(minLength: 0)
+            clearButton("Clear shortcut search") { self.chord = nil }
+        } else {
+            TextField("Filter by action or shortcut", text: $text)
+                .textFieldStyle(.plain)
+                .focused($textFocused)
+            if !text.isEmpty {
+                clearButton("Clear search") { text = "" }
+            }
+            Button {
+                text = ""
+                capturing = true
+            } label: {
+                Image(systemName: "keyboard").foregroundStyle(.secondary)
+            }
+            .buttonStyle(.plain)
+            .help("Search by pressing a shortcut")
+            .accessibilityLabel("Search by pressing a shortcut")
+        }
+    }
+
+    private func clearButton(_ label: String, action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            Image(systemName: "xmark.circle.fill").foregroundStyle(.secondary)
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel(label)
     }
 }
 

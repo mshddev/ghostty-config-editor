@@ -17,6 +17,10 @@ struct KeyRecorderView: NSViewRepresentable {
     var onWarning: (String?) -> Void = { _ in }
     /// Called when recording starts (true) / stops (false) — the row shows a recording hint.
     var onRecordingChanged: (Bool) -> Void = { _ in }
+    /// When true, the recorder focuses itself and begins recording the instant it appears —
+    /// for the "press keys to search" capture, which opens already listening. Default false
+    /// keeps the rebind capsules recording only on click/Return (A11Y-9 tab traversal).
+    var autostart: Bool = false
 
     func makeNSView(context: Context) -> KeyRecorderNSView {
         let view = KeyRecorderNSView()
@@ -24,6 +28,7 @@ struct KeyRecorderView: NSViewRepresentable {
         view.onWarning = onWarning
         view.onRecordingChanged = onRecordingChanged
         view.displayToken = token
+        view.autostart = autostart
         return view
     }
 
@@ -32,6 +37,7 @@ struct KeyRecorderView: NSViewRepresentable {
         view.onWarning = onWarning
         view.onRecordingChanged = onRecordingChanged
         view.displayToken = token
+        view.autostart = autostart
         view.needsDisplay = true
     }
 
@@ -96,6 +102,12 @@ final class KeyRecorderNSView: NSView {
         }
     }
     private var trackingArea: NSTrackingArea?
+
+    /// When set, the recorder focuses + begins recording as soon as it lands in a window —
+    /// the "press keys to search" capture opens already listening (set once, guarded so a
+    /// SwiftUI re-render never re-arms it after the first capture).
+    var autostart = false
+    private var didAutostart = false
 
     /// Tints mirroring the U2 design tokens (DS-14): `subtleFill`/`hoverLift`/`accentFill`
     /// expressed in AppKit so the recorder no longer hand-picks divergent alphas.
@@ -269,6 +281,19 @@ final class KeyRecorderNSView: NSView {
         // monitor — otherwise it lingers and swallows keystrokes app-wide.
         if newWindow == nil { stopRecording() }
         super.viewWillMove(toWindow: newWindow)
+    }
+
+    override func viewDidMoveToWindow() {
+        super.viewDidMoveToWindow()
+        // The search capture opens already listening: focus + record once, on the next
+        // runloop tick so the window's responder chain is ready. Guarded so a SwiftUI
+        // re-render (which re-runs `updateNSView`) can't re-arm after the first chord.
+        guard autostart, !didAutostart, window != nil else { return }
+        didAutostart = true
+        DispatchQueue.main.async { [weak self] in
+            guard let self, self.window != nil else { return }
+            if self.window?.makeFirstResponder(self) == true { self.startRecording() }
+        }
     }
 
     private func startRecording() {
