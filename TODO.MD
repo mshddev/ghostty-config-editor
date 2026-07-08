@@ -1,8 +1,10 @@
 # TODO
 
 ## A · Bugs / correctness
-- [] And I'm not sure in the KeyboardConfig item why there is a backslash on each key.
+- [x] And I'm not sure in the KeyboardConfig item why there is a backslash on each key. → Fixed: it was the pencil edit-affordance icon rendering as a stray "\"; removed it (KeyRecorderView).
+- [x] Keyboard shortcut "Go to tab N" showed a raw ⌘digit_N capsule next to ⌘N (Ghostty ships both). → Fixed: merged the physical+character pair into one clean ⌘N capsule for the default AND disabled states; edits/turn-off/re-enable manage both underlying lines.
 - [] I also want to take a look at the behavior when we set the wrong value for the config item. The last thing I try is when I try to set a wrong color code. The error still appears even if I cancel it. Not only the color code, I need you to check for other config items as well that have the possibility for the user to enter invalid or wrong values.
+- [] Emptying the config file entirely (removing the last remaining line) makes `ghostty +validate-config` exit 1 with no stderr, so the editor shows an unhelpful "The change didn't validate." Detect the would-be-empty write and show a clear message (or guard against writing a zero-byte config).
 
 ## B · Search
 - [] cmd+f for search in each menu, cmd+shift+f for global search
