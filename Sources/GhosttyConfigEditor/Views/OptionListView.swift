@@ -450,44 +450,40 @@ struct OptionRow: View {
         .onHover { isHovering = $0 }
     }
 
-    /// The customized-state cue (U5, DS-5/DS-9/DS-11) — replacing the accent
-    /// "Customized" pill + reset cluster that squeezed labels and repeated to noise.
-    /// A small **non-accent** state dot at rest (KTD4), in a fixed-width slot so it
-    /// never shifts the row (width-stable), that strengthens into an inline reset
-    /// glyph on hover. The dot is suppressed on the Customized surface — where every
-    /// row is customized, a per-row dot is redundant (IA-8) — but the hover reset
-    /// stays. Reset is *always* reachable without hovering via the ⓘ popover (a named
-    /// VoiceOver action), so hover reveals nothing otherwise-invisible: it only makes
-    /// the already-visible state actionable (KTD5). Rendered only on customized rows;
+    /// The customized-state cue (U5, DS-5/DS-9/DS-11, F1) — replacing the accent
+    /// "Customized" pill + reset cluster that squeezed labels and repeated to noise, and
+    /// then the separate dot/pencil marker. A single **reset glyph** now does both jobs:
+    /// dim at rest it reads as "this row is customized" (a width-stable, fixed slot so it
+    /// never shifts the row), and it strengthens (full opacity + hover fill) into the
+    /// click-to-revert action on hover. Reset is *always* reachable without hovering via
+    /// the ⓘ popover (a named VoiceOver action). Rendered only on customized rows;
     /// default/unset rows add no slot.
     @ViewBuilder
     private var stateAccessory: some View {
         if option.state == .setNonDefault {
-            ZStack {
-                if isHovering {
-                    Button {
-                        Task { await model.applyEdit(option: option, values: []) }
-                    } label: {
-                        Image(systemName: "arrow.uturn.backward.circle")
-                            .imageScale(.medium)
-                            .foregroundStyle(.secondary)
-                            .frame(width: 22, height: 22)
-                            .contentShape(Rectangle())
-                    }
-                    .buttonStyle(HoverAffordanceButtonStyle.icon)
-                    .help("Reset to default")
-                    .accessibilityLabel("Reset \(option.option.displayTitle) to default")
-                } else if !model.isShowingCustomized {
-                    Circle()
-                        .fill(DesignTokens.customizedTint)
-                        .frame(width: 8, height: 8)
-                        // The title already announces the state; the dot is its visual echo.
-                        .accessibilityHidden(true)
-                }
+            // One affordance carries both meanings (F1): the reset glyph is the at-rest
+            // "this row is customized" cue *and* the click-to-revert action — no separate
+            // dot/pencil. Dim at rest so a customized row stays glanceable without shouting;
+            // the hover fill + full opacity make it clearly clickable. (The old orange dot
+            // also collided with the app's orange *warning* cues.) Reset also stays in the
+            // ⓘ popover. Kept in the leading slot, by the label: a consistent scan position
+            // that never crowds the row's varied value controls.
+            Button {
+                Task { await model.applyEdit(option: option, values: []) }
+            } label: {
+                Image(systemName: "arrow.uturn.backward.circle")
+                    .imageScale(.medium)
+                    .foregroundStyle(.secondary)
+                    .opacity(isHovering ? 1 : 0.5)
+                    .frame(width: 22, height: 22)
+                    .contentShape(Rectangle())
             }
-            .frame(width: 22, height: 22)   // width-stable: dot ↔ reset never shifts the row
-            // MO-6: the same scale-in the theme "Current" pill uses, so both state cues
-            // read consistently. Driven by the `.animation(value: option.state)` above.
+            .buttonStyle(HoverAffordanceButtonStyle.icon)
+            .help("Reset to default")
+            .accessibilityLabel("Reset \(option.option.displayTitle) to default")
+            .frame(width: 22, height: 22)   // width-stable slot
+            // MO-6: the same scale-in the theme "Current" pill uses, so the cue reads
+            // consistently. Driven by the `.animation(value: option.state)` above.
             .transition(.scale(scale: 0.9).combined(with: .opacity))
         }
     }
