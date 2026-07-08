@@ -460,7 +460,7 @@ private struct KeybindRow: View {
                 }
             } else {
                 Button {
-                    perform { await model.removeKeybind(trigger: chord.canonicalTrigger) }
+                    perform { await model.removeKeybind(trigger: chord.canonicalTrigger, alsoRemove: chord.companions) }
                 } label: {
                     Image(systemName: "arrow.uturn.backward")
                 }
@@ -701,7 +701,7 @@ private struct KeybindRow: View {
             case .rebind(let chord):
                 switch chord.origin {
                 case .default:
-                    await model.rebindDefaultKeybind(oldTrigger: chord.trigger, newTrigger: token, action: group.action)
+                    await model.rebindDefaultKeybind(oldTrigger: chord.trigger, newTrigger: token, action: group.action, alsoUnbind: chord.companions)
                 case .unbound:
                     await model.applyKeybindEdit(originalTrigger: nil, trigger: token, action: group.action)
                 case .userAdded, .userOverridesDefault, .userDisablesDefault:
@@ -719,7 +719,7 @@ private struct KeybindRow: View {
         perform {
             switch chord.origin {
             case .default:
-                await model.unbindDefaultKeybind(trigger: chord.canonicalTrigger)
+                await model.unbindDefaultKeybind(trigger: chord.canonicalTrigger, alsoUnbind: chord.companions)
             case .userAdded, .userOverridesDefault:
                 await model.removeKeybind(trigger: chord.canonicalTrigger)
             case .userDisablesDefault, .unbound:

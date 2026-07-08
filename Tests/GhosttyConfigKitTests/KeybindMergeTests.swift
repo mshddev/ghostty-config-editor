@@ -248,6 +248,93 @@ final class KeybindMergeTests: XCTestCase {
         XCTAssertTrue(result.contains("super+y=new_tab"))
     }
 
+    // MARK: - collapsingRedundantDigits() — one clean ⌘N per tab (CB-digit)
+
+    func testCollapsingRedundantDigitsFoldsThePhysicalKeyIntoTheCharacterCapsule() {
+        // Ghostty ships both super+digit_1 and super+1 for goto_tab:1 (same physical key).
+        // The default pair collapses to a single ⌘1 capsule carrying the physical trigger
+        // as a companion, so the row reads cleanly but edits still know about both lines.
+        let groups = KeybindMerge.collapsingRedundantDigits(KeybindMerge.group([
+            merged("super+digit_1", "goto_tab:1", .default),
+            merged("super+1", "goto_tab:1", .default),
+            merged("super+t", "new_tab", .default),
+        ]))
+        let tab1 = groups.first { $0.action == "goto_tab:1" }
+        XCTAssertEqual(tab1?.chords.count, 1, "the physical + character pair renders as one capsule")
+        XCTAssertEqual(tab1?.chords.first?.trigger, "super+1", "the character chord stays visible (renders as ⌘1)")
+        XCTAssertEqual(tab1?.chords.first?.companions, ["super+digit_1"], "the physical key rides along as a companion")
+        // An unrelated action is untouched.
+        XCTAssertEqual(groups.first { $0.action == "new_tab" }?.chords.count, 1)
+    }
+
+    func testCollapsingRedundantDigitsLeavesCustomizedPairsSeparate() {
+        // Once the user has touched one of the pair they diverge — show both honestly, no
+        // collapse (only both-untouched-defaults fold together).
+        let groups = KeybindMerge.collapsingRedundantDigits(KeybindMerge.group([
+            merged("super+digit_1", "goto_tab:1", .default),
+            merged("super+1", "goto_tab:1", .userOverridesDefault(defaultAction: "goto_tab:1")),
+        ]))
+        XCTAssertEqual(groups.first { $0.action == "goto_tab:1" }?.chords.count, 2, "a customized member blocks the collapse")
+        // A lone super+9 (no physical digit_9 sibling) is never altered.
+        let lone = KeybindMerge.collapsingRedundantDigits(KeybindMerge.group([merged("super+9", "last_tab", .default)]))
+        XCTAssertEqual(lone.first?.chords.first?.companions, [])
+    }
+
+    func testCollapsingRedundantDigitsFoldsAnAllDisabledPairIntoOneStruckCapsule() {
+        // After the merged ⌘1 is turned off, both members are userDisablesDefault — they
+        // fold into a single struck capsule (physical carried as companion), so the raw
+        // digit_1 never resurfaces and one re-enable can restore both.
+        let groups = KeybindMerge.collapsingRedundantDigits(KeybindMerge.group([
+            merged("super+digit_1", "goto_tab:1", .userDisablesDefault),
+            merged("super+1", "goto_tab:1", .userDisablesDefault),
+        ]))
+        let tab1 = groups.first { $0.action == "goto_tab:1" }
+        XCTAssertEqual(tab1?.chords.count, 1)
+        XCTAssertEqual(tab1?.chords.first?.origin, .userDisablesDefault)
+        XCTAssertEqual(tab1?.chords.first?.companions, ["super+digit_1"])
+    }
+
+    func testCollapsingRedundantDigitsKeepsAMixedStatePairSeparate() {
+        // One default, one disabled (only reachable by hand-editing a single line) → shown
+        // honestly as two capsules, no fold across differing states.
+        let groups = KeybindMerge.collapsingRedundantDigits(KeybindMerge.group([
+            merged("super+digit_1", "goto_tab:1", .default),
+            merged("super+1", "goto_tab:1", .userDisablesDefault),
+        ]))
+        XCTAssertEqual(groups.first { $0.action == "goto_tab:1" }?.chords.count, 2)
+    }
+
+    // MARK: - movingDefault(alsoUnbind:) / unbindingDefaults() — merged-capsule edits
+
+    func testMovingDefaultAlsoUnbindsCompanionSoThePhysicalKeyGoesQuiet() {
+        // Rebinding the merged ⌘1 capsule to ⌘j must disable BOTH super+1 and its physical
+        // companion super+digit_1 — otherwise the hidden key keeps firing goto_tab:1.
+        let empty = TargetScopedBindings(userValues: [], sources: [], targetResolvedPath: primary)
+        let result = empty.movingDefault(fromTrigger: "super+1", toTrigger: "super+j", action: "goto_tab:1",
+                                         alsoUnbind: ["super+digit_1"])
+        XCTAssertTrue(result.contains("super+1=unbind"))
+        XCTAssertTrue(result.contains("super+digit_1=unbind"))
+        XCTAssertTrue(result.contains("super+j=goto_tab:1"))
+        XCTAssertEqual(result.count, 3)
+    }
+
+    func testUnbindingDefaultsDisablesEveryTriggerOnce() {
+        // Turning off the merged capsule disables both lines; a pre-existing unrelated
+        // binding is preserved verbatim.
+        let scoped = scoped(["super+b=new_window"], ["new_window"])
+        let result = scoped.unbindingDefaults(triggers: ["super+1", "super+digit_1"])
+        XCTAssertEqual(result, ["super+b=new_window", "super+1=unbind", "super+digit_1=unbind"])
+    }
+
+    func testRemovingTriggersReenablesBothLinesOfAMergedCapsule() {
+        // Re-enabling the folded ⌘1 clears BOTH =unbind lines so both defaults reactivate;
+        // an unrelated binding stays put.
+        let scoped = scoped(["super+1=unbind", "super+digit_1=unbind", "super+b=new_window"],
+                            ["unbind", "new_window"])
+        let result = scoped.removing(triggers: ["super+1", "super+digit_1"])
+        XCTAssertEqual(result, ["super+b=new_window"])
+    }
+
     // MARK: - removingAction() — Restore default
 
     func testRemovingActionDropsRebindAndReenablesDisabledDefault() {

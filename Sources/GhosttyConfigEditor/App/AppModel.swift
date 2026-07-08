@@ -1163,7 +1163,9 @@ public final class AppModel {
         )
         let merged = KeybindMerge.merge(defaults: keybindDefaults, user: user)
         let padded = KeybindMerge.withUnboundActions(merged, allActions: keybindActions)
-        return KeybindMerge.group(padded)
+        // Fold Ghostty's redundant physical+character digit pair (super+digit_N / super+N)
+        // into one clean ⌘N capsule per tab (CB-digit); edits still disable both lines.
+        return KeybindMerge.collapsingRedundantDigits(KeybindMerge.group(padded))
     }
 
     /// Canonical default trigger(s) grouped by *full* action (params included, so
@@ -1240,7 +1242,11 @@ public final class AppModel {
     /// new binding *and* disable the old default (`oldTrigger=unbind`) in one write, so
     /// the action moves to the new keys instead of firing on both (the "rebind replaces
     /// the shortcut" expectation). Pre-validates like `applyKeybindEdit`.
-    public func rebindDefaultKeybind(oldTrigger: String, newTrigger: String, action: String) async {
+    ///
+    /// `alsoUnbind` carries a merged capsule's companion triggers (the physical
+    /// `super+digit_N` folded onto `⌘N`, CB-digit) so a rebind disables them too — otherwise
+    /// the hidden physical key would keep firing the old action.
+    public func rebindDefaultKeybind(oldTrigger: String, newTrigger: String, action: String, alsoUnbind companions: [String] = []) async {
         let newTrigger = newTrigger.trimmingCharacters(in: .whitespaces)
         let action = action.trimmingCharacters(in: .whitespaces)
         let issues = KeybindValidation.validate(trigger: newTrigger, action: action, knownActions: keybindActionNames)
@@ -1248,17 +1254,22 @@ public final class AppModel {
             applyState = .failed(EditErrorPresentation(message: hardError.message))
             return
         }
-        await writeKeybinds { $0.movingDefault(fromTrigger: oldTrigger, toTrigger: newTrigger, action: action) }
+        await writeKeybinds { $0.movingDefault(fromTrigger: oldTrigger, toTrigger: newTrigger, action: action, alsoUnbind: companions) }
     }
 
-    /// Remove a user binding (any default with that trigger reactivates).
-    public func removeKeybind(trigger: String) async {
-        await writeKeybinds { $0.removing(trigger: trigger) }
+    /// Remove a user binding (any default with that trigger reactivates). `alsoRemove`
+    /// clears a merged capsule's companion lines in the same write (CB-digit) — re-enabling
+    /// a folded `⌘N` drops both its `super+N=unbind` and `super+digit_N=unbind`, so both
+    /// default keys come back together.
+    public func removeKeybind(trigger: String, alsoRemove companions: [String] = []) async {
+        await writeKeybinds { $0.removing(triggers: [trigger] + companions) }
     }
 
-    /// Disable a default by writing `trigger=unbind`.
-    public func unbindDefaultKeybind(trigger: String) async {
-        await writeKeybinds { $0.unbindingDefault(trigger: trigger) }
+    /// Disable a default by writing `trigger=unbind`. `alsoUnbind` turns off a merged
+    /// capsule's companion triggers in the same write (CB-digit) so both the character and
+    /// physical digit keys go quiet together.
+    public func unbindDefaultKeybind(trigger: String, alsoUnbind companions: [String] = []) async {
+        await writeKeybinds { $0.unbindingDefaults(triggers: [trigger] + companions) }
     }
 
     /// Scope the user's keybinds to the writer's target file (R-F), apply a pure
