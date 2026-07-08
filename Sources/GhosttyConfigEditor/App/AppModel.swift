@@ -150,6 +150,17 @@ public final class AppModel {
     public private(set) var binaryOverride: String?
     public var selection: SidebarSelection? = .themes {
         didSet {
+            // Moving to a *different* sidebar section clears that section's own search
+            // field, so each surface opens fresh — the per-surface `query`/`themeQuery` are
+            // ephemeral per visit, unlike the global ⇧⌘F Find, which navigation leaves
+            // alone (B2). Guarded to a real change so re-selecting the current section (or a
+            // redundant re-assignment during layout) doesn't wipe an in-progress search.
+            // Keyboard Shortcuts keeps its filter in view-local @State, which already
+            // resets when the surface is recreated.
+            if oldValue != selection {
+                query = ""
+                themeQuery = ""
+            }
             // Landing on Status always returns to the hub (KTD6/AE7): the Customized and
             // Problems drill-downs keep `selection == .status`, so reselecting the Status
             // footer (or ⌘, / restoration) re-assigns `.status` and lands back on the hub

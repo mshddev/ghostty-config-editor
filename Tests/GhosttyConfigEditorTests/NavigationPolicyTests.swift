@@ -148,6 +148,41 @@ final class NavigationPolicyTests: XCTestCase {
         XCTAssertEqual(model.currentSurfaceName, "Customized")
     }
 
+    // MARK: - Section-search clearing on navigation (B2)
+
+    // Moving to a different sidebar section clears that section's own search field
+    // (`query`/`themeQuery`) so each surface opens fresh — but leaves the global Find
+    // query untouched (navigation keeps clearing the *overlay* in the view layer, not the
+    // model-level query the user chose to preserve here).
+    func testSwitchingSidebarSectionClearsSectionSearchNotGlobalQuery() {
+        let model = AppModel()
+        model.selection = .category("Appearance")
+        model.query = "font"
+        model.themeQuery = "dracula"
+        model.findQuery = "opacity"          // a global search the user had run
+
+        model.selection = .category("Window")   // move to another section
+
+        XCTAssertEqual(model.query, "", "the section search must clear on navigation")
+        XCTAssertEqual(model.themeQuery, "", "the themes search must clear on navigation")
+        XCTAssertEqual(model.findQuery, "opacity",
+                       "changing the section must not touch the global Find query")
+    }
+
+    // The clear is guarded to a *real* section change: re-selecting the current section
+    // (e.g. clicking the already-selected sidebar row, or a redundant layout re-assignment)
+    // must not wipe an in-progress search.
+    func testReselectingTheSameSectionKeepsItsSearch() {
+        let model = AppModel()
+        model.selection = .category("Appearance")
+        model.query = "font"
+
+        model.selection = .category("Appearance")   // same value re-assigned
+
+        XCTAssertEqual(model.query, "font",
+                       "re-selecting the current section must not wipe an in-progress search")
+    }
+
     // MARK: - Problems row actions (F4/R10 scenario 4)
 
     // Scenario 4: a validation message whose key names a real catalog option offers
