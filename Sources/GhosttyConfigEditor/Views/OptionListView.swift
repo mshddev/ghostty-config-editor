@@ -357,21 +357,33 @@ private struct CategoryOptionList: View {
                 advancedExpanded.toggle()
             }
         } label: {
-            HStack(spacing: 6) {
+            HStack(spacing: DesignTokens.Spacing.snug) {
+                // Tinted disclosure bar (E1): the header rides in a subtle grey bar
+                // (restingFill below) so it reads as a distinct, tappable control that's
+                // impossible to miss — kept neutral to match the rest of the UI. The bright
+                // "Advanced" title + rotating chevron carry the heading; the trailing
+                // Show/Hide word makes its collapsible nature unmistakable.
                 Image(systemName: "chevron.right")
-                    .font(.caption.weight(.semibold))
-                    .foregroundStyle(.secondary)
+                    .font(.headline)
+                    .foregroundStyle(.primary)
                     .rotationEffect(.degrees(advancedExpanded ? 90 : 0))
-                Text("Advanced (\(count))")
-                    .font(.subheadline.weight(.semibold))
+                Text("Advanced")
+                    .font(.headline)
+                    .foregroundStyle(.primary)
+                Text(advancedExpanded ? "· \(count)" : "· \(count) more")
+                    .font(.subheadline)
                     .foregroundStyle(.secondary)
                 Spacer(minLength: 0)
+                Text(advancedExpanded ? "Hide" : "Show")
+                    .font(.subheadline.weight(.medium))
+                    .foregroundStyle(.secondary)
             }
             .contentShape(Rectangle())
         }
         .buttonStyle(HoverAffordanceButtonStyle(
-            cornerRadius: DesignTokens.Radius.standard,
-            insets: EdgeInsets(top: 4, leading: 8, bottom: 4, trailing: 8),
+            cornerRadius: DesignTokens.Radius.field,
+            insets: EdgeInsets(top: 8, leading: 12, bottom: 8, trailing: 12),
+            restingFill: DesignTokens.subtleFill,
             pointingHand: true))
         .accessibilityLabel("Advanced, \(count) options")
         .accessibilityValue(advancedExpanded ? "Expanded" : "Collapsed")
