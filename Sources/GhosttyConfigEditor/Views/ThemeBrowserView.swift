@@ -162,10 +162,11 @@ struct ThemeBrowserView: View {
             }
             Spacer(minLength: DesignTokens.Spacing.standard)
             Picker("View as", selection: $model.themeViewMode) {
-                Image(systemName: "list.bullet").tag(ThemeViewMode.list)
-                    .accessibilityLabel("List")
+                // Grid leads the control since it's the default view (2026-07-08).
                 Image(systemName: "square.grid.2x2").tag(ThemeViewMode.grid)
                     .accessibilityLabel("Grid")
+                Image(systemName: "list.bullet").tag(ThemeViewMode.list)
+                    .accessibilityLabel("List")
             }
             .pickerStyle(.segmented)
             .labelsHidden()
@@ -215,6 +216,10 @@ struct ThemeBrowserView: View {
 
     @ViewBuilder
     private func listBody(_ s: Sections) -> some View {
+        // The list is the compact, name-first scan view: fixed-height rows with a small
+        // resting swatch and no hover behaviour at all. Grid (the default) is where a theme's
+        // full-size preview lives, so the list deliberately never enlarges or previews on
+        // hover — nothing moves or pops as you scan (2026-07-08).
         List {
             // E2: the current theme is pinned at the very top and stays visible
             // even while filtering, so it's never confusable with row selection.
@@ -392,10 +397,6 @@ private struct ThemeRow: View {
     var forcePlaceholder: Bool = false
     /// Drives the light/dark pairing dialog (U11 — replaces the two-click borderless menu).
     @State private var showingPairing = false
-    /// U16 (TH-4, TH-7): pointer hover over the row/card. Tints the row, strengthens the
-    /// star/⋯, and enlarges the terminal mockup **in place** — a look-before-you-commit
-    /// preview with no file write (apply stays an explicit click).
-    @State private var hovering = false
 
     var body: some View {
         let colors = forcePlaceholder ? nil : model.themeColors[theme.name]
@@ -438,25 +439,17 @@ private struct ThemeRow: View {
         }
         .padding(.vertical, RowMetrics.rowVerticalPadding)
         .padding(.horizontal, DesignTokens.Spacing.snug)
-        // U16 (U12 style): a subtle row tint on hover — not motion, so ungated.
-        .background(
-            RoundedRectangle(cornerRadius: DesignTokens.Radius.standard)
-                .fill(hovering ? DesignTokens.hoverLift : Color.clear)
-        )
+        // The list is deliberately flat: no hover tint, no enlarge — nothing changes as the
+        // pointer moves across it (2026-07-08). Grid is the view for full-size previews.
         .contentShape(Rectangle())
-        .onHover { hovering = $0 }
-        // Enlarge/tint settle in; keyed to hover so nothing else animates. Reduce-Motion
-        // gated (the enlarge *is* motion, unlike the flat tint).
-        .animation(MotionSystem.gated(MotionSystem.quickFade, reduceMotion: reduceMotion),
-                   value: hovering)
     }
 
     private func rowLabel(colors: ThemeColors?, failed: Bool, isCurrent: Bool) -> some View {
         HStack(spacing: 12) {
-            // TH-4/TH-7: hovering enlarges the mockup in place (bigger type, a third line)
-            // — a look-before-you-commit preview with no config write.
-            preview(colors: colors, failed: failed, enlarged: hovering)
-                .frame(width: hovering ? 240 : 180, height: hovering ? 96 : 40)
+            // A compact, fixed-size preview swatch — enough to read the palette at a glance
+            // while scanning by name. The full-size preview lives in grid view.
+            ThemePreviewSwatch(colors: colors, failed: failed)
+                .frame(width: 180, height: 40)
                 .clipShape(RoundedRectangle(cornerRadius: 6))
                 // E2: only a subtle accent preview border marks the current theme —
                 // the old full-row accent fill (which mimicked selection) is gone.
@@ -501,7 +494,7 @@ private struct ThemeRow: View {
             Button {
                 Task { await model.applyTheme(theme.name) }
             } label: {
-                preview(colors: colors, failed: failed, enlarged: true)
+                ThemePreviewSwatch(colors: colors, failed: failed, enlarged: true)
                     .frame(height: 120)
                     .frame(maxWidth: .infinity)
                     .clipShape(RoundedRectangle(cornerRadius: DesignTokens.Radius.card))
@@ -544,15 +537,9 @@ private struct ThemeRow: View {
             }
         }
         .padding(DesignTokens.Spacing.standard)
-        // U16: hover lifts the whole card and strengthens its controls (never hover-only).
-        .background(
-            RoundedRectangle(cornerRadius: DesignTokens.Radius.card)
-                .fill(hovering ? DesignTokens.hoverLift : Color.clear)
-        )
+        // Flat at rest and on hover — the card already shows the full-size preview, so there's
+        // nothing to reveal; its controls stay permanently visible (below) rather than fading in.
         .contentShape(RoundedRectangle(cornerRadius: DesignTokens.Radius.card))
-        .onHover { hovering = $0 }
-        .animation(MotionSystem.gated(MotionSystem.quickFade, reduceMotion: reduceMotion),
-                   value: hovering)
     }
 
     /// The "Current" signal — a non-color pill (icon + text), so it reads without
@@ -568,35 +555,6 @@ private struct ThemeRow: View {
         return Pill(text: isDark ? "Dark" : "Light",
                     systemImage: isDark ? "moon.fill" : "sun.max.fill",
                     style: .prominent)
-    }
-
-    // MARK: - Preview swatch (U14: a miniature terminal, not a chip grid)
-
-    @ViewBuilder
-    private func preview(colors: ThemeColors?, failed: Bool, enlarged: Bool) -> some View {
-        if let model = colors.flatMap(ThemePreviewModel.resolve) {
-            TerminalMockup(model: model, large: enlarged)
-        } else if failed || colors != nil {
-            // A failed load, *or* colors that loaded but lack background/foreground: the
-            // U14 nil-fallback contract renders the placeholder, never an empty cell.
-            unavailablePreview
-        } else {
-            Rectangle().fill(.quaternary)
-                .overlay(ProgressView().controlSize(.small))
-        }
-    }
-
-    /// E3/U14: a distinct, non-spinning placeholder — a failed (or bg/fg-less) theme file
-    /// used to spin forever because `themeColors[name]` stays nil.
-    private var unavailablePreview: some View {
-        ZStack {
-            Rectangle().fill(.quaternary)
-            VStack(spacing: 2) {
-                Image(systemName: "exclamationmark.triangle")
-                Text("Preview unavailable").font(.caption2)
-            }
-            .foregroundStyle(.secondary)
-        }
     }
 
     // MARK: - Favorite + pairing controls (E4)
@@ -617,9 +575,6 @@ private struct ThemeRow: View {
                 .foregroundStyle(starred ? AnyShapeStyle(.yellow) : AnyShapeStyle(.secondary))
         }
         .buttonStyle(.plain)
-        // U16: dimmer at rest, full on hover — but never hidden, and a starred (yellow)
-        // star stays legible even dimmed so the state reads without hovering.
-        .opacity(hovering || starred ? 1 : 0.55)
         .accessibilityLabel(descriptor.accessibilityLabel)
     }
 
@@ -640,8 +595,6 @@ private struct ThemeRow: View {
             Image(systemName: descriptor.systemImage).foregroundStyle(.secondary)
         }
         .buttonStyle(.plain)
-        // U16: dimmer at rest, full on hover — but always visible.
-        .opacity(hovering ? 1 : 0.55)
         .accessibilityLabel(descriptor.accessibilityLabel)
         .confirmationDialog("Use \(theme.name) for…",
                             isPresented: $showingPairing,
@@ -668,6 +621,46 @@ private struct ThemeRow: View {
         if isCurrent { parts.append("current theme") }
         if let appearance = colors?.appearance { parts.append(appearance == .dark ? "dark" : "light") }
         return parts.joined(separator: ", ")
+    }
+}
+
+// MARK: - Shared preview swatch (U14)
+
+/// The theme preview swatch content (U14: a miniature terminal, not a chip grid): a live
+/// `TerminalMockup`, or a non-spinning "unavailable" placeholder (E3), or a loading tile.
+/// Shared by the list row and the grid card so both render an identical swatch from one
+/// source — compact in the list, full-size (`enlarged`) in the grid.
+private struct ThemePreviewSwatch: View {
+    let colors: ThemeColors?
+    let failed: Bool
+    /// The enlarged mockup (bigger type, a third line, taller footer) — grid cards; the
+    /// resting list swatch stays compact.
+    var enlarged: Bool = false
+
+    var body: some View {
+        if let model = colors.flatMap(ThemePreviewModel.resolve) {
+            TerminalMockup(model: model, large: enlarged)
+        } else if failed || colors != nil {
+            // A failed load, *or* colors that loaded but lack background/foreground: the
+            // U14 nil-fallback contract renders the placeholder, never an empty cell.
+            unavailablePreview
+        } else {
+            Rectangle().fill(.quaternary)
+                .overlay(ProgressView().controlSize(.small))
+        }
+    }
+
+    /// E3/U14: a distinct, non-spinning placeholder — a failed (or bg/fg-less) theme file
+    /// used to spin forever because `themeColors[name]` stays nil.
+    private var unavailablePreview: some View {
+        ZStack {
+            Rectangle().fill(.quaternary)
+            VStack(spacing: 2) {
+                Image(systemName: "exclamationmark.triangle")
+                Text("Preview unavailable").font(.caption2)
+            }
+            .foregroundStyle(.secondary)
+        }
     }
 }
 

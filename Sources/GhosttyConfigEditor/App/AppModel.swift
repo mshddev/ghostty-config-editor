@@ -189,9 +189,12 @@ public final class AppModel {
     static let themeViewModeDefaultsKey = "themeViewMode"
 
     /// List vs grid browsing of themes (U15 / TH-5). Persisted across launches like
-    /// `autoReloadEnabled`; defaults to `.list` (LOCKED 2026-07-04). `didSet` mirrors it
-    /// to `UserDefaults` (assigning in `init` doesn't fire `didSet`).
-    public var themeViewMode: ThemeViewMode = .list {
+    /// `autoReloadEnabled`; defaults to `.grid` (2026-07-08 — grid shows each theme's full
+    /// preview at rest, so it's the better first impression than the compact list, and it
+    /// let us drop the list's hover-to-enlarge preview entirely). A saved per-user choice
+    /// still wins. `didSet` mirrors it to `UserDefaults` (assigning in `init` doesn't fire
+    /// `didSet`).
+    public var themeViewMode: ThemeViewMode = .grid {
         didSet { UserDefaults.standard.set(themeViewMode.rawValue, forKey: Self.themeViewModeDefaultsKey) }
     }
 
@@ -300,8 +303,8 @@ public final class AppModel {
         autoReloadEnabled = defaults.bool(forKey: Self.autoReloadDefaultsKey)
         // Favorites start empty (no key registered) and load from any prior session.
         favoriteThemes = Set(defaults.stringArray(forKey: Self.favoriteThemesDefaultsKey) ?? [])
-        // List/grid preference survives relaunch; an unknown/absent value falls back to list.
-        themeViewMode = ThemeViewMode(rawValue: defaults.string(forKey: Self.themeViewModeDefaultsKey) ?? "") ?? .list
+        // List/grid preference survives relaunch; an unknown/absent value falls back to grid.
+        themeViewMode = ThemeViewMode(rawValue: defaults.string(forKey: Self.themeViewModeDefaultsKey) ?? "") ?? .grid
         // Welcome defaults to unseen on a fresh install (missing key → false).
         hasSeenWelcome = defaults.bool(forKey: Self.hasSeenWelcomeDefaultsKey)
         // A prior manual Ghostty binary path survives relaunch (G1), so a fix on the
