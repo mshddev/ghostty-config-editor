@@ -51,9 +51,10 @@ enum ContentSurface: Equatable {
 
     /// Resolve the surface from the model's navigation state. Global Find overlays every
     /// surface with a results *list*, so it reads as a form-width surface regardless of what
-    /// is selected beneath it.
+    /// is selected beneath it. The Status hub and its Problems drill-down both fall through to
+    /// `.form` by design — the drill-down destination never widens the column, so it isn't an
+    /// input here. Give one of those a wider canvas later by matching it before the `default`.
     static func resolve(selection: SidebarSelection?,
-                        statusDestination: StatusDestination,
                         isFinding: Bool) -> ContentSurface {
         if isFinding { return .form }
         switch selection {
@@ -77,26 +78,15 @@ enum ContentWidthPolicy {
     /// maximized window keeps a purposeful density rather than sprawling edge to edge.
     static let wideMaxWidth: CGFloat = 1000
 
-    /// The max width a surface's content column caps at — the value the live SwiftUI layout
-    /// feeds into `.frame(maxWidth:)`.
+    /// The max width a surface's content column caps at — the exact value the live SwiftUI
+    /// layout feeds into `.frame(maxWidth:)` (see `SurfaceWidthColumn`). This is the single
+    /// source the AE6 width expectations assert against, so the tests exercise the production
+    /// cap rather than a parallel re-derivation.
     static func maxContentWidth(for surface: ContentSurface) -> CGFloat {
         switch surface {
         case .form: return formMaxWidth
         case .themes, .keyboardShortcuts: return wideMaxWidth
         }
-    }
-
-    /// Approximate width the sidebar column takes, so a resolved content width tracks the
-    /// detail pane rather than the whole window. Used only by the pure resolution below; the
-    /// live layout gets its real pane width from SwiftUI.
-    static let sidebarAllowance: CGFloat = 220
-
-    /// The width a surface's content resolves to inside a window of `windowWidth`, after the
-    /// sidebar takes its share and the per-surface cap applies. Pure, so AE6's "forms stay
-    /// readable while Themes and Keyboard Shortcuts expand" is directly assertable.
-    static func resolvedContentWidth(for surface: ContentSurface, windowWidth: CGFloat) -> CGFloat {
-        let available = max(0, windowWidth - sidebarAllowance)
-        return min(available, maxContentWidth(for: surface))
     }
 }
 
@@ -466,7 +456,6 @@ struct RootView: View {
     /// Shortcuts each get their own bounded column width.
     private var currentContentSurface: ContentSurface {
         ContentSurface.resolve(selection: model.selection,
-                               statusDestination: model.statusDestination,
                                isFinding: model.isFinding)
     }
 

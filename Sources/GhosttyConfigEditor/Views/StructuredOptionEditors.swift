@@ -159,6 +159,20 @@ func transactionStatusView(_ transaction: EditTransaction, reload: @escaping () 
     }
 }
 
+// MARK: - Shared live-option lookup (U3/U4, R5)
+
+extension MergedOption {
+    /// The freshest form of this option: re-read from the live merged model so a structured
+    /// editor reflects an external edit or a just-applied write, falling back to this snapshot
+    /// when the browser hasn't loaded or the option has since vanished. Single-sourced here so
+    /// the stale-recovery lookup can't drift across the editors — the copy-paste that let some
+    /// U3/U4 editors dead-end an external-file conflict before it was consolidated (R5).
+    @MainActor
+    func live(in model: AppModel) -> MergedOption {
+        model.browser?.merged.option(named: option.name) ?? self
+    }
+}
+
 // MARK: - Keybind deep link
 
 /// keybind is edited on the dedicated Keyboard Shortcuts surface, so in a category/search row
@@ -202,9 +216,7 @@ struct RepeatableListEditor: View {
     @State private var showing = false
     @State private var newEntry = ""
 
-    private var liveOption: MergedOption {
-        model.browser?.merged.option(named: option.option.name) ?? option
-    }
+    private var liveOption: MergedOption { option.live(in: model) }
     private var entries: [String] { liveOption.isSet ? liveOption.userValues : [] }
 
     var body: some View {
@@ -330,9 +342,7 @@ struct FontFeatureEditor: View {
 
     /// Read the value in force from the live merged model, so the toggle reflects an
     /// external edit or a just-applied write.
-    private var liveOption: MergedOption {
-        model.browser?.merged.option(named: option.option.name) ?? option
-    }
+    private var liveOption: MergedOption { option.live(in: model) }
     private var values: [String] { liveOption.isSet ? liveOption.userValues : [] }
 
     var body: some View {
@@ -370,9 +380,7 @@ struct ScrollMultiplierEditor: View {
     @State private var showing = false
     @State private var transaction = EditTransaction(savedValue: "")
 
-    private var liveOption: MergedOption {
-        model.browser?.merged.option(named: option.option.name) ?? option
-    }
+    private var liveOption: MergedOption { option.live(in: model) }
     private var savedValue: String { liveOption.valuePresentation.value ?? "" }
 
     var body: some View {
@@ -479,9 +487,7 @@ struct BellFeaturesEditor: View {
     let option: MergedOption
     @State private var showing = false
 
-    private var liveOption: MergedOption {
-        model.browser?.merged.option(named: option.option.name) ?? option
-    }
+    private var liveOption: MergedOption { option.live(in: model) }
     private var savedValue: String { liveOption.valuePresentation.value ?? "" }
     private var parsed: BellFeaturesValue { BellFeaturesValue.parse(savedValue) }
 
@@ -571,9 +577,7 @@ struct PathChooserEditor: View {
     @State private var showing = false
     @State private var transaction = EditTransaction(savedValue: "")
 
-    private var liveOption: MergedOption {
-        model.browser?.merged.option(named: option.option.name) ?? option
-    }
+    private var liveOption: MergedOption { option.live(in: model) }
     private var savedValue: String { liveOption.valuePresentation.value ?? "" }
 
     var body: some View {
