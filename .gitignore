@@ -15,8 +15,8 @@ DerivedData/
 # macOS
 .DS_Store
 
-# Compound-engineering machine-local config (keep the .example template)
-.compound-engineering/config.local.yaml
-
-# Claude Code machine-local settings (shared skills under .claude/ are tracked)
+# Claude Code machine-local settings
 .claude/settings.local.json
+
+# Local release-prep working doc (not part of the published project)
+/RELEASE_CHECKLIST.md
