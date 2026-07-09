@@ -46,11 +46,15 @@ public enum ReloadOutcome: Equatable, Sendable {
     /// `EPERM` (R6) — distinct from a vanished instance.
     case unreachable
 
-    /// The caption to show beneath the "Saved" confirmation, or `nil` when there
-    /// is nothing to say (`.disabled`).
+    /// The caption to show beneath the "Saved" confirmation, or `nil` when there is
+    /// nothing worth saying — auto-reload disabled, or the routine success where every
+    /// reachable instance was signaled. The user just saw "Saved" and auto-reload working
+    /// is the expected default, so the happy path stays silent (F2); a caption appears only
+    /// when it's *actionable* — Ghostty isn't running, its version can't be signaled, it's
+    /// unreachable, or some instances still need a manual reload.
     ///
-    /// Because `SIGUSR2` is one-way and unacknowledged (KTD5), success copy says
-    /// the app *asked* Ghostty to reload — never that the reload itself succeeded.
+    /// Because `SIGUSR2` is one-way and unacknowledged (KTD5), the copy never claims the
+    /// reload itself succeeded — it only ever flags what still needs the user's attention.
     public var message: String? {
         switch self {
         case .disabled:
@@ -63,15 +67,13 @@ public enum ReloadOutcome: Equatable, Sendable {
             return "Couldn't confirm Ghostty's running version — reload it manually (auto-reload only signals a confirmed Ghostty 1.2+)."
         case .unreachable:
             return "Couldn't reach Ghostty to reload it — reload it manually."
-        case .reloaded(let count, let skipped):
-            let asked = count == 1
-                ? "Asked Ghostty to reload its config."
-                : "Asked \(count) running Ghostty instances to reload their config."
-            guard skipped > 0 else { return asked }
-            let manual = skipped == 1
-                ? "Another running instance couldn't be auto-reloaded — reload it manually."
-                : "\(skipped) other running instances couldn't be auto-reloaded — reload them manually."
-            return "\(asked) \(manual)"
+        case .reloaded(_, let skipped):
+            // Routine success (nothing skipped) says nothing; only the exceptional part —
+            // instances that still need a *manual* reload — is worth a caption.
+            guard skipped > 0 else { return nil }
+            return skipped == 1
+                ? "One running instance couldn't be auto-reloaded — reload it manually."
+                : "\(skipped) running instances couldn't be auto-reloaded — reload them manually."
         }
     }
 }

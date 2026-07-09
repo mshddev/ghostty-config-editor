@@ -191,25 +191,27 @@ final class GhosttyReloaderTests: XCTestCase {
     func testEachOutcomeMessageIsHonestAndDistinct() {
         XCTAssertNil(ReloadOutcome.disabled.message)
 
-        XCTAssertEqual(ReloadOutcome.reloaded(count: 1, skipped: 0).message,
-                       "Asked Ghostty to reload its config.")
-        // One-way signal (KTD5): copy says "asked", never "reloaded".
-        XCTAssertEqual(ReloadOutcome.reloaded(count: 1, skipped: 0).message?.contains("Asked"), true)
+        // Routine success stays silent — the user saw "Saved" and auto-reload working is
+        // the expected default, so there's nothing worth saying (F2). Single and multi.
+        XCTAssertNil(ReloadOutcome.reloaded(count: 1, skipped: 0).message)
+        XCTAssertNil(ReloadOutcome.reloaded(count: 2, skipped: 0).message)
 
+        // A skipped instance still needs a manual reload — that part is actionable, so it
+        // surfaces a caption saying "manually" (never claiming the reload itself succeeded).
         let withSkip = ReloadOutcome.reloaded(count: 1, skipped: 1).message
         XCTAssertEqual(withSkip?.contains("manually"), true)
-
-        let multi = ReloadOutcome.reloaded(count: 2, skipped: 0).message
-        XCTAssertEqual(multi?.contains("2"), true)
+        let multiSkip = ReloadOutcome.reloaded(count: 3, skipped: 2).message
+        XCTAssertEqual(multiSkip?.contains("2"), true)
+        XCTAssertEqual(multiSkip?.contains("manually"), true)
 
         XCTAssertEqual(ReloadOutcome.noInstance.message?.contains("running"), true)
         XCTAssertEqual(ReloadOutcome.versionUnsupported.message?.contains("1.2"), true)
         XCTAssertEqual(ReloadOutcome.versionUnknown.message?.contains("confirm"), true)
         XCTAssertEqual(ReloadOutcome.unreachable.message?.contains("manually"), true)
 
-        // Every non-disabled outcome must surface *some* honest caption.
+        // Every *actionable* outcome must surface a caption; routine success must not.
         for outcome: ReloadOutcome in [.noInstance, .versionUnsupported, .versionUnknown,
-                                       .unreachable, .reloaded(count: 1, skipped: 0)] {
+                                       .unreachable, .reloaded(count: 1, skipped: 1)] {
             XCTAssertNotNil(outcome.message)
         }
     }
