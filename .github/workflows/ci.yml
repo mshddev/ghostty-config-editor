@@ -20,7 +20,10 @@ jobs:
     # still deploys to macOS 14 (older systems get the guarded fallback). The
     # Ghostty-backed tests XCTSkip when no `ghostty` binary is present (as on CI).
     runs-on: macos-26
-    timeout-minutes: 12
+    # A clean build + test finishes in ~1.5 min; the headroom absorbs the
+    # occasional slow provision on the newer (scarcer) macos-26 runners so a
+    # valid run isn't clipped and reported as "cancelled".
+    timeout-minutes: 20
     steps:
       - uses: actions/checkout@v5
 
