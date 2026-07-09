@@ -12,7 +12,7 @@ You'll need macOS 14+, the Swift 6 toolchain (Xcode 16+), and [Ghostty](https://
 installed (the app and some tests drive the real `ghostty` CLI).
 
 ```bash
-git clone https://github.com/mshddev/GhosttyConfigEditor.git
+git clone https://github.com/mshddev/ghostty-config-editor.git
 cd GhosttyConfigEditor
 swift build
 swift test

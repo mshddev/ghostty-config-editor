@@ -2,7 +2,7 @@
 
 > A native macOS app that gives the [Ghostty](https://ghostty.org) terminal a friendly GUI for its configuration.
 
-[![CI](https://github.com/mshddev/GhosttyConfigEditor/actions/workflows/ci.yml/badge.svg)](https://github.com/mshddev/GhosttyConfigEditor/actions/workflows/ci.yml)
+[![CI](https://github.com/mshddev/ghostty-config-editor/actions/workflows/ci.yml/badge.svg)](https://github.com/mshddev/ghostty-config-editor/actions/workflows/ci.yml)
 [![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 ![Platform: macOS 14+](https://img.shields.io/badge/macOS-14%2B-black?logo=apple)
 ![Swift 6](https://img.shields.io/badge/Swift-6-f05138?logo=swift&logoColor=white)
@@ -33,7 +33,7 @@ version you have installed — no bundled, drifting copy of the options list.
 
 ### Download
 
-Grab the latest `Ghostty Config Editor.app` from the [Releases](https://github.com/mshddev/GhosttyConfigEditor/releases)
+Grab the latest `Ghostty Config Editor.app` from the [Releases](https://github.com/mshddev/ghostty-config-editor/releases)
 page, unzip it, and drag it to `/Applications`.
 
 > **First launch:** the app is signed ad-hoc, so macOS Gatekeeper may say it's from an
@@ -43,7 +43,7 @@ page, unzip it, and drag it to `/Applications`.
 ### Build from source
 
 ```bash
-git clone https://github.com/mshddev/GhosttyConfigEditor.git
+git clone https://github.com/mshddev/ghostty-config-editor.git
 cd GhosttyConfigEditor
 scripts/package-app.sh --install   # builds and copies the .app to /Applications
 ```

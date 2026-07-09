@@ -22,5 +22,5 @@ enum AppInfo {
     static let minimumGhosttyVersion = "1.3.1"
 
     /// The project's public home, shown in the About panel.
-    static let repositoryURL = "https://github.com/mshddev/GhosttyConfigEditor"
+    static let repositoryURL = "https://github.com/mshddev/ghostty-config-editor"
 }
