@@ -8,12 +8,14 @@ report a security issue, see [SECURITY.md](SECURITY.md).
 
 ## Getting set up
 
-You'll need macOS 14+, the Swift 6 toolchain (Xcode 16+), and [Ghostty](https://ghostty.org)
-installed (the app and some tests drive the real `ghostty` CLI).
+You'll need Xcode 26 (the macOS 26 SDK) and a Swift 6 toolchain to build, macOS 14+ to run, and
+[Ghostty](https://ghostty.org) installed — the app and some tests drive the real `ghostty` CLI. The
+macOS 26 SDK is required because the app adopts a couple of macOS 26 SwiftUI refinements behind
+`#available` guards; the app itself still runs back to macOS 14.
 
 ```bash
 git clone https://github.com/mshddev/ghostty-config-editor.git
-cd GhosttyConfigEditor
+cd ghostty-config-editor
 swift build
 swift test
 swift run GhosttyConfigEditor
