@@ -6,36 +6,26 @@ import GhosttyConfigKit
 /// of the primary editing navigation while preserving one place to inspect Ghostty,
 /// Customized values, and Problems.
 ///
-/// Closes the "the not-found screen says set the binary path, but no UI sets it"
-/// dead-end (FEATURES-2/3, ONBOARD-2/8/12): a **Ghostty** section chooses the binary
-/// (persisted via `BinaryOverrideStore`, so a fix survives relaunch), a **Config file**
-/// section reveals/creates the file, and **Behavior** carries the auto-reload toggle.
-/// Reads the shared `AppModel` from the environment (which the WindowGroup injects — no
-/// more cross-scene injection, since the separate `Settings` scene is gone).
+/// Laid out **health-first** in three grouped cards (G-2): **Health** (Problems +
+/// Customized as prominent tiles up top, so "is anything wrong?" reads first),
+/// **Environment** (the Ghostty binary, the config file, and the auto-reload behavior —
+/// where things live and how saving behaves), and **Manage** (backup + reset). This
+/// collapses the former seven flat sections into three denser groups. Config-missing has
+/// a single home in Environment's Config file row (it no longer also shows under
+/// Problems). Reads the shared `AppModel` from the environment.
 struct StatusView: View {
     @Environment(AppModel.self) private var model
     let ghosttyVersion: String
     @State private var confirmingReset = false
 
     var body: some View {
-        @Bindable var model = model
         VStack(spacing: 0) {
             SurfaceHeader(title: "Status")
             Divider()
             Form {
-                ghosttySection
-                configFileSection
-                Section("Behavior") {
-                    Toggle("Automatically reload Ghostty after changes", isOn: $model.autoReloadEnabled)
-                    Text("After each saved change, the app asks the running Ghostty to reload its config so live terminals update right away. Uses Ghostty's reload signal — needs Ghostty 1.2 or newer.")
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                        .fixedSize(horizontal: false, vertical: true)
-                }
-                customizedSection
-                problemsSection
-                backupSection
-                resetSection
+                healthSection
+                environmentSection
+                manageSection
             }
             .formStyle(.grouped)
             // Import / reset route through the shared write engine, so their outcome
@@ -55,175 +45,160 @@ struct StatusView: View {
         }
     }
 
-    // MARK: - Configuration summaries
+    // MARK: - Health (G-2) — Problems + Customized, up top, 2-up
 
+    /// Health leads the surface: the two things you'd want to know at a glance, rendered
+    /// as free-standing tiles (cleared row chrome) side by side. Problems carries health
+    /// color (green / orange); Customized stays neutral — a changed value isn't an error.
     @ViewBuilder
-    private var customizedSection: some View {
-        Section("Customized") {
-            if model.customizedCount == 0 {
-                StatusSummaryRow(
-                    systemImage: "checkmark.circle.fill",
-                    tint: .green,
-                    title: "No customized options",
-                    detail: "Using Ghostty defaults."
-                )
-            } else {
-                let count = model.customizedCount
-                StatusSummaryRow(
-                    systemImage: "slider.horizontal.3",
-                    tint: DesignTokens.customizedTint,
-                    title: "\(count) customized option\(count == 1 ? "" : "s")",
-                    detail: "Review values that differ from Ghostty defaults.",
-                    actionTitle: "Review",
-                    // Drill into the Customized sub-surface; the sidebar stays on Status
-                    // (KTD6), and reselecting Status returns here to the hub (AE7).
-                    action: { model.setStatusDestination(.customized) }
-                )
+    private var healthSection: some View {
+        Section("Health") {
+            HStack(alignment: .top, spacing: DesignTokens.Spacing.cozy) {
+                problemsTile
+                customizedTile
             }
+            .listRowInsets(EdgeInsets(top: 8, leading: 20, bottom: 8, trailing: 20))
+            .listRowBackground(Color.clear)
         }
     }
 
     @ViewBuilder
-    private var problemsSection: some View {
-        Section("Problems") {
+    private var problemsTile: some View {
+        if model.configMissing {
+            // Config-missing is flagged (and fixable) in Environment › Config file; the
+            // Problems tile stays about validity so the two don't duplicate that state.
+            StatusHealthTile(systemImage: "checkmark.circle.fill", tint: .green,
+                             label: "Problems", value: "None")
+        } else if model.lintReport == nil {
+            StatusHealthTile(systemImage: "ellipsis.circle", tint: .secondary,
+                             label: "Problems", value: "Checking…")
+        } else if model.problemCount > 0 {
+            let count = model.problemCount
+            StatusHealthTile(systemImage: "exclamationmark.triangle.fill", tint: .orange,
+                             label: "Problems", value: "\(count) found",
+                             actionTitle: "Review", action: { model.setStatusDestination(.problems) })
+        } else {
+            StatusHealthTile(systemImage: "checkmark.circle.fill", tint: .green,
+                             label: "Problems", value: "None")
+        }
+    }
+
+    @ViewBuilder
+    private var customizedTile: some View {
+        if model.customizedCount == 0 {
+            StatusHealthTile(systemImage: "slider.horizontal.3", tint: .secondary,
+                             label: "Customized", value: "None")
+        } else {
+            let count = model.customizedCount
+            StatusHealthTile(systemImage: "slider.horizontal.3", tint: .secondary,
+                             label: "Customized", value: "\(count) option\(count == 1 ? "" : "s")",
+                             actionTitle: "Review", action: { model.setStatusDestination(.customized) })
+        }
+    }
+
+    // MARK: - Environment (G-2) — binary, config file, auto-reload behavior
+
+    @ViewBuilder
+    private var environmentSection: some View {
+        @Bindable var model = model
+        Section("Environment") {
+            ghosttyRow
+            configFileRow
+            VStack(alignment: .leading, spacing: DesignTokens.Spacing.tight) {
+                Toggle("Automatically reload Ghostty after changes", isOn: $model.autoReloadEnabled)
+                Text("After each saved change, the app asks the running Ghostty to reload its config so live terminals update right away. Uses Ghostty's reload signal — needs Ghostty 1.2 or newer.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+        }
+    }
+
+    /// The Ghostty binary: version + health glyph, with Choose… (and an escape back to
+    /// auto-detected when a manual binary is in force). (FEATURES-2)
+    private var ghosttyRow: some View {
+        let detected = model.resolvedBinaryPath != nil
+        return HStack(spacing: DesignTokens.Spacing.cozy) {
+            healthGlyph(detected ? "checkmark.circle.fill" : "exclamationmark.triangle.fill",
+                        tint: detected ? .green : .orange,
+                        label: detected ? "Detected" : "Needs attention")
+            VStack(alignment: .leading, spacing: 1) {
+                Text(detected
+                     ? (ghosttyVersion.isEmpty ? "Ghostty" : "Ghostty \(ghosttyVersion)")
+                     : "Ghostty not detected")
+                Text(model.binaryOverride != nil
+                     ? "Using a binary you chose manually."
+                     : (detected ? "Detected automatically." : "Set the path to your Ghostty binary."))
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
+            Spacer(minLength: DesignTokens.Spacing.snug)
+            Button("Choose…") { chooseBinary() }
+            if model.binaryOverride != nil {
+                Button("Use auto-detected") { Task { await model.setBinaryOverride(nil) } }
+            }
+        }
+    }
+
+    /// The config file: its resolved path + health glyph, with reveal, and create when
+    /// it's missing (config-missing's single home now). (FEATURES-3)
+    private var configFileRow: some View {
+        HStack(spacing: DesignTokens.Spacing.cozy) {
+            healthGlyph(model.configMissing ? "exclamationmark.triangle.fill" : "checkmark.circle.fill",
+                        tint: model.configMissing ? .orange : .green,
+                        label: model.configMissing ? "Needs attention" : "Detected")
+            VStack(alignment: .leading, spacing: 1) {
+                Text("Config file")
+                if let path = model.configFilePath { pathText(path) }
+                if model.configMissing {
+                    Text("No file yet — create it, or your first change will.")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
+            }
+            Spacer(minLength: DesignTokens.Spacing.snug)
+            Button("Reveal in Finder") { model.revealConfigInFinder() }
             if model.configMissing {
-                StatusSummaryRow(
-                    systemImage: "exclamationmark.triangle.fill",
-                    tint: .orange,
-                    title: "Config file not found",
-                    detail: "Your first change can create it, or create it now.",
-                    actionTitle: "Create",
-                    action: { Task { await model.createConfigFileIfMissing() } }
-                )
-            } else if model.lintReport == nil {
-                HStack(spacing: DesignTokens.Spacing.standard) {
-                    ProgressView().controlSize(.small)
-                    Text("Checking configuration…").foregroundStyle(.secondary)
-                }
-            } else if model.problemCount > 0 {
-                let count = model.problemCount
-                StatusSummaryRow(
-                    systemImage: "exclamationmark.triangle.fill",
-                    tint: .orange,
-                    title: "\(count) problem\(count == 1 ? "" : "s") detected",
-                    detail: "Review validation errors and potentially unsafe settings.",
-                    actionTitle: "Review Problems",
-                    action: { model.setStatusDestination(.problems) }
-                )
-            } else {
-                StatusSummaryRow(
-                    systemImage: "checkmark.circle.fill",
-                    tint: .green,
-                    title: "No problems detected",
-                    detail: "Your configuration is valid."
-                )
+                Button("Create") { Task { await model.createConfigFileIfMissing() } }
             }
         }
     }
 
-    // MARK: - Backup & reset (G4)
+    // MARK: - Manage (G-2) — backup + reset
 
+    /// Backup actions and the destructive reset, merged. Reset renders red via
+    /// DestructiveRowButton (a grouped Form drops `role:`-only styling, DS-7) and only
+    /// appears when there's something to reset.
     @ViewBuilder
-    private var backupSection: some View {
-        Section("Backup") {
-            Button("Copy Full Config") { model.copyConfigToPasteboard() }
-            Button("Export…") {
-                if let text = model.primaryConfigText { ConfigTransfer.export(text) }
-            }
-            Button("Import…") {
-                if let text = ConfigTransfer.chooseImportText() {
-                    Task { await model.importConfig(text: text) }
+    private var manageSection: some View {
+        Section("Manage") {
+            LabeledContent {
+                HStack(spacing: DesignTokens.Spacing.snug) {
+                    Button("Copy") { model.copyConfigToPasteboard() }
+                    Button("Export…") {
+                        if let text = model.primaryConfigText { ConfigTransfer.export(text) }
+                    }
+                    Button("Import…") {
+                        if let text = ConfigTransfer.chooseImportText() {
+                            Task { await model.importConfig(text: text) }
+                        }
+                    }
+                }
+            } label: {
+                VStack(alignment: .leading, spacing: 1) {
+                    Text("Backup")
+                    Text("Copy, export, or import your config.")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
                 }
             }
-        }
-    }
-
-    /// Reset lives in its own trailing section, separated from the benign backup actions
-    /// (IA-6, matching the Customized surface), and renders red via DestructiveRowButton
-    /// since a grouped Form drops `role:`-only styling (DS-7).
-    @ViewBuilder
-    private var resetSection: some View {
-        if model.resettableCount > 0 {
-            Section {
+            if model.resettableCount > 0 {
                 DestructiveRowButton(title: "Reset All to Defaults…") { confirmingReset = true }
             }
         }
     }
 
-    // MARK: - Ghostty binary (FEATURES-2)
-
-    @ViewBuilder
-    private var ghosttySection: some View {
-        Section("Ghostty") {
-            LabeledContent("Version") {
-                Text(ghosttyVersion)
-                    .foregroundStyle(.secondary)
-                    .textSelection(.enabled)
-            }
-            if let path = model.resolvedBinaryPath {
-                LabeledContent("Binary") {
-                    HStack(spacing: DesignTokens.Spacing.snug) {
-                        pathText(path)
-                        healthGlyph("checkmark.circle.fill", tint: .green, label: "Detected")
-                    }
-                }
-                if model.binaryOverride == nil {
-                    Text("Detected automatically.")
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                }
-            } else {
-                LabeledContent("Binary") {
-                    HStack(spacing: DesignTokens.Spacing.snug) {
-                        Text("Not detected").foregroundStyle(.secondary)
-                        healthGlyph("exclamationmark.triangle.fill", tint: .orange, label: "Needs attention")
-                    }
-                }
-            }
-            if model.binaryOverride != nil {
-                Text("Using a binary you chose manually.")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-            }
-            HStack {
-                Button("Choose…") { chooseBinary() }
-                if model.binaryOverride != nil {
-                    Button("Use auto-detected") { Task { await model.setBinaryOverride(nil) } }
-                }
-            }
-        }
-    }
-
-    // MARK: - Config file (FEATURES-3)
-
-    @ViewBuilder
-    private var configFileSection: some View {
-        Section("Config file") {
-            if let path = model.configFilePath {
-                LabeledContent("Location") {
-                    HStack(spacing: DesignTokens.Spacing.snug) {
-                        pathText(path)
-                        healthGlyph(
-                            model.configMissing ? "exclamationmark.triangle.fill" : "checkmark.circle.fill",
-                            tint: model.configMissing ? .orange : .green,
-                            label: model.configMissing ? "Needs attention" : "Detected"
-                        )
-                    }
-                }
-            }
-            if model.configMissing {
-                Text("No file yet — your first change creates it, or create it now.")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-            }
-            HStack {
-                Button("Reveal in Finder") { model.revealConfigInFinder() }
-                if model.configMissing {
-                    Button("Create config file") { Task { await model.createConfigFileIfMissing() } }
-                }
-            }
-        }
-    }
+    // MARK: - Shared bits
 
     /// A resolved filesystem path rendered compactly (monospaced, middle-truncated,
     /// selectable) so a long `~/.config/...` path never blows out the row.
@@ -250,36 +225,34 @@ struct StatusView: View {
     }
 }
 
-/// One calm status line used by the Customized and Problems sections. The row stays
-/// informational; an explicit trailing button appears only when there is useful work.
-private struct StatusSummaryRow: View {
+/// One compact health tile (G-2 Grouped cards). A labeled value with an optional review
+/// action, sized to sit 2-up. Health tiles carry health color; Customized stays neutral.
+private struct StatusHealthTile: View {
     let systemImage: String
     let tint: Color
-    let title: String
-    let detail: String
+    let label: String
+    let value: String
     var actionTitle: String? = nil
     var action: (() -> Void)? = nil
 
     var body: some View {
-        HStack(alignment: .center, spacing: DesignTokens.Spacing.cozy) {
+        HStack(spacing: DesignTokens.Spacing.cozy) {
             Image(systemName: systemImage)
                 .font(.title3)
                 .foregroundStyle(tint)
                 .accessibilityHidden(true)
-            VStack(alignment: .leading, spacing: 2) {
-                Text(title).font(.body.weight(.medium))
-                Text(detail)
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-                    .fixedSize(horizontal: false, vertical: true)
+            VStack(alignment: .leading, spacing: 1) {
+                Text(label).font(.caption).foregroundStyle(.secondary)
+                Text(value).font(.title3.weight(.semibold))
             }
-            Spacer(minLength: DesignTokens.Spacing.standard)
+            Spacer(minLength: DesignTokens.Spacing.snug)
             if let actionTitle, let action {
-                Button(actionTitle, action: action)
+                Button(actionTitle, action: action).font(.caption)
             }
         }
-        .padding(.vertical, RowMetrics.rowVerticalPadding)
-        .accessibilityElement(children: .contain)
+        .padding(DesignTokens.Spacing.cozy)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(DesignTokens.subtleFill, in: RoundedRectangle(cornerRadius: DesignTokens.Radius.card))
     }
 }
 
