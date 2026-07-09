@@ -1325,6 +1325,17 @@ public final class AppModel {
         resolvedBinaryPath == nil || configMissing || problemCount > 0
     }
 
+    /// A concise, honest caption for the sidebar Status footer (G1). "All clear" when
+    /// healthy; otherwise the single most salient, actionable reason — prioritized
+    /// problems → missing config → missing binary — so the footer names a real issue
+    /// instead of a vague "needs attention". Mirrors `statusNeedsAttention`'s conditions.
+    public var statusAttentionSummary: String {
+        if problemCount > 0 { return problemCount == 1 ? "1 problem" : "\(problemCount) problems" }
+        if configMissing { return "Config file not found" }
+        if resolvedBinaryPath == nil { return "Ghostty not detected" }
+        return "All clear"
+    }
+
     // MARK: - Derived view data
 
     public var categories: [String] {

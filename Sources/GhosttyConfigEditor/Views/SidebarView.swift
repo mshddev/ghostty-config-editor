@@ -70,24 +70,36 @@ struct SidebarView: View {
     /// Aggregate status pinned to a fixed, non-scrolling footer (the Finder/Xcode idiom):
     /// its visibility never depends on how many category rows fit above it at any window
     /// height. It's a second single-row `List` sharing the same selection binding, so it
-    /// gets the native sidebar highlight for free. Its icon reports aggregate health while
-    /// Customized remains neutral: a changed value is not an error.
+    /// gets the native sidebar highlight for free. A leading health glyph + a caption
+    /// **spelling out** the state (G1) — "All clear", or the salient reason ("3 problems",
+    /// "Config file not found") — so the footer actually indicates a status rather than
+    /// relying on a lone dot. Customized stays out of it: a changed value is not an error.
     private var statusFooter: some View {
         let needsAttention = model.statusNeedsAttention
+        let summary = model.statusAttentionSummary
         return List(selection: sidebarSelection) {
             HStack(spacing: DesignTokens.Spacing.standard) {
-                Text("Status")
-                Spacer(minLength: 0)
                 Image(systemName: needsAttention
                       ? "exclamationmark.triangle.fill"
                       : "checkmark.circle.fill")
+                    .font(.body)
                     .foregroundStyle(needsAttention ? Color.orange : Color.green)
                     .accessibilityHidden(true)
+                VStack(alignment: .leading, spacing: 1) {
+                    Text("Status")
+                    Text(summary)
+                        .font(.caption)
+                        .foregroundStyle(needsAttention ? Color.orange : Color.secondary)
+                        .lineLimit(1)
+                        .truncationMode(.tail)
+                }
+                Spacer(minLength: 0)
             }
                 .tag(SidebarSelection.status)
+                .accessibilityElement(children: .ignore)
                 .accessibilityLabel("Status")
-                .accessibilityValue(needsAttention ? "Needs attention" : "All clear")
-                .help(needsAttention ? "Status needs attention" : "Status is healthy")
+                .accessibilityValue(needsAttention ? "Needs attention, \(summary)" : "All clear")
+                .help(needsAttention ? "Status needs attention — \(summary)" : "Status is healthy")
                 // AE7: reselecting the already-highlighted Status footer must return to the
                 // hub. A `List(selection:)` binding doesn't fire for a re-pick of the current
                 // row (the value is unchanged), so this gesture catches the re-pick while a
@@ -100,7 +112,7 @@ struct SidebarView: View {
                 })
         }
         .scrollDisabled(true)
-        .frame(height: 44)
+        .frame(height: 58)
         .listStyle(.sidebar)
     }
 
