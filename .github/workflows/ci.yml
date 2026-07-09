@@ -13,10 +13,13 @@ concurrency:
 jobs:
   test:
     name: Build & test (macOS)
-    # macOS 15 ships Xcode 16 / Swift 6, which this package's swift-tools 6.0
-    # manifest and macOS 14 deployment target require. The app's Ghostty-backed
-    # tests XCTSkip when no `ghostty` binary is present (as on CI).
-    runs-on: macos-15
+    # macOS 26 (Tahoe) ships the Xcode 26 / macOS 26 SDK. The app progressively
+    # adopts macOS 26 SwiftUI refinements (e.g. `sharedBackgroundVisibility`)
+    # behind `if #available(macOS 26, *)` runtime guards; those symbols exist only
+    # in the macOS 26 SDK, so CI must compile against it even though the package
+    # still deploys to macOS 14 (older systems get the guarded fallback). The
+    # Ghostty-backed tests XCTSkip when no `ghostty` binary is present (as on CI).
+    runs-on: macos-26
     timeout-minutes: 12
     steps:
       - uses: actions/checkout@v4
