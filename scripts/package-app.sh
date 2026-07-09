@@ -23,6 +23,7 @@ BUNDLE_ID="com.mshddev.GhosttyConfigEditor"
 SHORT_VERSION="1.0"
 BUILD_VERSION="1"
 MIN_MACOS="14.0"
+COPYRIGHT="Copyright © 2026 mshddev. Released under the MIT License. Not affiliated with the Ghostty project."
 
 # The Bundle.module resource bundle SwiftPM emits for the kit target. It lives in
 # Contents/Resources, the first location Bundle.module probes (Bundle.main.resourceURL).
@@ -92,6 +93,8 @@ cat > "${APP_DIR}/Contents/Info.plist" <<PLIST
     <string>NSApplication</string>
     <key>NSHighResolutionCapable</key>
     <true/>
+    <key>NSHumanReadableCopyright</key>
+    <string>${COPYRIGHT}</string>
 ${ICON_KEY}
 </dict>
 </plist>
