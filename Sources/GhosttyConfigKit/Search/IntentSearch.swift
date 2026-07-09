@@ -1,6 +1,6 @@
 import Foundation
 
-/// Curated phrase → option(s) map for intent/behavior search (R4, KTD7). Loaded
+/// Curated phrase → option(s) map for intent/behavior search. Loaded
 /// from a bundled JSON resource; deliberately small and hand-maintained rather
 /// than heuristic/ML.
 public struct IntentMap: Sendable {
@@ -40,7 +40,7 @@ public struct IntentMap: Sendable {
 
     /// Like `options(matching:)` but also returns *which* curated phrase matched, so
     /// callers can explain why an option surfaced (the intent-provenance "matches: …"
-    /// badge — D2). The first matching phrase of an entry wins; options are
+    /// badge). The first matching phrase of an entry wins; options are
     /// de-duplicated in first-seen order, exactly like `options(matching:)`.
     public func matches(for query: String) -> [(option: String, phrase: String)] {
         let q = query.lowercased().trimmingCharacters(in: .whitespaces)
@@ -73,7 +73,7 @@ public struct SearchHit: Sendable, Equatable {
     public let score: Int
     /// For `.intent` matches, the curated phrase that surfaced this option — so a
     /// global-search result can show "matches: transparent background" and explain
-    /// why a name-mismatched option appeared (D2). `nil` for name/doc matches.
+    /// why a name-mismatched option appeared. `nil` for name/doc matches.
     public let intentPhrase: String?
 
     public init(optionName: String, matchKind: MatchKind, score: Int, intentPhrase: String? = nil) {
@@ -84,8 +84,7 @@ public struct SearchHit: Sendable, Equatable {
     }
 }
 
-/// Layered option search: curated intent map → option-name match → doc full-text
-/// (KTD7, R3, R4).
+/// Layered option search: curated intent map → option-name match → doc full-text.
 public struct CatalogSearch: Sendable {
     public let catalog: OptionCatalog
     public let intentMap: IntentMap
@@ -127,7 +126,7 @@ public struct CatalogSearch: Sendable {
 
 /// View-facing helper over a `MergedConfig`: category browsing, search, the
 /// discovery (unused) surface, and copy-snippet generation. Pure and Sendable so
-/// the SwiftUI layer stays thin and the logic is fully testable (R3, R4, R6).
+/// the SwiftUI layer stays thin and the logic is fully testable.
 public struct CatalogBrowser: Sendable {
     public let merged: MergedConfig
     public let search: CatalogSearch
@@ -147,7 +146,7 @@ public struct CatalogBrowser: Sendable {
 
     /// The category's **Common** options — the curated common tier, plus any
     /// *customized* advanced option auto-promoted so a changed setting is never
-    /// hidden behind the Advanced disclosure (IA-2, R2). Preserves the shared
+    /// hidden behind the Advanced disclosure. Preserves the shared
     /// `OptionOrdering` sort, so curated commons lead in their curated order and
     /// promoted options trail alphabetically.
     public func commonOptions(in category: String) -> [MergedOption] {
@@ -173,8 +172,8 @@ public struct CatalogBrowser: Sendable {
         search.search(query).compactMap { hit in merged.option(named: hit.optionName) }
     }
 
-    /// Search results scoped to a single category — the per-surface **local** filter
-    /// (R9/F3). Runs the same layered search as the global Find surface, then constrains
+    /// Search results scoped to a single category — the per-surface **local** filter.
+    /// Runs the same layered search as the global Find surface, then constrains
     /// the ranked hits to the browsed category so a local filter never surfaces another
     /// category's options. A `nil` scope (a non-category surface) degrades to the unscoped
     /// results, so the local field never silently drops matches. Global Find keeps using
@@ -187,7 +186,7 @@ public struct CatalogBrowser: Sendable {
 
     /// Search results paired with their `SearchHit` provenance, in ranked order — so
     /// the global Find surface can show, per row, the option's category pill and (for
-    /// intent matches) the phrase that surfaced it (D2). A hit whose option is absent
+    /// intent matches) the phrase that surfaced it. A hit whose option is absent
     /// from the merged config is dropped, mirroring `searchResults`.
     public func searchHits(_ query: String) -> [(hit: SearchHit, option: MergedOption)] {
         search.search(query).compactMap { hit in
@@ -195,7 +194,7 @@ public struct CatalogBrowser: Sendable {
         }
     }
 
-    /// The "you're not using this" discovery surface (R6).
+    /// The "you're not using this" discovery surface.
     public var unusedOptions: [MergedOption] {
         merged.unusedOptions.sorted { $0.option.name < $1.option.name }
     }

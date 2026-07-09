@@ -15,7 +15,7 @@ public struct ValidationMessage: Sendable, Equatable {
     }
 }
 
-/// The result of running `+validate-config` (R15).
+/// The result of running `+validate-config`.
 public struct ValidationResult: Sendable, Equatable {
     public let isValid: Bool
     public let messages: [ValidationMessage]
@@ -28,7 +28,7 @@ public struct ValidationResult: Sendable, Equatable {
     }
 }
 
-/// A statically-detected configuration footgun (R16).
+/// A statically-detected configuration footgun.
 public struct LintFinding: Sendable, Equatable, Identifiable {
     public enum Severity: String, Sendable, Equatable {
         case error
@@ -57,7 +57,7 @@ public struct LintFinding: Sendable, Equatable, Identifiable {
 
 /// The outcome of the `+validate-config` step — distinguishes "validated, no
 /// errors" from "couldn't validate", which a plain `ValidationResult?` conflated
-/// into `nil` and let the UI render a false all-clear (R15).
+/// into `nil` and let the UI render a false all-clear.
 public enum ValidationOutcome: Sendable, Equatable {
     /// Not attempted — no binary available (e.g. first launch with no config).
     case notRun
@@ -84,7 +84,7 @@ public struct LintReport: Sendable {
         return validationFailed || findings.contains { $0.severity != .info }
     }
 
-    /// At-a-glance config health for the window-chrome chip (R15, R16). `.error`
+    /// At-a-glance config health for the window-chrome chip. `.error`
     /// outranks `.warning`; `.unknown` means live validation couldn't run
     /// (surfaced instead of a false all-clear), and `.clean` means
     /// validated/not-run with no actionable footguns.
@@ -142,13 +142,12 @@ public struct LintReport: Sendable {
     }
 }
 
-/// Validates config via the Ghostty CLI and flags known footguns statically
-/// (R15, R16).
+/// Validates config via the Ghostty CLI and flags known footguns statically.
 public struct ConfigLinter: Sendable {
 
     public init() {}
 
-    // MARK: - CLI validation (R15)
+    // MARK: - CLI validation
 
     /// Run `+validate-config`, optionally against a specific file. Errors are
     /// parsed from output of the form `path:line:key: message`.
@@ -194,7 +193,7 @@ public struct ConfigLinter: Sendable {
         return messages
     }
 
-    // MARK: - Static footgun lint (R16)
+    // MARK: - Static footgun lint
 
     /// Flag known footguns over the parsed config model.
     public func lint(_ model: ConfigModel) -> [LintFinding] {

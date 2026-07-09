@@ -1,7 +1,7 @@
 import SwiftUI
 import AppKit
 
-/// U11 (MO-1, TH-6): "one click to close, one to act."
+/// "one click to close, one to act."
 ///
 /// A SwiftUI `.popover` on macOS is a `.transient` `NSPopover`. When you click a control
 /// *outside* the open popover, AppKit consumes that click to dismiss the popover — so the
@@ -16,7 +16,7 @@ import AppKit
 ///
 /// Disciplined like `KeyRecorderNSView`'s monitor: installed only while presented, torn
 /// down on dismissal *and* on disappear, and it only ever closes *its own* popover — it
-/// never inspects or perturbs another `isPresented` binding or the U12 hover state.
+/// never inspects or perturbs another `isPresented` binding or the hover state.
 ///
 /// This is the documented recipe for the ~11 popover sites; it's applied where the
 /// two-click cost actually bites (the info popover and the font picker), not blanket.
@@ -43,7 +43,7 @@ private struct PopoverPassthroughDismiss: ViewModifier {
         monitor = NSEvent.addLocalMonitorForEvents(matching: [.leftMouseDown]) { [weak host] event in
             if let host, event.window === host {
                 // Outside the popover → close it, then let the click through so it acts on
-                // the control underneath in the same gesture (MO-1). Flipping the binding
+                // the control underneath in the same gesture. Flipping the binding
                 // fires `.onChange` → `remove()`, so the monitor tears itself down.
                 isPresented = false
             }
@@ -59,7 +59,7 @@ private struct PopoverPassthroughDismiss: ViewModifier {
 
 extension View {
     /// Make a `.popover(isPresented:)` dismiss *and pass the closing click through* to the
-    /// control underneath, so it takes one click instead of two (U11 / MO-1). Attach to
+    /// control underneath, so it takes one click instead of two. Attach to
     /// the same view that carries the `.popover`, bound to the same flag.
     func passthroughPopoverDismiss(isPresented: Binding<Bool>) -> some View {
         modifier(PopoverPassthroughDismiss(isPresented: isPresented))

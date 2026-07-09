@@ -5,9 +5,9 @@ import GhosttyConfigKit
 
 /// A focusable control that records a single modifier+key chord — press the real
 /// hotkey, exactly like a system shortcut field — and hands a canonical trigger
-/// token back to SwiftUI (RK3, KTD6). All the token logic lives in the kit
+/// token back to SwiftUI. All the token logic lives in the kit
 /// (`KeybindTrigger.token(from:)`); this view only captures the keystroke and
-/// resolves the layout-correct character (KTD5).
+/// resolves the layout-correct character.
 struct KeyRecorderView: NSViewRepresentable {
     /// The trigger token to display (the binding's current trigger).
     let token: String
@@ -19,7 +19,7 @@ struct KeyRecorderView: NSViewRepresentable {
     var onRecordingChanged: (Bool) -> Void = { _ in }
     /// When true, the recorder focuses itself and begins recording the instant it appears —
     /// for the "press keys to search" capture, which opens already listening. Default false
-    /// keeps the rebind capsules recording only on click/Return (A11Y-9 tab traversal).
+    /// keeps the rebind capsules recording only on click/Return (tab traversal).
     var autostart: Bool = false
 
     func makeNSView(context: Context) -> KeyRecorderNSView {
@@ -41,7 +41,7 @@ struct KeyRecorderView: NSViewRepresentable {
         view.needsDisplay = true
     }
 
-    /// Size the capsule to its glyph content (U27), so short chords (⌘n) don't reserve a
+    /// Size the capsule to its glyph content, so short chords (⌘n) don't reserve a
     /// fixed 108pt and squeeze the action title off a two-chord row at the minimum window
     /// width. The height stays fixed at 30.
     func sizeThatFits(_ proposal: ProposedViewSize, nsView: KeyRecorderNSView, context: Context) -> CGSize? {
@@ -50,23 +50,22 @@ struct KeyRecorderView: NSViewRepresentable {
 }
 
 /// The AppKit control behind `KeyRecorderView`. Owns a local `NSEvent` monitor so
-/// it sees menu key-equivalents (⌘Q/⌘W) *before* the menu does and swallows them
-/// (KTD6), and resolves character keys against the live keyboard layout so
-/// non-US layouts bind correctly (KTD5).
+/// it sees menu key-equivalents (⌘Q/⌘W) *before* the menu does and swallows them,
+/// and resolves character keys against the live keyboard layout so
+/// non-US layouts bind correctly.
 final class KeyRecorderNSView: NSView {
     var onToken: ((String) -> Void)?
     var onWarning: ((String?) -> Void)?
     /// Called when recording starts/stops, so the SwiftUI row can show its recording hint.
     /// Also the *reliable* re-layout signal: the capsule's width depends only on
     /// `displayToken`, not on the AppKit-internal `isRecording` that SwiftUI's layout can't
-    /// observe — so nothing here needs to force a resize on the recording toggle (U27,
-    /// Phase G review).
+    /// observe — so nothing here needs to force a resize on the recording toggle.
     var onRecordingChanged: ((Bool) -> Void)?
     var displayToken: String = "" {
         didSet {
             guard oldValue != displayToken else { return }
             needsDisplay = true
-            invalidateIntrinsicContentSize()   // the chip sizes to its glyphs (U27)
+            invalidateIntrinsicContentSize()   // the chip sizes to its glyphs
             updateAccessibilityValue()
             updateToolTip()
         }
@@ -86,7 +85,7 @@ final class KeyRecorderNSView: NSView {
             noteFocusRingMaskChanged()
             onRecordingChanged?(isRecording)   // the row shows its recording hint
             updateAccessibilityValue()
-            // MO-7: cross-fade the capsule's border/fill on the recording toggle (~120ms,
+            // Cross-fade the capsule's border/fill on the recording toggle (~120ms,
             // gated by Reduce Motion).
             applyChrome(animated: true)
             NSAccessibility.post(element: self, notification: .valueChanged)
@@ -109,7 +108,7 @@ final class KeyRecorderNSView: NSView {
     var autostart = false
     private var didAutostart = false
 
-    /// Tints mirroring the U2 design tokens (DS-14): `subtleFill`/`hoverLift`/`accentFill`
+    /// Tints mirroring the design tokens: `subtleFill`/`hoverLift`/`accentFill`
     /// expressed in AppKit so the recorder no longer hand-picks divergent alphas.
     private enum Tint {
         static let recordingFill = NSColor.controlAccentColor.withAlphaComponent(0.15)   // ~accentFill
@@ -123,10 +122,10 @@ final class KeyRecorderNSView: NSView {
 
     override init(frame frameRect: NSRect) {
         super.init(frame: frameRect)
-        // A real keyboard-focus ring (A11Y-9): focus no longer auto-starts recording, so
+        // A real keyboard-focus ring: focus no longer auto-starts recording, so
         // the focused-but-idle state needs its own visible affordance.
         focusRingType = .exterior
-        // Layer-backed so the border/fill can cross-fade on the recording toggle (MO-7)
+        // Layer-backed so the border/fill can cross-fade on the recording toggle
         // rather than snapping; the text/chip still draw in `draw(_:)`.
         wantsLayer = true
         layer?.cornerRadius = DesignTokens.Radius.standard
@@ -151,7 +150,7 @@ final class KeyRecorderNSView: NSView {
     /// Set the capsule's border and fill for the current state. Recording draws an accent
     /// border + fill; a hovered idle capsule gets a faint accent tint; otherwise it's a
     /// plain control-background field. The recording transition cross-fades (~120ms) unless
-    /// Reduce Motion is on (MO-7).
+    /// Reduce Motion is on.
     private func applyChrome(animated: Bool) {
         guard let layer else { return }
         // Resolve the dynamic system colors against *this view's* appearance so dark mode
@@ -228,7 +227,7 @@ final class KeyRecorderNSView: NSView {
         }
     }
 
-    // MARK: - Focus ring (A11Y-9: focus is a state distinct from recording)
+    // MARK: - Focus ring (focus is a state distinct from recording)
 
     override var focusRingMaskBounds: NSRect { bounds }
 
@@ -245,14 +244,14 @@ final class KeyRecorderNSView: NSView {
         // — but only if focus was actually granted. Recording on a *failed* makeFirstResponder
         // would install the app-wide key monitor on a non-first-responder view that never gets
         // `resignFirstResponder`, stranding it (a runaway capture + keystroke swallow). This
-        // keeps "monitor installed" ⇒ "is first responder" (review F #1).
+        // keeps "monitor installed" ⇒ "is first responder".
         if window?.makeFirstResponder(self) == true { startRecording() }
     }
 
     override func becomeFirstResponder() -> Bool {
         let became = super.becomeFirstResponder()
         // Focus only — recording begins on a click or on Return/Space (see keyDown), so
-        // Tab-traversing the ~140-row list no longer hijacks the keyboard per row (A11Y-9).
+        // Tab-traversing the ~140-row list no longer hijacks the keyboard per row.
         if became { needsDisplay = true }
         return became
     }
@@ -264,7 +263,7 @@ final class KeyRecorderNSView: NSView {
     }
 
     /// While focused but idle, Return/Space begins recording; every other key passes
-    /// through so keyboard focus can keep traversing the list (A11Y-9). While recording,
+    /// through so keyboard focus can keep traversing the list. While recording,
     /// the local monitor handles keys, so this rarely fires.
     override func keyDown(with event: NSEvent) {
         guard !isRecording else { super.keyDown(with: event); return }
@@ -329,7 +328,7 @@ final class KeyRecorderNSView: NSView {
     /// Process a key-down while recording. Returns nil to swallow the event (so no
     /// menu fires and there's no beep) or the event to let the system handle it
     /// (Tab focus traversal). Runs synchronously on the main thread; only Sendable
-    /// value types are extracted from the `NSEvent` (KTD1, Swift 6).
+    /// value types are extracted from the `NSEvent` (Swift 6).
     private func handle(_ event: NSEvent) -> NSEvent? {
         let flags = event.modifierFlags.intersection(.deviceIndependentFlagsMask)
         let hasCommand = flags.contains(.command)
@@ -369,7 +368,7 @@ final class KeyRecorderNSView: NSView {
             return nil
         }
 
-        // Character keys resolve against the live layout (KTD5); named keys are
+        // Character keys resolve against the live layout; named keys are
         // named by the kit from their position-stable keyCode.
         let resolved = named == nil ? Self.unshiftedCharacter(forKeyCode: keyCode) : nil
         let captured = CapturedKey(keyCode: keyCode, modifierFlags: event.modifierFlags.rawValue, resolvedCharacter: resolved)
@@ -386,7 +385,7 @@ final class KeyRecorderNSView: NSView {
     /// The unshifted, layout-correct character a key produces in the *current*
     /// keyboard layout (so `[` on US, `ü` on QWERTZ), via Carbon `UCKeyTranslate`
     /// — the same approach `MASShortcut`/`KeyboardShortcuts` use, which a
-    /// deliberately NSEvent-free kit can't replicate (KTD5).
+    /// deliberately NSEvent-free kit can't replicate.
     static func unshiftedCharacter(forKeyCode keyCode: UInt16) -> String? {
         guard let source = TISCopyCurrentKeyboardLayoutInputSource()?.takeRetainedValue(),
               let layoutPtr = TISGetInputSourceProperty(source, kTISPropertyUnicodeKeyLayoutData)
@@ -420,21 +419,21 @@ final class KeyRecorderNSView: NSView {
     // MARK: - Drawing
 
     /// The capsule's **idle** text + font — shared by `draw` and `intrinsicContentSize` so
-    /// the capsule sizes to exactly what it renders when not recording (U27 — a ⌘n chip is
+    /// the capsule sizes to exactly what it renders when not recording (a ⌘n chip is
     /// ~50pt, not a fixed 108, so two-chord rows stop truncating the action title at the
     /// minimum window width). Crucially this does **not** vary with `isRecording`: the width
     /// depends only on `displayToken`, which SwiftUI's layout reliably re-measures on — so a
-    /// recording⇄idle toggle never leaves the capsule stuck at the wrong width (Phase G review).
+    /// recording⇄idle toggle never leaves the capsule stuck at the wrong width.
     private var idleContent: (text: String, color: NSColor, font: NSFont) {
         // The stored token is Ghostty's raw `super+…` spelling; show the macOS glyphs.
         let shown = KeybindTrigger.displaySymbol(for: displayToken)
         if displayToken.isEmpty {
-            // Names both affordances now that focus and recording are decoupled (A11Y-9).
+            // Names both affordances now that focus and recording are decoupled.
             return ("Click or press ⏎ to record", .secondaryLabelColor,
-                    .systemFont(ofSize: NSFont.systemFontSize))  // was tertiary — strict contrast (H3)
+                    .systemFont(ofSize: NSFont.systemFontSize))  // was tertiary — strict contrast
         } else if KeybindTrigger.isPhysicalNamedKey(displayToken) {
             // A physical hardware key (Copy/Paste): mono small-caps chip so a lone word
-            // doesn't read as prose beside the ⌘⌃⌥⇧ glyph chords (KB-3/CB-6).
+            // doesn't read as prose beside the ⌘⌃⌥⇧ glyph chords.
             return (shown.uppercased(), .labelColor,
                     .monospacedSystemFont(ofSize: NSFont.smallSystemFontSize, weight: .medium))
         } else {
@@ -445,13 +444,13 @@ final class KeyRecorderNSView: NSView {
     }
 
     override func draw(_ dirtyRect: NSRect) {
-        // The border/fill live on the layer now (so they can cross-fade, MO-7).
+        // The border/fill live on the layer now (so they can cross-fade).
         let bounds = self.bounds.insetBy(dx: 1, dy: 1)
         if isRecording {
             // A compact recording indicator that fits the stable (idle-width) capsule — the
             // accent border already signals recording, and the guidance ("press the new keys,
             // ⌫ clears, esc cancels") lives in the row hint (SwiftUI) so the capsule width
-            // never has to grow (Phase G review). A pulsing look would need a timer; a static
+            // never has to grow. A pulsing look would need a timer; a static
             // accent dot reads clearly enough.
             drawRecordingDot(in: bounds)
             return

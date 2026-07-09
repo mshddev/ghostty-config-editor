@@ -1,6 +1,6 @@
 import Foundation
 
-/// Serializes config writes so exactly one hits disk at a time (GAP-8 / KTD2).
+/// Serializes config writes so exactly one hits disk at a time.
 ///
 /// The un-serialized `applyEdit` let a rapid burst of edits (a slider drag, a
 /// theme spam-click) run concurrently: each read the *same* pre-refresh model, so

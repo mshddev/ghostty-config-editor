@@ -3,8 +3,8 @@ import Foundation
 /// Ghostty's keybind trigger modifiers, in their canonical config spelling.
 ///
 /// Ghostty requires modifiers lowercase and (when re-emitted) in a fixed order —
-/// `super → ctrl → alt → shift` — regardless of the order the user typed them
-/// (KTD4). `normalize` also folds the accepted aliases (`cmd`/`command`,
+/// `super → ctrl → alt → shift` — regardless of the order the user typed them.
+/// `normalize` also folds the accepted aliases (`cmd`/`command`,
 /// `control`, `opt`/`option`) onto the canonical token so a hand-written
 /// `cmd+t` round-trips as `super+t`.
 public enum KeyModifier: String, CaseIterable, Sendable, Equatable {
@@ -13,7 +13,7 @@ public enum KeyModifier: String, CaseIterable, Sendable, Equatable {
     case alt
     case shift
 
-    /// The fixed re-emission order (KTD4).
+    /// The fixed re-emission order.
     public static let canonicalOrder: [KeyModifier] = [.superKey, .ctrl, .alt, .shift]
 
     /// The macOS glyph for this modifier, for DISPLAY ONLY (the config always stores
@@ -43,7 +43,7 @@ public enum KeyModifier: String, CaseIterable, Sendable, Equatable {
 }
 
 /// A keybind trigger decomposed into its grammar pieces, preserving everything
-/// the recorder can't regenerate so an unrelated edit never drops it (RK4).
+/// the recorder can't regenerate so an unrelated edit never drops it.
 ///
 /// Grammar (verified against Ghostty 1.3.1): `[<prefix>:]* <chord>[><chord>]*`
 /// where a chord is `mod+mod+…+key`. Prefixes (`global:`/`all:`/`unconsumed:`/
@@ -53,7 +53,7 @@ public struct KeybindTrigger: Sendable, Equatable {
     /// A single chord: its modifier tokens *as written* plus the key token.
     public struct Chord: Sendable, Equatable {
         /// Modifier tokens exactly as the user wrote them (case preserved so
-        /// validation can flag a non-lowercase modifier, KTD7).
+        /// validation can flag a non-lowercase modifier).
         public let rawModifiers: [String]
         /// The key token, verbatim (`t`, `=`, `+`, `arrow_left`, `digit_1`, …).
         public let key: String
@@ -129,7 +129,7 @@ public struct KeybindTrigger: Sendable, Equatable {
 
     /// Re-emit the trigger canonically: prefixes verbatim, modifiers lowercased in
     /// `super→ctrl→alt→shift` order, single-character keys lowercased, sequences
-    /// rejoined with `>` (RK4, KTD4).
+    /// rejoined with `>`.
     public func canonical() -> String {
         let prefixPart = prefixes.joined()
         let chordPart = chords.map { chord -> String in
@@ -165,7 +165,7 @@ public struct KeybindTrigger: Sendable, Equatable {
     /// A "physical" named-key trigger: a bare, modifier-less named key such as the
     /// hardware Copy/Paste keys (`copy`, `paste`). These read as a distinct mono
     /// small-caps chip because a lone word can't lean on the ⌘⌃⌥⇧ glyph vocabulary a
-    /// modified chord uses, so it would otherwise look like prose (KB-3/CB-6). A
+    /// modified chord uses, so it would otherwise look like prose. A
     /// single-character key (`a`, `=`) is *not* physical — that's an ordinary key that
     /// only ever appears inside a modified chord. Sequences and prefixed triggers never
     /// qualify.
@@ -198,7 +198,7 @@ public struct KeybindTrigger: Sendable, Equatable {
     /// `delete` → ⌫), so a shortcut reads like a Mac shortcut instead of a raw identifier.
     /// Everything without a conventional glyph (letters, punctuation, function keys) falls
     /// through to `canonicalizeKey`. **Never** used by `canonical()` — the raw token must
-    /// survive for matching and writing (RK4), so this lives only behind `displaySymbol()`.
+    /// survive for matching and writing, so this lives only behind `displaySymbol()`.
     ///
     /// Physical digit keys (`digit_1`) are deliberately *not* mapped: Ghostty ships both
     /// `super+digit_1` and `super+1` as defaults for `goto_tab:1`, so mapping `digit_1` → 1
@@ -224,11 +224,11 @@ public struct KeybindTrigger: Sendable, Equatable {
 // MARK: - Captured key → token
 
 /// A keystroke captured by the AppKit recorder, reduced to Sendable value types so
-/// it can cross into the kit without importing AppKit (KTD1).
+/// it can cross into the kit without importing AppKit.
 ///
 /// `resolvedCharacter` is the **unshifted, layout-correct** character the recorder
 /// computed for a *character* key (letters, digits, punctuation) via the live
-/// keyboard layout (KTD5); it is nil for position-stable named keys (arrows,
+/// keyboard layout; it is nil for position-stable named keys (arrows,
 /// F-keys, enter/tab/…) which the kit names from `keyCode` instead.
 public struct CapturedKey: Sendable, Equatable {
     public let keyCode: UInt16
@@ -256,7 +256,7 @@ public extension KeybindTrigger {
 
     /// Build a canonical trigger token from a captured chord, or nil when the key
     /// can't be named (no resolved character and not a known named key) so the
-    /// recorder keeps listening (KTD5).
+    /// recorder keeps listening.
     static func token(from key: CapturedKey) -> String? {
         let flags = key.modifierFlags & deviceIndependentMask
         var mods: [KeyModifier] = []
@@ -283,7 +283,7 @@ public extension KeybindTrigger {
     }
 
     /// Static `keyCode → Ghostty key name` table for **position-stable, non-character
-    /// keys only** (KTD5). Letters, digits, and punctuation are layout-variable and
+    /// keys only**. Letters, digits, and punctuation are layout-variable and
     /// must arrive via `CapturedKey.resolvedCharacter`, never from here. Names are
     /// Ghostty's own (verified against `+list-keybinds --default`: `enter`,
     /// `backspace`, `arrow_left`, `page_up`, …).
@@ -324,7 +324,7 @@ public extension KeybindTrigger {
 
 /// A parsed `keybind` value. The whole-value specials (`clear`, bare `keybind =`)
 /// are not per-trigger bindings, so parsing yields either a `.binding` or a
-/// `.special` and both carry the original `raw` for verbatim round-trips (R8/R11).
+/// `.special` and both carry the original `raw` for verbatim round-trips.
 public enum ParsedKeybind: Sendable, Equatable {
     case binding(Keybind)
     case special(KeybindSpecial, raw: String)
@@ -346,14 +346,14 @@ public enum ParsedKeybind: Sendable, Equatable {
 /// The non-binding whole-value forms of a `keybind` line.
 public enum KeybindSpecial: Sendable, Equatable {
     /// A bare `keybind =` (empty value). Per Ghostty 1.3.1 this *resets to
-    /// defaults* (see Risk R-A); the editor never generates it.
+    /// defaults*; the editor never generates it.
     case clearAll
     /// `keybind = clear`.
     case clear
 }
 
 /// A single `TRIGGER=ACTION` binding. `raw` is the exact original value (post the
-/// `keybind = ` prefix) so an untouched binding round-trips byte-for-byte (AE2).
+/// `keybind = ` prefix) so an untouched binding round-trips byte-for-byte.
 public struct Keybind: Sendable, Equatable {
     /// The trigger text as written (left of the action boundary).
     public let trigger: String
@@ -389,7 +389,7 @@ public struct Keybind: Sendable, Equatable {
     /// are valid keys (`super+==increase_font_size:1`). We scan candidate `=`
     /// positions left→right and take the first whose right-hand side names a
     /// *known action*; with no action set we fall back to the shape heuristic
-    /// (action names are `[a-z_]`-initial), then to the last `=` (HTD, R-D).
+    /// (action names are `[a-z_]`-initial), then to the last `=`.
     public static func parse(value: String, knownActions: Set<String> = []) -> ParsedKeybind {
         let trimmed = value.trimmingCharacters(in: .whitespaces)
         if trimmed.isEmpty { return .special(.clearAll, raw: value) }
@@ -436,11 +436,11 @@ public struct Keybind: Sendable, Equatable {
     }
 }
 
-// MARK: - Validation (KTD7 / RK5)
+// MARK: - Validation
 
 /// A single validation issue produced before a keybind is written. Ghostty
 /// *silently drops* malformed keybinds (exit 0, no stderr), so `+validate-config`
-/// can't catch them — the kit validates trigger/action shape itself (KTD7).
+/// can't catch them — the kit validates trigger/action shape itself.
 public struct KeybindIssue: Sendable, Equatable {
     public enum Severity: Sendable, Equatable {
         /// Ghostty would drop this binding — block the write.
@@ -458,7 +458,7 @@ public struct KeybindIssue: Sendable, Equatable {
     }
 }
 
-/// Pre-write validation of a trigger/action pair (RK5).
+/// Pre-write validation of a trigger/action pair.
 public enum KeybindValidation {
 
     /// Recognized special actions accepted even when the action set is empty

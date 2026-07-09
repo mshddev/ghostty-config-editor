@@ -1,6 +1,6 @@
 import Foundation
 
-/// The curated "Recommended" starting set (F1, ONBOARD-3, IA-10): a short,
+/// The curated "Recommended" starting set: a short,
 /// separately-authorable list of the high-value options a newcomer usually wants to
 /// set first, grouped into a few named sections. Rendered by the Recommended surface
 /// (reusing the ordinary option rows), so a newcomer meets ~a dozen meaningful
@@ -10,7 +10,7 @@ import Foundation
 /// concern (which options to *recommend*), distinct from which tier an option sits in,
 /// and a standalone list is easier to re-author. Loaded like `LabelCatalog.bundled`,
 /// and — because it names raw option keys that a Ghostty upgrade could rename — guarded
-/// by the same KTD1 orphan-key test the other curated resources carry.
+/// by the same orphan-key test the other curated resources carry.
 public struct RecommendedSettings: Sendable {
 
     /// One titled group of recommended options, in author order.
@@ -38,7 +38,7 @@ public struct RecommendedSettings: Sendable {
         sections.flatMap(\.options)
     }
 
-    /// Recommended option keys as a set — used by the KTD1 orphan-key guard so a key
+    /// Recommended option keys as a set — used by the orphan-key guard so a key
     /// that no longer resolves against the catalog fails a test rather than silently
     /// rendering nothing.
     public var recommendedOptionNames: Set<String> {

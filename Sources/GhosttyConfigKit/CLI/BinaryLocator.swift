@@ -1,6 +1,6 @@
 import Foundation
 
-/// Locates the `ghostty` binary by an ordered, absolute-path probe (KTD3).
+/// Locates the `ghostty` binary by an ordered, absolute-path probe.
 ///
 /// GUI apps launched from Finder do not inherit the shell `PATH`, so a bare
 /// `which ghostty` is unreliable. Instead we probe known install locations in

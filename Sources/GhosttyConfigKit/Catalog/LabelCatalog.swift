@@ -1,6 +1,6 @@
 import Foundation
 
-/// Plain-language names and one-line summaries for config options (R1, CONTENT-1).
+/// Plain-language names and one-line summaries for config options.
 ///
 /// Ghostty's catalog names options by their raw config key (`background-opacity`,
 /// `macos-titlebar-style`). Those are precise but unfriendly to a newcomer, so
@@ -11,7 +11,7 @@ import Foundation
 ///   - `displayTitle` is **always non-empty** (curated → humanizer), so no row ever
 ///     renders a blank name even for the 300+ long-tail options we don't curate.
 ///   - The raw key is never lost: search still matches it (see `CatalogSearch`), so
-///     a power user who knows an option by its config name always finds it (R8).
+///     a power user who knows an option by its config name always finds it.
 ///
 /// `shortSummary` is best-effort and **may be empty** — curated summary, else the
 /// first sentence of the option's own docs, else nothing.
@@ -36,7 +36,7 @@ public struct LabelCatalog: Sendable {
     }
 
     /// Option names that carry a curated label — used by the orphan-key guard so a
-    /// key that no longer resolves against the catalog fails a test (KTD1).
+    /// key that no longer resolves against the catalog fails a test.
     public var curatedOptionNames: Set<String> {
         Set(curated.keys)
     }
@@ -44,24 +44,24 @@ public struct LabelCatalog: Sendable {
     // MARK: - Read API
 
     /// The friendly name for an option. Curated title wins; otherwise the humanized
-    /// raw key. Never empty (R1).
+    /// raw key. Never empty.
     public func displayTitle(for name: String) -> String {
         if let title = curated[name]?.title, !title.isEmpty { return title }
         return Self.humanize(name)
     }
 
     /// A one-line description for an option. Curated summary wins, then the first
-    /// non-title-echoing sentence of its docs, then empty (R1 is satisfied by the
-    /// always-present title, so an empty summary is acceptable).
+    /// non-title-echoing sentence of its docs, then empty (the always-present title is
+    /// enough, so an empty summary is acceptable).
     ///
     /// `maxLength` caps the extracted doc sentence (the curated summary is authored to
     /// length and never capped). The default suits tooltip-length uses; a row subtitle
     /// that owns its own visual truncation (`lineLimit`) passes `.max` so the sentence
-    /// isn't ellipsized mid-word before the view can wrap it (CM-7).
+    /// isn't ellipsized mid-word before the view can wrap it.
     public func shortSummary(for name: String, documentation: String, maxLength: Int = 120) -> String {
         if let summary = curated[name]?.summary, !summary.isEmpty { return summary }
         // A first sentence that merely restates the title adds nothing beneath a row
-        // that already shows the title, so advance past it (CV-10/CM-5). The title is
+        // that already shows the title, so advance past it. The title is
         // only knowable here, not inside the pure `firstSentence`.
         return Self.firstSentence(documentation, skippingTitleEcho: displayTitle(for: name), maxLength: maxLength)
     }
@@ -104,7 +104,7 @@ public struct LabelCatalog: Sendable {
     /// so it fits a subtitle. Truncation lands on a word boundary with an ellipsis.
     /// Returns "" for empty docs. When `skippingTitleEcho` is non-empty, a leading
     /// sentence that merely restates it is skipped and the next sentence used instead
-    /// (or "" if the docs are nothing but the echo) — see `shortSummary` (CV-10/CM-5).
+    /// (or "" if the docs are nothing but the echo) — see `shortSummary`.
     public static func firstSentence(_ documentation: String, skippingTitleEcho title: String = "", maxLength: Int = 120) -> String {
         let flat = documentation
             .replacingOccurrences(of: "\n", with: " ")
@@ -148,7 +148,7 @@ public struct LabelCatalog: Sendable {
 
     /// A short example value mined from a doc block — the first backtick-quoted token
     /// that reads like a value (not the option's own name, no newline, bounded length)
-    /// — for use as a text-field placeholder on untyped options (B4, CONTROLS-17).
+    /// — for use as a text-field placeholder on untyped options.
     /// Returns "" when the docs offer nothing usable.
     ///
     /// `--docs` prose quotes concrete values in backticks (`` `xterm-256color` ``), so
@@ -171,7 +171,7 @@ public struct LabelCatalog: Sendable {
     /// A text-field placeholder for an option whose value is empty, in priority order:
     /// a concrete example mined from the docs (`exampleValue`), then the option's own
     /// default, then a title-derived prompt ("Enter a background image") — never the bare
-    /// "value" the old fields showed (CV-7). Callers with a site-specific hint (e.g.
+    /// "value" the old fields showed. Callers with a site-specific hint (e.g.
     /// `env` → "KEY=VALUE") short-circuit before calling this. `mineExample` is off for
     /// typed fields (a number field shouldn't borrow a stray backtick token as its hint).
     public static func fieldPlaceholder(name: String, title: String, documentation: String,

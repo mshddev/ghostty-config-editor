@@ -1,9 +1,9 @@
 import Foundation
 
-/// A running Ghostty GUI instance the app may ask to reload its config (R2).
+/// A running Ghostty GUI instance the app may ask to reload its config.
 ///
 /// Carries the OS process id and a **confirmable** version string — the version
-/// the app could positively verify the process is actually running (KTD4). An
+/// the app could positively verify the process is actually running. An
 /// empty `version` means the running code's version could not be confirmed; the
 /// reload gate treats that as unconfirmable and never signals it, because
 /// `SIGUSR2` sent to a build without the reload handler would terminate it.
@@ -19,41 +19,41 @@ public struct GhosttyInstance: Sendable, Equatable {
 }
 
 /// The result of an auto-reload attempt, with **all** user-facing copy derived
-/// here in the kit (KTD8) so it is unit-tested rather than assembled in the view.
+/// here in the kit so it is unit-tested rather than assembled in the view.
 ///
 /// Every `message` is **scope-neutral**: it talks only about the reload, never
 /// about whether the edited option needs a new surface or a full restart. The
 /// view stacks it as a separate line beneath the option's own `applyNotice`, so
-/// the two never compose into a contradictory sentence (KTD8, U2). Mirrors
+/// the two never compose into a contradictory sentence. Mirrors
 /// `LintReport.badgeText` — derive the honest copy in the tested kit, not the view.
 public enum ReloadOutcome: Equatable, Sendable {
-    /// Auto-reload is off; neither the lister nor the sender ran (R7).
+    /// Auto-reload is off; neither the lister nor the sender ran.
     case disabled
-    /// No running Ghostty was found to signal (R5).
+    /// No running Ghostty was found to signal.
     case noInstance
     /// Every running instance is a *confirmed* pre-1.2 build with no reload
-    /// handler, so none could be safely signaled (R4).
+    /// handler, so none could be safely signaled.
     case versionUnsupported
     /// No running instance's version could be confirmed, so none was signaled —
-    /// the fail-safe skip (R4).
+    /// the fail-safe skip.
     case versionUnknown
-    /// At least one instance was signaled (R6). `count` instances were asked to
+    /// At least one instance was signaled. `count` instances were asked to
     /// reload; `skipped` is the number of running instances that were **not**
-    /// signaled because their version was too old or unconfirmable (R4) — those
+    /// signaled because their version was too old or unconfirmable — those
     /// need a manual reload.
     case reloaded(count: Int, skipped: Int)
     /// A confirmed-supported instance was found but the signal was refused, e.g.
-    /// `EPERM` (R6) — distinct from a vanished instance.
+    /// `EPERM` — distinct from a vanished instance.
     case unreachable
 
     /// The caption to show beneath the "Saved" confirmation, or `nil` when there is
     /// nothing worth saying — auto-reload disabled, or the routine success where every
     /// reachable instance was signaled. The user just saw "Saved" and auto-reload working
-    /// is the expected default, so the happy path stays silent (F2); a caption appears only
+    /// is the expected default, so the happy path stays silent; a caption appears only
     /// when it's *actionable* — Ghostty isn't running, its version can't be signaled, it's
     /// unreachable, or some instances still need a manual reload.
     ///
-    /// Because `SIGUSR2` is one-way and unacknowledged (KTD5), the copy never claims the
+    /// Because `SIGUSR2` is one-way and unacknowledged, the copy never claims the
     /// reload itself succeeded — it only ever flags what still needs the user's attention.
     public var message: String? {
         switch self {
@@ -79,41 +79,41 @@ public enum ReloadOutcome: Equatable, Sendable {
 }
 
 /// Decides whether and how to ask a running Ghostty to reload its config after an
-/// in-app write (R1), and owns the entire safety policy and copy (R2–R6, KTD8).
+/// in-app write, and owns the entire safety policy and copy.
 /// Pure and fully injected so it is unit-tested without ever signaling a live
 /// process — the fakes record calls; the real fleet is never touched in tests.
 ///
-/// ## Safety (KTD1, KTD4)
+/// ## Safety
 /// `SIGUSR2` is Ghostty's macOS config-reload signal **only** in 1.2.0+. Sent to a
 /// process without that handler, the default signal disposition **terminates** it.
 /// So this type is fail-safe by construction:
-///  - It signals an instance only when its version is *confirmed* `>= 1.2.0` (R4).
+///  - It signals an instance only when its version is *confirmed* `>= 1.2.0`.
 ///    When it cannot confirm (empty / unparseable version), it skips and tells the
 ///    user to reload manually — it never signals a process it cannot vouch for.
 ///  - It refuses structurally dangerous pids (`<= 1`, which would make `kill`
 ///    broadcast to every process or target a process group / `init`, and the app's
-///    own pid) before any signal, and de-duplicates the list (R3).
+///    own pid) before any signal, and de-duplicates the list.
 ///
-/// The instance lister is intentionally app-supplied (KTD3): `NSRunningApplication`
+/// The instance lister is intentionally app-supplied: `NSRunningApplication`
 /// (and the `launchDate >= bundle mtime` confirmation behind the version string) is
 /// AppKit/Foundation system state the kit stays free of. So `.live` is a *partial*
 /// factory by design — do not "fix" it by dragging AppKit into the kit.
 public struct GhosttyReloader: Sendable {
 
-    /// The bundle id every Ghostty macOS GUI process registers under (KTD2),
+    /// The bundle id every Ghostty macOS GUI process registers under,
     /// verified locally at `/Applications/Ghostty.app/Contents/Info.plist`. The app
     /// lister discovers instances by this id, never by process *name* — a name probe
     /// would also match the transient `ghostty +…` CLI subprocesses this app spawns.
     public static let ghosttyBundleID = "com.mitchellh.ghostty"
 
-    /// The lowest Ghostty version whose macOS GUI handles `SIGUSR2` reload (KTD1,
-    /// PR #7759, milestone 1.2.0). Below this, the signal terminates the process.
+    /// The lowest Ghostty version whose macOS GUI handles `SIGUSR2` reload
+    /// (PR #7759, milestone 1.2.0). Below this, the signal terminates the process.
     static let minimumSupportedVersion: (Int, Int, Int) = (1, 2, 0)
 
-    /// Lists running Ghostty GUI instances with a confirmable version (KTD2/KTD3).
+    /// Lists running Ghostty GUI instances with a confirmable version.
     private let runningInstances: @Sendable () -> [GhosttyInstance]
     /// Sends `signal` to `pid`, returning `0` on success or the captured `errno`
-    /// (KTD6) so the failure path — `ESRCH` (vanished, benign) vs `EPERM` (blocked)
+    /// so the failure path — `ESRCH` (vanished, benign) vs `EPERM` (blocked)
     /// — is classifiable with injected constants in the unit suite.
     private let send: @Sendable (pid_t, Int32) -> Int32
 
@@ -126,13 +126,13 @@ public struct GhosttyReloader: Sendable {
     }
 
     /// Wire the real `kill`-based sender, leaving the instance lister to the app
-    /// (KTD3). `.live` is deliberately a *partial* factory: the kit owns the signal
+    /// `.live` is deliberately a *partial* factory: the kit owns the signal
     /// and the policy; the app owns the AppKit enumeration.
     public static func live(
         runningInstances: @escaping @Sendable () -> [GhosttyInstance]
     ) -> GhosttyReloader {
         GhosttyReloader(runningInstances: runningInstances, send: { pid, signal in
-            // `kill` returns 0 on success, or -1 with `errno` set (KTD6). Surface the
+            // `kill` returns 0 on success, or -1 with `errno` set. Surface the
             // errno so the caller can tell ESRCH (vanished, benign) from EPERM (blocked).
             // The errno-after-syscall idiom mirrors `ConfigWriter.stageAndRename`.
             kill(pid, signal) == 0 ? 0 : errno
@@ -140,24 +140,24 @@ public struct GhosttyReloader: Sendable {
     }
 
     /// Ask every confirmed-supported running Ghostty to reload, returning a fully
-    /// classified outcome whose `message` is ready to render (KTD8).
+    /// classified outcome whose `message` is ready to render.
     ///
     /// Never throws and never reports an apply failure — reload is best-effort, so a
     /// missing, unreachable, unsupported, unconfirmable, or disabled reload never
-    /// turns a successful save into a failure (R5). When `enabled` is false, neither
-    /// the lister nor the sender is invoked (R7/AE8).
+    /// turns a successful save into a failure. When `enabled` is false, neither
+    /// the lister nor the sender is invoked.
     public func reload(enabled: Bool) -> ReloadOutcome {
         guard enabled else { return .disabled }
 
         let safe = safeInstances(runningInstances())
         guard !safe.isEmpty else { return .noInstance }
 
-        // R4: only confirmed `>= 1.2.0` instances are signalable. Everything else is
+        // Only confirmed `>= 1.2.0` instances are signalable. Everything else is
         // skipped — never signaled — and surfaced for a manual reload.
         let supported = safe.filter { Self.signalReloadSupported(version: $0.version) }
         guard !supported.isEmpty else { return unsignalableOutcome(for: safe) }
 
-        // R4/KTD6: signal only the supported pids; classify each result by errno.
+        // Signal only the supported pids; classify each result by errno.
         let skipped = safe.count - supported.count
         var successes = 0
         var blocked = 0
@@ -166,7 +166,7 @@ public struct GhosttyReloader: Sendable {
             case 0:
                 successes += 1
             case ESRCH:
-                break          // instance vanished between list and send — benign (R5)
+                break          // instance vanished between list and send — benign
             default:
                 blocked += 1   // EPERM or any other refusal — surfaced as unreachable
             }
@@ -180,7 +180,7 @@ public struct GhosttyReloader: Sendable {
         return skipped > 0 ? unsignalableOutcome(for: safe) : .noInstance
     }
 
-    /// R3: keep only structurally safe, de-duplicated pids, preserving first-seen
+    /// Keep only structurally safe, de-duplicated pids, preserving first-seen
     /// order. Drops `<= 1` (a `kill` broadcast / process-group / `init` target) and
     /// the app's own pid (a self-signal). This is the hazard gate — a single leaked
     /// unsafe pid could signal the wrong process — so it runs before any classification.
@@ -211,7 +211,7 @@ public struct GhosttyReloader: Sendable {
     // MARK: - Version gate (pure)
 
     /// True only when `version` is a *confidently parsed* Ghostty version
-    /// `>= 1.2.0` (R4). Fails **closed** (`false`) on any parse ambiguity — an empty
+    /// `>= 1.2.0`. Fails **closed** (`false`) on any parse ambiguity — an empty
     /// string, non-numeric components, or trailing junk — because a false positive
     /// here terminates the user's terminal (execution note: bias toward `false`).
     public static func signalReloadSupported(version: String) -> Bool {

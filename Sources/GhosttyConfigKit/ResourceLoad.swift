@@ -2,8 +2,8 @@ import Foundation
 
 /// The tri-state of a lazily-loaded resource (theme list, font list) so the UI can
 /// tell "still loading" from "load failed" — the distinction the app was missing when
-/// a failed `+list-themes` left `themes` empty and spun a `ProgressView` forever (G3,
-/// GAP-3). `.capture` is the load classifier: it never swallows a thrown error into an
+/// a failed `+list-themes` left `themes` empty and spun a `ProgressView` forever.
+/// `.capture` is the load classifier: it never swallows a thrown error into an
 /// empty `.loaded`, which reads to the UI as "no data" and is exactly the eternal-spinner
 /// bug this type exists to kill.
 public enum ResourceLoad<Value: Sendable & Equatable>: Equatable, Sendable {

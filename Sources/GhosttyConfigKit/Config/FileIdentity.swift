@@ -2,8 +2,8 @@ import Foundation
 import CryptoKit
 
 /// A snapshot of a config file's on-disk identity, captured at read time and
-/// re-checked at write time to detect external changes (R22) and to preserve
-/// attributes through a write (R23).
+/// re-checked at write time to detect external changes and to preserve
+/// attributes through a write.
 public struct FileIdentity: Sendable, Equatable {
     public let resolvedPath: String
     public let inode: UInt64

@@ -1,21 +1,21 @@
 import Foundation
 
-/// A pure, value-type reducer for a single text-bearing edit (KTD2, U3: R3/R4/R5).
+/// A pure, value-type reducer for a single text-bearing edit.
 ///
-/// The color, long-value, and (U4) structured popovers wrap the existing safe-write path
+/// The color, long-value, and structured popovers wrap the existing safe-write path
 /// with this state machine instead of scattered `@State` + commit-on-close callbacks, so
 /// "Apply commits, Cancel discards, incidental dismissal never commits, a stale write is
 /// reviewable, a failure retains the draft" is one tested contract rather than per-editor
 /// ad-hoc code. It holds NO SwiftUI/AppKit — the view drives it and maps write outcomes
 /// back onto it, and the writer/backup/serial-write semantics are untouched underneath.
 ///
-/// Lifecycle (matches the plan's stateDiagram):
+/// Lifecycle:
 ///   Clean → Dirty (user changes draft) → Invalid ↔ Dirty (local validation)
 ///   Dirty → Applying (Apply/Done) → Committed | Stale | Failed
 ///   Stale → Dirty (Reload & Review — NEVER auto-retry) ; Failed → Dirty (edit) ; Cancel → Clean
 ///
 /// The attempted draft is retained through Stale and Failed so recovery never requires
-/// retyping (R5/R3). Reloading a stale edit refreshes the saved value and surfaces BOTH
+/// retyping. Reloading a stale edit refreshes the saved value and surfaces BOTH
 /// the on-disk value and the draft; a SECOND explicit Apply commits.
 public struct EditTransaction: Equatable, Sendable {
 
@@ -39,10 +39,10 @@ public struct EditTransaction: Equatable, Sendable {
     /// The working draft the user is editing.
     public private(set) var draft: String
     /// After Reload & Review, the externally-changed on-disk value, kept beside the draft
-    /// for the side-by-side comparison (F2/AE3). Nil outside that reviewable state.
+    /// for the side-by-side comparison. Nil outside that reviewable state.
     public private(set) var refreshedDiskValue: String?
-    /// The plain-language reason for the current invalid/failed/stale/unavailable phase
-    /// (R3). The caller supplies the normalized text; the reducer only carries it.
+    /// The plain-language reason for the current invalid/failed/stale/unavailable phase.
+    /// The caller supplies the normalized text; the reducer only carries it.
     public private(set) var message: String?
 
     public init(savedValue: String) {
@@ -92,7 +92,7 @@ public struct EditTransaction: Equatable, Sendable {
     }
 
     /// Begin an Apply/Done. Returns `true` only when a write actually starts, so repeated
-    /// draft callbacks or a double-Apply cannot kick off a second write (R4).
+    /// draft callbacks or a double-Apply cannot kick off a second write.
     @discardableResult
     public mutating func beginApply() -> Bool {
         guard canApply else { return false }
@@ -121,14 +121,14 @@ public struct EditTransaction: Equatable, Sendable {
     }
 
     /// The write was refused because the file changed on disk. The attempted draft is
-    /// retained (R5); recovery is an explicit `reloadAndReview`, never an auto-retry.
+    /// retained; recovery is an explicit `reloadAndReview`, never an auto-retry.
     public mutating func markStale(message: String? = nil) {
         phase = .stale
         self.message = message
     }
 
     /// Reload & Review after a stale conflict: refresh the saved value to what is now on
-    /// disk and expose it beside the retained draft for comparison (F2/AE3). Returns to a
+    /// disk and expose it beside the retained draft for comparison. Returns to a
     /// reviewable Dirty state so a SECOND explicit Apply is required — it never auto-applies.
     /// If the draft already equals the refreshed value, the conflict is resolved → Clean.
     public mutating func reloadAndReview(refreshedDiskValue newValue: String) {
@@ -152,14 +152,14 @@ public struct EditTransaction: Equatable, Sendable {
     }
 
     /// Ghostty rejected the value. The attempted draft is retained so the user can correct
-    /// it (Failed → Dirty on the next edit); the message is the normalized reason (R3).
+    /// it (Failed → Dirty on the next edit); the message is the normalized reason.
     public mutating func markFailed(message: String? = nil) {
         phase = .failed
         self.message = message
     }
 
     /// Cancel / incidental dismissal (Escape, click-outside): discard the draft and return
-    /// to Clean (R4). Never writes.
+    /// to Clean. Never writes.
     public mutating func cancel() {
         draft = savedValue
         refreshedDiskValue = nil

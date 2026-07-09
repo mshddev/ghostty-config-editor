@@ -1,9 +1,9 @@
 import Foundation
 
-/// Per-option state after merging the user's config against the catalog (R5, R6).
+/// Per-option state after merging the user's config against the catalog.
 public enum OptionState: Sendable, Equatable {
     /// Not present in the config — the catalog default applies. Surfaced in the
-    /// "you're not using this" view (R6).
+    /// "you're not using this" view.
     case unset
     /// Explicitly set, but to the same value as the default.
     case setToDefault
@@ -12,7 +12,7 @@ public enum OptionState: Sendable, Equatable {
 }
 
 public extension OptionState {
-    /// The single badge word every surface uses for this state (CONTENT-6, A5).
+    /// The single badge word every surface uses for this state.
     ///
     /// One vocabulary for the dot tooltip, the popover badge, and any row subtitle,
     /// replacing the three divergent phrasings that used to describe the same state
@@ -91,7 +91,7 @@ public struct OptionValuePresentation: Sendable, Equatable {
     }
 }
 
-/// How a boolean/boolean-ish option should render its on/off axis (R1, U2).
+/// How a boolean/boolean-ish option should render its on/off axis.
 ///
 /// A plain two-state switch is only honest when the effective boolean value is
 /// known — either explicitly set or resolvable from a documented default. When
@@ -118,7 +118,7 @@ public extension MergedOption {
 
     /// A switch when the effective boolean is known (explicit value, or a
     /// documented/curated default); otherwise an explicit Default/On/Off choice so
-    /// an unset option with an undocumented default never masquerades as Off (R1).
+    /// an unset option with an undocumented default never masquerades as Off.
     var booleanControlStyle: BooleanControlStyle {
         // An explicit value is always known — the switch reflects it truthfully,
         // even when it's a richer boolean-ish value (`left`, `always`, a radius).
@@ -128,7 +128,7 @@ public extension MergedOption {
     }
 }
 
-/// One selectable row in an enumerated option's dropdown (R1, R2, R3).
+/// One selectable row in an enumerated option's dropdown.
 public struct EnumChoice: Sendable, Equatable, Identifiable {
     public var id: String { value }
     /// The value written/selected — the SwiftUI `Picker` tag.
@@ -148,7 +148,7 @@ public struct EnumChoice: Sendable, Equatable, Identifiable {
 public extension MergedOption {
     /// Ordered rows for an enumerated option's dropdown, made safe against the
     /// SwiftUI `Picker` footgun where a selection with no matching tag renders
-    /// blank and silently overwrites the user's value (R3).
+    /// blank and silently overwrites the user's value.
     ///
     /// - Parameter current: the option's *saved* value (the editor's seeded
     ///   selection) — `userValues.first` when set, else the catalog default. Pass
@@ -161,7 +161,7 @@ public extension MergedOption {
     ///   as its tag so the editor's selection always has a match.
     func enumChoices(current: String) -> [EnumChoice] {
         let values = option.enumValues
-        // Row text is the *friendly* label (A4/B4) while the tag stays the raw token,
+        // Row text is the *friendly* label while the tag stays the raw token,
         // so a cryptic value like `osc8` reads as "OSC 8 only" but still
         // writes `osc8`.
         if !current.isEmpty, values.contains(current) {
@@ -186,7 +186,7 @@ public extension MergedOption {
 public struct MergedConfig: Sendable {
     public let options: [MergedOption]
     public let model: ConfigModel
-    /// Keys the user set that aren't in the catalog — preserved (R11), shown as custom.
+    /// Keys the user set that aren't in the catalog — preserved, shown as custom.
     public let unknownUserKeys: [String]
 
     public init(options: [MergedOption], model: ConfigModel, unknownUserKeys: [String]) {
@@ -199,7 +199,7 @@ public struct MergedConfig: Sendable {
         options.first { $0.option.name == name }
     }
 
-    /// Options the user has not set — the discovery surface (R6).
+    /// Options the user has not set — the discovery surface.
     public var unusedOptions: [MergedOption] {
         options.filter { !$0.isSet }
     }
@@ -220,7 +220,7 @@ public enum ConfigReadError: Error, Equatable, Sendable {
 }
 
 /// Reads the active config (search-path precedence + `config-file` includes)
-/// and merges it with the catalog (R5, R6, R7).
+/// and merges it with the catalog.
 public struct ConfigReader: Sendable {
 
     /// Config filenames tried in priority order within the config directory.
@@ -258,7 +258,7 @@ public struct ConfigReader: Sendable {
     }
 
     /// Canonicalize a path (resolve symlinks + standardize) so include lookups
-    /// and writer targeting agree on identity (R20).
+    /// and writer targeting agree on identity.
     public static func canonicalPath(_ path: String) -> String {
         URL(fileURLWithPath: path).resolvingSymlinksInPath().path
     }
@@ -304,13 +304,13 @@ public struct ConfigReader: Sendable {
         }
         let resolved = canonicalPath(path)
         // Refuse non-UTF-8 rather than lossily decoding (U+FFFD replacement),
-        // which would silently corrupt the file on the next write (R11, R23).
+        // which would silently corrupt the file on the next write.
         guard let text = String(data: data, encoding: .utf8) else {
             throw ConfigReadError.unreadable(path: path)
         }
         var file = ConfigFile.parse(text: text, path: path, resolvedPath: resolved)
         // Capture the read-time identity stamp so the writer can detect external
-        // changes and preserve permissions (R22, R23).
+        // changes and preserve permissions.
         file.identity = FileIdentity.capture(path: resolved, fileManager: fileManager)
         return file
     }
@@ -338,7 +338,7 @@ public struct ConfigReader: Sendable {
 
     /// Walk the config in processing order, splicing includes at the position of
     /// their `config-file` directive. Order matters: the last occurrence of a
-    /// scalar key wins (R5).
+    /// scalar key wins.
     func effectiveSettings(_ model: ConfigModel) -> [EffectiveSetting] {
         var out: [EffectiveSetting] = []
         var visited: Set<String> = []
@@ -389,10 +389,10 @@ public struct ConfigReader: Sendable {
             let values: [String]
             let sources: [SettingLocation]
             if option.isRepeatable {
-                values = occurrences.map(\.value)              // all accumulate (R9)
+                values = occurrences.map(\.value)              // all accumulate
                 sources = occurrences.map(\.location)
             } else {
-                values = [occurrences.last!.value]             // last wins (R5)
+                values = [occurrences.last!.value]             // last wins
                 sources = [occurrences.last!.location]
             }
             let isDefault = matchesDefault(option: option, values: values)

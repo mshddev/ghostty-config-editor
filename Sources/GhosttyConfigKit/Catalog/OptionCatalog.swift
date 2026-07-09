@@ -1,7 +1,7 @@
 import Foundation
 
-/// Best-effort value type for a config option, inferred from its docs/default
-/// (R2). `unknown` is a first-class state — the catalog never guesses when the
+/// Best-effort value type for a config option, inferred from its docs/default.
+/// `unknown` is a first-class state — the catalog never guesses when the
 /// doc text gives no signal.
 public enum OptionValueType: String, Sendable, Hashable, Codable {
     case boolean
@@ -13,7 +13,7 @@ public enum OptionValueType: String, Sendable, Hashable, Codable {
 }
 
 public extension OptionValueType {
-    /// A plain-language name for the kind of value (CONTENT-7), or `nil` for
+    /// A plain-language name for the kind of value, or `nil` for
     /// `.unknown` — the catalog never invents a type when the docs give no signal,
     /// so the UI shows nothing rather than guessing.
     var displayName: String? {
@@ -28,7 +28,7 @@ public extension OptionValueType {
     }
 }
 
-/// One config option as described by the user's installed Ghostty (R1, R2).
+/// One config option as described by the user's installed Ghostty.
 public struct CatalogOption: Sendable, Hashable, Identifiable, Codable {
     public var id: String { name }
     public let name: String
@@ -40,7 +40,7 @@ public struct CatalogOption: Sendable, Hashable, Identifiable, Codable {
     public let valueType: OptionValueType
     /// Enumerated values parsed from a "Valid values are:" doc section.
     public let enumValues: [String]
-    /// True when the key may appear multiple times in a config (R9).
+    /// True when the key may appear multiple times in a config.
     public let isRepeatable: Bool
 
     public var defaultValue: String { defaultValues.first ?? "" }
@@ -65,7 +65,7 @@ public struct CatalogOption: Sendable, Hashable, Identifiable, Codable {
 }
 
 public extension CatalogOption {
-    /// When a change to this option takes effect, inferred from its docs (R17).
+    /// When a change to this option takes effect, inferred from its docs.
     enum ChangeScope: String, Sendable, Equatable {
         case live        // applies immediately on reload
         case newSurface  // only applies to new terminals/windows/tabs
@@ -87,10 +87,10 @@ public extension CatalogOption {
         return .live
     }
 
-    /// A human-facing notice for non-live changes (AE5), or nil when live.
+    /// A human-facing notice for non-live changes, or nil when live.
     ///
     /// Worded **additively**, not correctively, so it reads complementarily when the
-    /// app stacks it above the scope-neutral auto-reload caption (KTD8, U2): the reload
+    /// app stacks it above the scope-neutral auto-reload caption: the reload
     /// caption says Ghostty was asked to reload, and this line clarifies that *this
     /// particular* option needs a new surface or a full restart on top of that — the
     /// two never contradict. (Tested not to begin with the old "This takes effect …".)
@@ -102,38 +102,38 @@ public extension CatalogOption {
         }
     }
 
-    /// Plain-language name for this option, from the bundled `LabelCatalog` (R1,
-    /// CONTENT-1). Always non-empty — a curated title when we have one, otherwise
-    /// the humanized raw key. The raw `name` stays searchable (R8).
+    /// Plain-language name for this option, from the bundled `LabelCatalog`.
+    /// Always non-empty — a curated title when we have one, otherwise
+    /// the humanized raw key. The raw `name` stays searchable.
     var displayTitle: String { LabelCatalog.bundled.displayTitle(for: name) }
 
     /// A best-effort one-line description (curated summary → first doc sentence →
-    /// empty). May be empty; the always-present `displayTitle` carries R1.
+    /// empty). May be empty; the always-present `displayTitle` is the guaranteed label.
     var shortSummary: String { LabelCatalog.bundled.shortSummary(for: name, documentation: documentation) }
 
     /// The same summary without the tooltip-length char cap, for row subtitles that own
-    /// their own visual truncation via `lineLimit(1...2)` (CM-7). Lets a real sentence
+    /// their own visual truncation via `lineLimit(1...2)`. Lets a real sentence
     /// wrap to a second line instead of being ellipsized mid-word at 120 chars.
     var subtitleSummary: String {
         LabelCatalog.bundled.shortSummary(for: name, documentation: documentation, maxLength: .max)
     }
 
     /// Curated range/step/unit/style for a numeric option, or `nil` when none is
-    /// specified (the editor then uses a plain number field). (A4, CONTROLS-1.)
+    /// specified (the editor then uses a plain number field).
     var numericSpec: NumericSpec? { NumericSpecCatalog.bundled.spec(for: name) }
 
     /// True when this option accepts `true`/`false` alongside other values, so the
-    /// editor renders toggle-first (A4, U10). `valueType` is unchanged.
+    /// editor renders toggle-first. `valueType` is unchanged.
     var isBooleanish: Bool { CatalogParser.isBooleanish(name) }
 
-    /// A friendly label for one of this option's enum values (A4, CONTENT-8),
+    /// A friendly label for one of this option's enum values,
     /// falling back to the raw value when none is curated.
     func enumValueLabel(_ value: String) -> String {
         EnumValueLabels.bundled.label(option: name, value: value)
     }
 }
 
-/// The full set of options for a given Ghostty version (R1).
+/// The full set of options for a given Ghostty version.
 public struct OptionCatalog: Sendable, Codable {
     public let options: [CatalogOption]
     /// The binary version this catalog was generated for (cache key).
@@ -159,12 +159,12 @@ public struct OptionCatalog: Sendable, Codable {
     }
 }
 
-/// Maps option names to sidebar categories (R3). Ghostty's `--docs` output has
+/// Maps option names to sidebar categories. Ghostty's `--docs` output has
 /// no section headers, so categories are derived from the option name's prefix.
 public enum OptionCategorizer {
     /// The one category name for keyboard shortcuts, shared by the categorizer, the
     /// sidebar icon map, the `mainColumn` router, and the editor's title, so a
-    /// rename can't desync the routing that shows `KeybindEditorView` (P1 coupling).
+    /// rename can't desync the routing that shows `KeybindEditorView`.
     public static let keybindingsCategory = "Keyboard Shortcuts"
 
     /// The catch-all for options with no clearer home — the true internals. Also the
@@ -172,7 +172,7 @@ public enum OptionCategorizer {
     /// phantom "General" bucket.
     public static let advancedCategory = "Advanced"
 
-    /// The colors category. Shared so the Appearance→Themes cross-link (D1) tests for
+    /// The colors category. Shared so the Appearance→Themes cross-link tests for
     /// "am I on Appearance" against this constant rather than a bare string literal.
     public static let appearanceCategory = "Appearance"
 
@@ -280,7 +280,7 @@ public enum OptionCategorizer {
         let prefix = name.split(separator: "-").first.map(String.init) ?? name
         if let mapped = prefixMap[prefix.lowercased()] { return mapped }
         // Unmapped options land in Advanced — never a phantom "General" bucket, so
-        // `orderedCategories`' append-unknown step can't resurface one (IA-4).
+        // `orderedCategories`' append-unknown step can't resurface one.
         return advancedCategory
     }
 
@@ -292,8 +292,7 @@ public enum OptionCategorizer {
     }
 }
 
-/// macOS-scoping policy for the catalog — the "macOS-scoped catalog" decision in
-/// `docs/brainstorms/2026-06-16-ghostty-config-manager-requirements.md` (R1, R6).
+/// macOS-scoping policy for the catalog.
 ///
 /// Ghostty's `+show-config` output is platform-agnostic and lists options that
 /// only take effect on Linux/GTK/Wayland/X11. This app is macOS-only, so those
@@ -347,7 +346,7 @@ public enum MacOSCatalogScope {
     }
 }
 
-/// Loads and caches the option catalog, keyed by binary version (R1). When the
+/// Loads and caches the option catalog, keyed by binary version. When the
 /// detected version changes, the cached catalog is invalidated and regenerated.
 public actor CatalogProvider {
     private var cache: [String: OptionCatalog] = [:]

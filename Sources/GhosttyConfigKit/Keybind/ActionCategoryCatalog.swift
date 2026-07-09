@@ -1,6 +1,6 @@
 import Foundation
 
-/// A functional section of the Keybindings editor (KB-9): a curated group like
+/// A functional section of the Keybindings editor: a curated group like
 /// "Windows & Tabs" or "Splits" that the ~140 actions read under, instead of one flat
 /// alphabetical wall.
 public struct ActionSection: Sendable, Codable, Equatable, Identifiable {
@@ -24,10 +24,10 @@ public struct ActionCategory: Sendable, Codable, Equatable {
     }
 }
 
-/// The Keybindings editor's action list, partitioned into curated functional sections
-/// (KB-9). Mirrors `OptionTierCatalog`: a small bundled map keyed by **action name**
+/// The Keybindings editor's action list, partitioned into curated functional sections.
+/// Mirrors `OptionTierCatalog`: a small bundled map keyed by **action name**
 /// (params stripped, so every `goto_tab:N` lands in the same section), with the same
-/// orphan-key guard discipline (KTD1) — a categorized action absent from `+list-actions`
+/// orphan-key guard discipline — a categorized action absent from `+list-actions`
 /// is a test failure. Any action we haven't categorized falls into a deterministic
 /// **Other** section rather than vanishing.
 public struct ActionCategoryCatalog: Sendable {
@@ -58,7 +58,7 @@ public struct ActionCategoryCatalog: Sendable {
     }
 
     /// Categorized actions whose `section` doesn't match any declared section — used by a
-    /// referential-integrity test so a typo is caught at test time (KTD1 discipline), even
+    /// referential-integrity test so a typo is caught at test time, even
     /// though `sectionID` degrades gracefully at runtime.
     public var danglingSectionActions: [String] {
         categories.compactMap { name, category in
@@ -71,7 +71,7 @@ public struct ActionCategoryCatalog: Sendable {
         categories[Keybind.actionName(action)]?.rank ?? Int.max
     }
 
-    /// Categorized action names — used by the orphan-key guard (KTD1).
+    /// Categorized action names — used by the orphan-key guard.
     public var categorizedActionNames: Set<String> { Set(categories.keys) }
 
     /// The curated sections in display order (the Other bucket is appended by `sections(for:)`).
@@ -79,7 +79,7 @@ public struct ActionCategoryCatalog: Sendable {
 
     // MARK: - Sectioning
 
-    /// Partition action groups into ordered functional sections (U19). Curated sections
+    /// Partition action groups into ordered functional sections. Curated sections
     /// appear in their catalog order; an **Other** section (uncategorized actions) is always
     /// last. Within a section, groups sort by curated rank then action name — total and
     /// deterministic. Empty sections are omitted, so a filtered list shows only sections
@@ -110,7 +110,7 @@ public struct ActionCategoryCatalog: Sendable {
     }
 
     /// The subset of `groups` belonging to a single section id (params stripped), preserving
-    /// the input order. Powers the Keybindings section-filter pills (D) — a coarse filter that
+    /// the input order. Powers the Keybindings section-filter pills — a coarse filter that
     /// composes with the row text search — without re-partitioning the whole set.
     public func groups(_ groups: [KeybindActionGroup], inSection sectionID: String) -> [KeybindActionGroup] {
         groups.filter { self.sectionID(forAction: $0.action) == sectionID }

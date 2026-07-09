@@ -1,8 +1,8 @@
 import Foundation
 
-/// Pure matching for the Keybindings editor's "search by pressing keys" (D): given a
+/// Pure matching for the Keybindings editor's "search by pressing keys": given a
 /// captured chord, the action groups bound to exactly that chord. Kept out of the view so
-/// the exact-match rule is unit-testable without an `NSEvent` recorder (KTD7).
+/// the exact-match rule is unit-testable without an `NSEvent` recorder.
 public enum KeybindSearch {
     /// The action groups whose any chord's canonical trigger equals `chord` (exact match).
     ///

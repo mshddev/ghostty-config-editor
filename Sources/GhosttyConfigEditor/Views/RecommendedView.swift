@@ -1,14 +1,14 @@
 import SwiftUI
 import GhosttyConfigKit
 
-/// The curated "Recommended" surface (F1, ONBOARD-3, IA-10): a short, grouped list of
+/// The curated "Recommended" surface: a short, grouped list of
 /// the settings most people set first, so a newcomer meets ~a dozen meaningful choices
-/// instead of the 300-option wall. It reuses the ordinary option rows (Phase B) with
+/// instead of the 300-option wall. It reuses the ordinary option rows with
 /// their friendly labels and inline controls; `theme` — which has a rich dedicated
 /// browser — is rendered as a deep-link into Themes rather than a raw field.
 ///
-/// Not the launch default: the app still opens on Themes to preserve its identity
-/// (Open Question #2). This surface is reachable from the pinned sidebar row.
+/// Not the launch default: the app still opens on Themes to preserve its identity.
+/// This surface is reachable from the pinned sidebar row.
 struct RecommendedView: View {
     @Environment(AppModel.self) private var model
 
@@ -56,7 +56,7 @@ struct RecommendedView: View {
                         }
                     }
                 }
-                // A closing next-step block (IA-5): the two concrete places to go after the
+                // A closing next-step block: the two concrete places to go after the
                 // recommended settings — themes and free-form Find — via the shared
                 // springboard component. No no-op "browse" filler. Clear the Form's own row
                 // background/insets so the card supplies all the chrome (no card-in-card

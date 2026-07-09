@@ -6,10 +6,10 @@ import GhosttyConfigKit
 /// What the sidebar can select.
 ///
 /// `.themes` is the launch default; `.recommended` is the curated "start here"
-/// surface (F1), pinned above Themes in Get started but *not* the launch default
+/// surface, pinned above Themes in Get started but *not* the launch default
 /// (the app keeps opening on Themes to preserve its identity). `.status` is the in-window
 /// maintenance hub; its Customized and Problems drill-downs are *not* selection cases —
-/// they are `StatusDestination` sub-surfaces while `.status` stays selected (KTD6/AE7), so
+/// they are `StatusDestination` sub-surfaces while `.status` stays selected, so
 /// the sidebar has one truthful highlight. The rest map to option categories. A `nil`
 /// selection is a defensive fallback that shows the unfiltered option list.
 public enum SidebarSelection: Hashable {
@@ -23,7 +23,7 @@ public enum SidebarSelection: Hashable {
 }
 
 extension SidebarSelection {
-    /// A stable string encoding for `@SceneStorage` last-surface restoration (G2). The
+    /// A stable string encoding for `@SceneStorage` last-surface restoration. The
     /// associated-value `.category` case makes the enum non-`RawRepresentable`, so the
     /// codec is hand-rolled: a `category:` prefix carries the category name. Status always
     /// restores to the hub (the drill-down destination is session state, not persisted).
@@ -51,7 +51,7 @@ extension SidebarSelection {
     }
 }
 
-/// The Status hub's current drill-down sub-surface (KTD6/AE7). The sidebar selection stays
+/// The Status hub's current drill-down sub-surface. The sidebar selection stays
 /// `.status` for all three; this decides which surface renders. Landing on `.status`
 /// (footer reselection, ⌘,, `@SceneStorage` restoration, the Back to Status link) always
 /// resets this to `.hub` — so reselecting Status while on Customized/Problems returns to
@@ -62,7 +62,7 @@ public enum StatusDestination: Equatable, Sendable {
     case problems
 }
 
-/// The Themes browser's appearance/favorites filter (U15 / TH-3). In-memory (a session
+/// The Themes browser's appearance/favorites filter. In-memory (a session
 /// choice, like `selection`/`query`), not a persisted preference.
 public enum ThemeFilter: String, CaseIterable, Sendable {
     case all, dark, light, favorites
@@ -81,13 +81,13 @@ public enum ThemeFilter: String, CaseIterable, Sendable {
     var needsClassification: Bool { self == .dark || self == .light }
 }
 
-/// List vs grid browsing of themes (U15 / TH-5). Persisted like `autoReloadEnabled` —
+/// List vs grid browsing of themes. Persisted like `autoReloadEnabled` —
 /// a durable view preference. List is the default (LOCKED 2026-07-04).
 public enum ThemeViewMode: String, Sendable {
     case list, grid
 }
 
-/// Root application state (KTD9: `@Observable`, macOS 14+).
+/// Root application state (`@Observable`, macOS 14+).
 ///
 /// Owns the discovered Ghostty environment, the loaded catalog + merged config,
 /// and the browser selection/search state the SwiftUI shell renders.
@@ -109,20 +109,20 @@ public final class AppModel {
         case failed(String)
     }
 
-    /// Lifecycle of an in-flight apply (R17).
+    /// Lifecycle of an in-flight apply.
     public enum ApplyState: Equatable {
         case idle
         case applying
         /// Saved successfully. `headline` is the lead word — "Saved" for an apply,
         /// "Reverted" for an undo — so an undo stops stacking "Saved" over "Reverted"
-        /// (CM-6). `notice` carries a new-surface/restart hint (AE5); `reload` is the
+        /// `notice` carries a new-surface/restart hint; `reload` is the
         /// auto-reload outcome whose kit-derived caption the views stack beneath the
-        /// notice — but only when it's actionable (R1, R6 — see `GhosttyReloader`).
+        /// notice — but only when it's actionable (see `GhosttyReloader`).
         case succeeded(headline: String, notice: String?, reload: ReloadOutcome)
-        /// A write/validation failure, normalized at the boundary (KTD4/R3): the presentation
+        /// A write/validation failure, normalized at the boundary : the presentation
         /// carries the plain-language `message`, the raw diagnostic as secondary `detail`,
         /// and `offersReload` (true only for stale-on-disk, where re-reading disk is the fix
-        /// — so the surface can show an inline "Reload", G3/GAP-2). Raw Ghostty diagnostics
+        /// — so the surface can show an inline "Reload"). Raw Ghostty diagnostics
         /// and implementation type names never reach row feedback.
         case failed(EditErrorPresentation)
     }
@@ -130,10 +130,10 @@ public final class AppModel {
     public private(set) var environmentState: EnvironmentState = .loading
     public private(set) var contentState: ContentState = .idle
     public private(set) var browser: CatalogBrowser?
-    /// Validation + footgun report for the loaded config (R15, R16).
+    /// Validation + footgun report for the loaded config.
     public private(set) var lintReport: LintReport?
     /// True when no config file exists yet — discovery still works against an
-    /// all-unset view (R6, first-launch state).
+    /// all-unset view (first-launch state).
     public private(set) var configMissing = false
     public private(set) var applyState: ApplyState = .idle
     /// Which option the current `applyState` describes. Editing is now inline in
@@ -142,7 +142,7 @@ public final class AppModel {
     /// the state unambiguously is gone).
     public private(set) var applyingOptionName: String?
 
-    /// The user's manual Ghostty binary-path override (G1, FEATURES-2). **Persisted**
+    /// The user's manual Ghostty binary-path override. **Persisted**
     /// across launches via the kit's `BinaryOverrideStore` — read in `init`, written by
     /// `setBinaryOverride(_:)` — so a fix on the "not found" screen survives relaunch.
     /// Read by `bootstrap()` as `GhosttyEnvironment.discover(userOverride:)`.
@@ -152,7 +152,7 @@ public final class AppModel {
             // Moving to a *different* sidebar section clears that section's own search
             // field, so each surface opens fresh — the per-surface `query`/`themeQuery` are
             // ephemeral per visit, unlike the global ⇧⌘F Find, which navigation leaves
-            // alone (B2). Guarded to a real change so re-selecting the current section (or a
+            // alone. Guarded to a real change so re-selecting the current section (or a
             // redundant re-assignment during layout) doesn't wipe an in-progress search.
             // Keyboard Shortcuts keeps its filter in view-local @State, which already
             // resets when the surface is recreated.
@@ -160,7 +160,7 @@ public final class AppModel {
                 query = ""
                 themeQuery = ""
             }
-            // Landing on Status always returns to the hub (KTD6/AE7): the Customized and
+            // Landing on Status always returns to the hub: the Customized and
             // Problems drill-downs keep `selection == .status`, so reselecting the Status
             // footer (or ⌘, / restoration) re-assigns `.status` and lands back on the hub
             // rather than staying on a hidden sub-surface. `setStatusDestination` assigns
@@ -169,7 +169,7 @@ public final class AppModel {
         }
     }
 
-    /// The Status hub's active drill-down (KTD6/AE7). Only meaningful while
+    /// The Status hub's active drill-down. Only meaningful while
     /// `selection == .status`; otherwise inert. Written by `setStatusDestination` (the
     /// hub's Review buttons and the Back to Status link) and reset to `.hub` whenever
     /// `selection` becomes `.status`.
@@ -178,16 +178,16 @@ public final class AppModel {
     public var query: String = ""
     /// The Themes surface's own search text (name filter), bound to the shared
     /// `SurfaceHeader` field. Distinct from `query` so each surface filters itself
-    /// and never means two things at once (C3). E1 layers light/dark grouping on top.
+    /// and never means two things at once. Light/dark grouping layers on top.
     public var themeQuery: String = ""
-    /// The Themes browser's appearance/favorites filter (U15). In-memory like `themeQuery`.
+    /// The Themes browser's appearance/favorites filter. In-memory like `themeQuery`.
     public var themeFilter: ThemeFilter = .all
     public var selectedOptionName: String?
 
-    /// `UserDefaults` key for the themes list/grid toggle (U15).
+    /// `UserDefaults` key for the themes list/grid toggle.
     static let themeViewModeDefaultsKey = "themeViewMode"
 
-    /// List vs grid browsing of themes (U15 / TH-5). Persisted across launches like
+    /// List vs grid browsing of themes. Persisted across launches like
     /// `autoReloadEnabled`; defaults to `.grid` (2026-07-08 — grid shows each theme's full
     /// preview at rest, so it's the better first impression than the compact list, and it
     /// let us drop the list's hover-to-enlarge preview entirely). A saved per-user choice
@@ -197,23 +197,23 @@ public final class AppModel {
         didSet { UserDefaults.standard.set(themeViewMode.rawValue, forKey: Self.themeViewModeDefaultsKey) }
     }
 
-    /// `UserDefaults` key for the auto-reload toggle (KTD7).
+    /// `UserDefaults` key for the auto-reload toggle.
     static let autoReloadDefaultsKey = "autoReloadEnabled"
 
-    /// Whether a successful in-app write auto-reloads the running Ghostty (R7, KTD7).
+    /// Whether a successful in-app write auto-reloads the running Ghostty.
     /// **On by default**; the toggle persists across launches (alongside `binaryOverride`
     /// and `favoriteThemes`; `selection`/`query` remain in-memory). Stored (not computed) so a mid-session
     /// toggle updates the in-memory value immediately while `didSet` mirrors it to
     /// `UserDefaults`; the `Settings` toggle binds to this property, never to a bare
-    /// `@AppStorage` that would leave this stored value stale (U3).
+    /// `@AppStorage` that would leave this stored value stale.
     public var autoReloadEnabled: Bool {
         didSet { UserDefaults.standard.set(autoReloadEnabled, forKey: Self.autoReloadDefaultsKey) }
     }
 
-    /// `UserDefaults` key for the starred themes (E4).
+    /// `UserDefaults` key for the starred themes.
     static let favoriteThemesDefaultsKey = "favoriteThemes"
 
-    /// Themes the user has starred (E4), persisted across launches like
+    /// Themes the user has starred, persisted across launches like
     /// `autoReloadEnabled`. Stored as a `Set` for O(1) membership in `isFavorite`;
     /// `didSet` mirrors it to `UserDefaults` as a string array (the value read back
     /// in `init`). Assigning in `init` does not fire `didSet`, so the initial load
@@ -224,10 +224,10 @@ public final class AppModel {
         }
     }
 
-    /// `UserDefaults` key for the first-run welcome (F2).
+    /// `UserDefaults` key for the first-run welcome.
     static let hasSeenWelcomeDefaultsKey = "hasSeenWelcome"
 
-    /// Whether the user has dismissed the first-run welcome at least once (F2).
+    /// Whether the user has dismissed the first-run welcome at least once.
     /// Persisted like `autoReloadEnabled`; defaults to `false` (a missing key reads
     /// false), so a fresh install shows the welcome. Set true on first *dismiss*, not
     /// on first edit, so the safety story is seen before anything is changed.
@@ -235,7 +235,7 @@ public final class AppModel {
         didSet { UserDefaults.standard.set(hasSeenWelcome, forKey: Self.hasSeenWelcomeDefaultsKey) }
     }
 
-    /// Whether the welcome pane is currently presented (F2). Transient (not persisted):
+    /// Whether the welcome pane is currently presented. Transient (not persisted):
     /// computed once per launch from `!hasSeenWelcome || configMissing`, cleared on
     /// dismiss, and re-set when re-opened from the Help menu.
     public var isShowingWelcome = false
@@ -247,55 +247,55 @@ public final class AppModel {
     private var catalog: OptionCatalog?
     private var lastReceipt: WriteReceipt?
     /// The last successful inline edit (option name + values), captured so a revert can
-    /// be redone by re-issuing it (U6). Edit-replay — it never touches `lastReceipt`.
+    /// be redone by re-issuing it. Edit-replay — it never touches `lastReceipt`.
     private var lastApplyEdit: (name: String, values: [String])?
     /// The edit a Redo would re-apply: set when an undo reverts `lastApplyEdit`, cleared
-    /// by the next successful apply. Drives the time-boxed inline Redo link (U6).
+    /// by the next successful apply. Drives the time-boxed inline Redo link.
     private var redoableApply: (name: String, values: [String])?
 
     /// Serializes every disk write — single-option applies, batch import/reset, and
-    /// undo — so only one is ever in flight (U1/GAP-8). Coalesces a same-option burst
+    /// undo — so only one is ever in flight. Coalesces a same-option burst
     /// to its latest value; queues everything else FIFO. The public write methods keep
     /// their signatures; enqueuing is an internal detail. See `SerialWriteQueue`.
     private let writeQueue = SerialWriteQueue()
 
-    /// Signals the running Ghostty to reload after a successful write (R1). The kit
+    /// Signals the running Ghostty to reload after a successful write. The kit
     /// owns the whole decision + safety policy; the app supplies only the AppKit
-    /// instance enumeration (KTD3) — so this is `.live` with the app-side lister.
+    /// instance enumeration — so this is `.live` with the app-side lister.
     private let reloader = GhosttyReloader.live(runningInstances: GhosttyInstanceLister.runningInstances)
 
-    // Themes (U8)
+    // Themes
     private var themeProvider: ThemeProvider?
     /// In-flight per-theme color loads, kept so they can be cancelled when the
     /// environment is reloaded (rather than leaking and writing into stale state).
     private var colorTasks: [String: Task<Void, Never>] = [:]
     private var failedThemes: Set<String> = []
-    /// Tri-state theme/font list loads (G3): a failed `+list-themes`/`+list-fonts` becomes
+    /// Tri-state theme/font list loads: a failed `+list-themes`/`+list-fonts` becomes
     /// a *distinct* `.failed` phase the surface renders as an error + "Try again", instead
-    /// of an empty list that spins a `ProgressView` forever (GAP-3). `themes`/`fonts` are
+    /// of an empty list that spins a `ProgressView` forever. `themes`/`fonts` are
     /// the loaded values, empty until `.loaded`, so their readers stay unchanged.
     public private(set) var themesLoad: ResourceLoad<[ThemeRef]> = .idle
     public private(set) var fontsLoad: ResourceLoad<[String]> = .idle
     public var themes: [ThemeRef] { themesLoad.value ?? [] }
     public var fonts: [String] { fontsLoad.value ?? [] }
     public private(set) var themeColors: [String: ThemeColors] = [:]
-    /// Determinate progress of the one-time Dark/Light batch classification (U15): `nil`
+    /// Determinate progress of the one-time Dark/Light batch classification: `nil`
     /// when idle, otherwise the number of themes still to read. Drives "Classifying N…".
     /// Doubles as the "already running" guard so a second filter tap doesn't re-enter.
     public private(set) var classifyProgress: Int?
     /// True once every theme has been read for classification, so re-selecting Dark/Light
-    /// is instant (memoized — GAP-5). Reset on re-bootstrap with the other theme caches.
+    /// is instant (memoized). Reset on re-bootstrap with the other theme caches.
     public private(set) var didClassifyAll = false
 
-    // Keybindings (U5)
+    // Keybindings
     private var keybindReference: KeybindReferenceProvider?
     public private(set) var keybindDefaults: [DefaultKeybind] = []
     public private(set) var keybindActions: [KeybindAction] = []
 
     public init() {
-        // Default ON (KTD7): register the default so a fresh install reads `true`.
+        // Default ON: register the default so a fresh install reads `true`.
         // A bare `bool(forKey:)` returns `false` for a missing key, which would ship
-        // auto-reload OFF and silently violate R7/AE8 — so the default is registered,
+        // auto-reload OFF and silently violate that contract — so the default is registered,
         // not assumed. (Assigning in `init` does not trigger the `didSet` above.)
         let defaults = UserDefaults.standard
         defaults.register(defaults: [Self.autoReloadDefaultsKey: true])
@@ -306,15 +306,15 @@ public final class AppModel {
         themeViewMode = ThemeViewMode(rawValue: defaults.string(forKey: Self.themeViewModeDefaultsKey) ?? "") ?? .grid
         // Welcome defaults to unseen on a fresh install (missing key → false).
         hasSeenWelcome = defaults.bool(forKey: Self.hasSeenWelcomeDefaultsKey)
-        // A prior manual Ghostty binary path survives relaunch (G1), so a fix on the
+        // A prior manual Ghostty binary path survives relaunch, so a fix on the
         // "not found" screen sticks; nil (unset/blank) falls back to auto-detection.
         binaryOverride = BinaryOverrideStore(defaults: defaults).load()
     }
 
-    // MARK: - Binary override (G1)
+    // MARK: - Binary override
 
     /// Set (or clear, with nil) the manual Ghostty binary path, persist it, and
-    /// re-discover the environment so the change takes effect immediately (G1). Backs the
+    /// re-discover the environment so the change takes effect immediately. Backs the
     /// Status "Choose…"/"Use auto-detected" buttons and the "Choose Ghostty…" recovery
     /// on the not-found/unsupported screens. Re-evaluates the first-run welcome (a no-op
     /// after it's been seen) so a fresh discovery with no config still surfaces it.
@@ -326,7 +326,7 @@ public final class AppModel {
         showWelcomeIfNeeded()
     }
 
-    // MARK: - First-run welcome (F2)
+    // MARK: - First-run welcome
 
     /// Decide once per launch whether to present the welcome: shown when it's never been
     /// dismissed *or* there's no config yet (so deleting the config later re-surfaces it).
@@ -341,7 +341,7 @@ public final class AppModel {
     /// Re-open the welcome from the Help menu (available at any time).
     public func openWelcome() { isShowingWelcome = true }
 
-    /// Dismiss the welcome and remember it's been seen (F2: on first dismiss, not first edit).
+    /// Dismiss the welcome and remember it's been seen (on first dismiss, not first edit).
     public func dismissWelcome() {
         isShowingWelcome = false
         hasSeenWelcome = true
@@ -406,7 +406,7 @@ public final class AppModel {
         } catch {
             // No readable config yet: present an all-unset view, but point the
             // empty model at the real primary path so a first edit creates the
-            // file in the right place (R6, first-launch state).
+            // file in the right place (first-launch state).
             merged = reader.merge(model: Self.emptyModel(), catalog: catalog)
             configMissing = true
         }
@@ -429,12 +429,12 @@ public final class AppModel {
         return ConfigModel(primary: ConfigFile.parse(text: "", path: path, resolvedPath: ConfigReader.canonicalPath(path)))
     }
 
-    // MARK: - Apply (U7)
+    // MARK: - Apply
 
-    /// Validate a proposed change against the live binary, write it safely (U6),
-    /// then reload so the UI reflects disk. Surfaces explicit feedback (R17).
+    /// Validate a proposed change against the live binary, write it safely,
+    /// then reload so the UI reflects disk. Surfaces explicit feedback.
     ///
-    /// Enqueues onto `writeQueue` (U1) keyed by the option name, so a rapid burst of
+    /// Enqueues onto `writeQueue` keyed by the option name, so a rapid burst of
     /// edits to the same option serializes to one in-flight write and coalesces to the
     /// latest value. `await` returns only when this write — or the coalescing successor
     /// that supersedes it — has fully applied, preserving the contract that a caller may
@@ -454,7 +454,7 @@ public final class AppModel {
     private func performApplyEdit(optionName: String, values: [String]) async {
         guard let environment, let browser,
               let option = browser.merged.option(named: optionName) else { return }
-        // A color option's failures speak "color" through the normalizer (KTD4/R3).
+        // A color option's failures speak "color" through the normalizer.
         let valueKind: EditValueKind = option.option.valueType == .color ? .color : .generic
         applyingOptionName = optionName
         applyState = .applying
@@ -469,24 +469,24 @@ public final class AppModel {
             )
             lastReceipt = receipt
             // Remember what to redo-through, and invalidate any prior redo — a fresh
-            // apply supersedes a revert that could have been redone (U6).
+            // apply supersedes a revert that could have been redone.
             lastApplyEdit = (optionName, values)
             redoableApply = nil
             if let catalog { await refreshConfig(environment: environment, catalog: catalog) }
             // Best-effort: ask the running Ghostty to reload now that the new bytes are
-            // committed (R1). Never throws — the only throwing call here is the write
-            // above — and never downgrades a successful save to a failure (R5/KTD5).
+            // committed. Never throws — the only throwing call here is the write
+            // above — and never downgrades a successful save to a failure.
             let reload = reloader.reload(enabled: autoReloadEnabled)
             applyState = .succeeded(headline: "Saved", notice: option.option.applyNotice, reload: reload)
         } catch {
-            // Normalize every failure at the boundary (KTD4/R3): validation diagnostics,
+            // Normalize every failure at the boundary : validation diagnostics,
             // stale-on-disk, line-break refusals, and any other error become plain language
             // with the raw text kept as secondary detail — no impl type name leaks to a row.
             applyState = .failed(EditErrorPresentation.present(error, kind: valueKind))
         }
     }
 
-    /// Revert the last applied write (R10). Enqueued as a non-coalescable entry so it
+    /// Revert the last applied write. Enqueued as a non-coalescable entry so it
     /// serializes behind any pending write rather than racing it.
     public func undoLastApply() async {
         await writeQueue.submit(key: nil) { [weak self] in
@@ -494,10 +494,10 @@ public final class AppModel {
         }
     }
 
-    /// True while a just-reverted edit can be re-applied — drives the inline Redo link (U6).
+    /// True while a just-reverted edit can be re-applied — drives the inline Redo link.
     public var canRedoApply: Bool { redoableApply != nil }
 
-    /// Re-apply the edit a prior undo reverted (U6). A single-step redo implemented as
+    /// Re-apply the edit a prior undo reverted. A single-step redo implemented as
     /// edit-replay: it re-issues `applyEdit` through the same serial queue, so it never
     /// fights the last-write receipt model. Guarded — a no-op when nothing is redoable.
     public func redoLastApply() async {
@@ -517,14 +517,14 @@ public final class AppModel {
         do {
             _ = try ConfigWriter().restore(from: receipt)
             lastReceipt = nil
-            // The edit we just reverted becomes redoable (U6) — a single-step redo.
+            // The edit we just reverted becomes redoable — a single-step redo.
             redoableApply = lastApplyEdit
             await refreshConfig(environment: environment, catalog: catalog)
             // Reload after an undo too, so the live terminal reverts (closes the undo
-            // gap — undo previously refreshed only the app's own view) (R1/AE5).
+            // gap — undo previously refreshed only the app's own view).
             let reload = reloader.reload(enabled: autoReloadEnabled)
             // "Reverted" as the headline, so the UI stops stacking "Saved" over the
-            // revert message (CM-6); the reload caption still rides beneath if present.
+            // revert message; the reload caption still rides beneath if present.
             applyState = .succeeded(headline: "Reverted", notice: nil, reload: reload)
         } catch {
             applyState = .failed(EditErrorPresentation.present(error))
@@ -535,11 +535,11 @@ public final class AppModel {
         applyState = .idle
         applyingOptionName = nil
         // Invalidate any pending single-step redo: it's time-boxed to the visible
-        // feedback, and after a disk reload the reverted bytes may already be gone (U6).
+        // feedback, and after a disk reload the reverted bytes may already be gone.
         redoableApply = nil
     }
 
-    /// Clear a lingering validation error the moment its edit is abandoned (A-2). A
+    /// Clear a lingering validation error the moment its edit is abandoned. A
     /// `.failed` apply-state is global and, unlike `.succeeded`, never auto-collapses — so
     /// cancelling an editor popover (or blurring an inline field back to its saved value)
     /// used to leave the red error stranded on the row until the next apply or surface
@@ -551,10 +551,10 @@ public final class AppModel {
         resetApplyState()
     }
 
-    // MARK: - Reload from disk (G3)
+    // MARK: - Reload from disk
 
     /// Re-read the config from disk and rebuild the browser, reusing the already-
-    /// discovered environment/catalog (no rediscovery) (G3/GAP-2). Backs the ⌘R command
+    /// discovered environment/catalog (no rediscovery). Backs the ⌘R command
     /// and the inline "Reload" recovery on a stale-on-disk failure — the error told the
     /// user to reload and now the app actually does. Clears the apply feedback so a
     /// lingering stale-on-disk banner disappears once memory matches disk.
@@ -577,14 +577,14 @@ public final class AppModel {
     /// Re-sync from disk when the app regains focus — but only when the file actually
     /// changed externally and nothing is mid-apply, so "Reveal in editor" round-trips
     /// (edit outside, come back, see it) without a spurious reload clobbering an in-app
-    /// edit (G3; live FSEvents watching remains a deferred enhancement).
+    /// edit (live FSEvents watching remains a deferred enhancement).
     public func syncFromDiskIfChanged() async {
         if case .applying = applyState { return }
         guard !configMissing, primaryChangedOnDisk else { return }
         await reloadFromDisk()
     }
 
-    // MARK: - Status pane data (G1)
+    // MARK: - Status pane data
 
     /// The resolved Ghostty binary path, shown in the Status "Ghostty" section — nil
     /// until discovery succeeds (the pane shows a not-found note + "Choose…" then).
@@ -594,13 +594,13 @@ public final class AppModel {
     }
 
     /// Where the primary config file lives (or *would* live on first write) — shown in
-    /// the Status "Config file" section and used by Reveal-in-Finder / create (G1).
+    /// the Status "Config file" section and used by Reveal-in-Finder / create.
     public var configFilePath: String? {
         browser?.merged.model.primary.path
     }
 
     /// Reveal the config file (or its parent directory when it doesn't exist yet) in the
-    /// Finder (G1). Uses the resolved path so a symlinked `~/.config` lands on the real file.
+    /// Finder. Uses the resolved path so a symlinked `~/.config` lands on the real file.
     public func revealConfigInFinder() {
         guard let file = browser?.merged.model.primary else { return }
         let resolved = file.resolvedPath
@@ -615,12 +615,12 @@ public final class AppModel {
 
     /// The resolved path of the primary config file (symlinks followed), or `nil` before a
     /// browser is loaded. The fallback target for a Problems file action (Open at Line /
-    /// Reveal in Finder) when a diagnostic carries a line but no explicit file (F4/R10).
+    /// Reveal in Finder) when a diagnostic carries a line but no explicit file.
     public var primaryConfigResolvedPath: String? {
         browser?.merged.model.primary.resolvedPath
     }
 
-    /// Reveal a specific file in the Finder (F4/R10) — a Problems finding can live in a
+    /// Reveal a specific file in the Finder — a Problems finding can live in a
     /// `config-file` include, not just the primary, so its Reveal targets that exact file.
     /// Falls back to the primary config's directory when the path is gone.
     public func revealInFinder(path: String) {
@@ -631,7 +631,7 @@ public final class AppModel {
         }
     }
 
-    /// Open the config file in the user's default editor, best-effort at `line` (F4/R10).
+    /// Open the config file in the user's default editor, best-effort at `line`.
     /// macOS has no universal line-jump across editors, so the line is advisory context —
     /// the Problems row pairs this with Reveal in Finder as the reliable fallback. Mirrors
     /// the `NSWorkspace.open` the finding rows already use.
@@ -639,7 +639,7 @@ public final class AppModel {
         NSWorkspace.shared.open(URL(fileURLWithPath: path))
     }
 
-    /// The next action a validation-message Problems row exposes (F4/R10): "Show Setting"
+    /// The next action a validation-message Problems row exposes: "Show Setting"
     /// when the message's `key` names a real catalog option (focuses it), otherwise an
     /// Open-at-Line file action when the message carries a line (its own file, or the
     /// primary config as fallback). Pure routing lives in `ProblemActionPolicy`.
@@ -649,13 +649,13 @@ public final class AppModel {
         }
     }
 
-    /// The next action a static footgun finding row exposes (F4/R10): a file action at its
+    /// The next action a static footgun finding row exposes: a file action at its
     /// first location — footgun findings are file-only warnings, never option-keyed.
     public func problemAction(for finding: LintFinding) -> ProblemAction? {
         ProblemActionPolicy.action(for: finding)
     }
 
-    /// Perform a resolved Problems row action (F4/R10): focus the mapped setting, or open
+    /// Perform a resolved Problems row action: focus the mapped setting, or open
     /// the source file at the diagnostic's line. Shared by the validation and finding rows.
     public func perform(_ action: ProblemAction) {
         switch action {
@@ -664,7 +664,7 @@ public final class AppModel {
         }
     }
 
-    /// Create an empty config file at the primary path when none exists yet (G1), so a
+    /// Create an empty config file at the primary path when none exists yet, so a
     /// newcomer can open it in an editor before making a first change. Creates the parent
     /// directory as needed, then reloads so `configMissing` clears. A no-op if a file is
     /// already there.
@@ -677,7 +677,7 @@ public final class AppModel {
         await reloadFromDisk()
     }
 
-    // MARK: - Import / export / copy / reset (G4)
+    // MARK: - Import / export / copy / reset
 
     /// The whole primary config as text — the source for "Copy full config" and Export.
     public var primaryConfigText: String? {
@@ -688,8 +688,7 @@ public final class AppModel {
     /// The batch owns only the primary (options set in a `config-file` include are left
     /// untouched), so gating/labelling the reset on the *total* customized count would
     /// promise to reset options it can't, report a false success, and re-offer a reset
-    /// that never reduces the count (adversarial review #1). This counts only what will
-    /// truly change.
+    /// that never reduces the count. This counts only what will truly change.
     public var resettableCount: Int {
         guard let browser else { return 0 }
         return browser.customizedOptions.filter { isPrimaryResident($0) }.count
@@ -711,7 +710,7 @@ public final class AppModel {
         return option.sources.contains { ConfigReader.canonicalPath($0.file) == canonicalPrimary }
     }
 
-    /// Copy the full config to the pasteboard (a trivial read; G4).
+    /// Copy the full config to the pasteboard (a trivial read).
     public func copyConfigToPasteboard() {
         guard let text = primaryConfigText else { return }
         NSPasteboard.general.clearContents()
@@ -719,7 +718,7 @@ public final class AppModel {
     }
 
     /// Replace the primary config with imported `text` — validated, backed up, and
-    /// undoable as one step (G4, replace-with-backup). A config that fails validation is
+    /// undoable as one step (replace-with-backup). A config that fails validation is
     /// rejected before anything is written.
     public func importConfig(text: String) async {
         await commitWrite(notice: "Imported configuration.") { model, cli in
@@ -728,14 +727,14 @@ public final class AppModel {
     }
 
     /// Reset the primary file's customized options to their defaults in ONE undoable
-    /// batch (G4). Options set in a `config-file` include are left untouched — the batch
+    /// batch. Options set in a `config-file` include are left untouched — the batch
     /// owns only the primary — and the reset affordance is gated/counted on
     /// `resettableCount` so it only offers, and reports, what it can actually clear.
     public func resetAllCustomized() async {
         await applyReset(in: nil, notice: "Reset settings to their defaults.")
     }
 
-    /// Reset just one category's customized options in one undoable batch (G4).
+    /// Reset just one category's customized options in one undoable batch.
     public func resetCategory(_ category: String) async {
         await applyReset(in: category, notice: "Reset \(category) to defaults.")
     }
@@ -766,7 +765,7 @@ public final class AppModel {
     /// Run a whole-file/batch write and map its outcome into `applyState` + refresh +
     /// reload, shared by import and reset (the single-option `applyEdit` keeps its own
     /// path because it anchors feedback to a row via `applyingOptionName`). Enqueued as a
-    /// non-coalescable entry on `writeQueue` (U1) so a batch write and a queued
+    /// non-coalescable entry on `writeQueue` so a batch write and a queued
     /// `applyEdit` never run concurrently. The `work` closure receives the model and CLI
     /// **fresh at execution** so its stale-on-disk guard compares against current bytes.
     private func commitWrite(
@@ -790,7 +789,7 @@ public final class AppModel {
             lastReceipt = receipt
             // A batch write (import / reset-all / reset-category) isn't a single inline
             // edit, so it carries no single-step redo: clear both, so undoing a batch
-            // never offers to redo a stale, unrelated inline edit (U6).
+            // never offers to redo a stale, unrelated inline edit.
             lastApplyEdit = nil
             redoableApply = nil
             await refreshConfig(environment: environment, catalog: catalog)
@@ -798,12 +797,12 @@ public final class AppModel {
             applyState = .succeeded(headline: "Saved", notice: notice, reload: reload)
         } catch {
             // Batch/import writes carry no single option, so the generic vocabulary applies;
-            // still normalized so no raw diagnostic reaches the feedback bar (KTD4/R3).
+            // still normalized so no raw diagnostic reaches the feedback bar.
             applyState = .failed(EditErrorPresentation.present(error))
         }
     }
 
-    // MARK: - Navigation & global Find (D)
+    // MARK: - Navigation & global Find
 
     /// Bumped on each `focus(optionNamed:)` so a *mounted* option list can react to an
     /// explicit focus — never to ordinary sidebar navigation (which would otherwise
@@ -814,23 +813,23 @@ public final class AppModel {
     /// into view. Unlike `focusRequestID`'s `onChange`, this flag survives the option
     /// list *remounting* — the common case, since a focus from a global Find result
     /// swaps the Find overlay out and the option list in, so `onChange` never fires and
-    /// only an `onAppear` that consults this flag will scroll (D1/D2).
+    /// only an `onAppear` that consults this flag will scroll.
     public var pendingFocusScroll = false
 
     /// Whether the global ⇧⌘F Find overlay is showing. Distinct from a surface's own
     /// local filter (`query`/`themeQuery`): Find searches *all* options regardless of
-    /// the current surface, so the two search tiers never mean the same thing (U20).
+    /// the current surface, so the two search tiers never mean the same thing.
     public var isFinding = false
 
     /// The global Find query (all-option search), kept separate from the per-surface
-    /// `query` so the two-tier search model has no shared, double-meaning field (U20).
+    /// `query` so the two-tier search model has no shared, double-meaning field.
     public var findQuery: String = ""
 
     /// Navigate to a specific option: clear any local filter and the global Find,
     /// select the option's category, and mark it as the focus target so the list
-    /// scrolls it into view (D1). The shared navigation primitive behind a global
-    /// Find result tap (D2), Customized deep-links (F3), and the Problems deep-link
-    /// (G5) — introduced here so those units share one behavior.
+    /// scrolls it into view. The shared navigation primitive behind a global
+    /// Find result tap, Customized deep-links, and the Problems deep-link
+    /// — introduced here so those units share one behavior.
     public func focus(optionNamed name: String) {
         query = ""
         endFind()
@@ -859,7 +858,7 @@ public final class AppModel {
     }
 
     /// Ranked global-search results paired with their provenance (category pill +
-    /// intent phrase), for the Find surface (D2).
+    /// intent phrase), for the Find surface.
     public func globalFindHits() -> [(hit: SearchHit, option: MergedOption)] {
         browser?.searchHits(findQuery) ?? []
     }
@@ -873,7 +872,7 @@ public final class AppModel {
         findQuery = ""
     }
 
-    // MARK: - Status drill-down destinations (KTD6/AE7)
+    // MARK: - Status drill-down destinations
 
     /// True when the Status hub's Customized drill-down is showing — the sidebar keeps
     /// `.status` selected, so views test this rather than a (now-removed) `.customized`
@@ -887,22 +886,22 @@ public final class AppModel {
     /// `.problems`; the Back to Status link → `.hub`). Keeps the sidebar on `.status`.
     /// Assigns `selection` first — which resets the destination to `.hub` via `didSet` —
     /// then sets the requested destination, so the two never fight and reselecting Status
-    /// still returns to the hub (AE7).
+    /// still returns to the hub.
     public func setStatusDestination(_ destination: StatusDestination) {
         selection = .status
         statusDestination = destination
         // The sidebar selection stays `.status` across these drill-downs, so the
         // `onChange(of: selection)` surface cleanup doesn't fire — clear lingering apply
         // feedback here so a hub action's "Saved" doesn't bleed into Customized/Problems
-        // (mirrors the per-surface cleanup, C3).
+        // (mirrors the per-surface cleanup).
         resetApplyState()
     }
 
-    // MARK: - Local search scope (R9/F3)
+    // MARK: - Local search scope
 
     /// The category a **local** (per-surface) search is scoped to — the browsed category,
     /// or `nil` on non-category surfaces (where the local filter stays unscoped). Distinct
-    /// from global Find, which always spans the whole catalog (R9). Drives `visibleOptions`'
+    /// from global Find, which always spans the whole catalog. Drives `visibleOptions`'
     /// scoping and the search-field prompt.
     public var localSearchScopeCategory: String? {
         if case .category(let name) = selection { return name }
@@ -910,7 +909,7 @@ public final class AppModel {
     }
 
     /// The prompt for the local search field, naming its scope so a local filter reads as
-    /// visibly scoped to the current category — "Search Appearance" (R9/F3). Falls back to
+    /// visibly scoped to the current category — "Search Appearance". Falls back to
     /// a generic prompt on surfaces without a single-category scope.
     public var localSearchPrompt: String {
         if let category = localSearchScopeCategory { return "Search \(category)" }
@@ -919,7 +918,7 @@ public final class AppModel {
 
     /// The human name of the surface currently browsed — the category name, "Customized",
     /// "Themes", etc. Backs the surface title and the "clearing local search restores the
-    /// prior title" behavior (F3 scenario 5). `nil` only for the defensive `.none` fallback.
+    /// prior title" behavior. `nil` only for the defensive `.none` fallback.
     public var currentSurfaceName: String? {
         if isShowingCustomized { return "Customized" }
         switch selection {
@@ -931,20 +930,20 @@ public final class AppModel {
         }
     }
 
-    // MARK: - Themes (U8)
+    // MARK: - Themes
 
     /// The currently-applied theme value, if set.
     public var currentTheme: String? {
         browser?.merged.option(named: "theme").flatMap { $0.isSet ? $0.userValues.first : nil }
     }
 
-    /// The themes matching the active appearance/favorites filter (U15) *and* the
+    /// The themes matching the active appearance/favorites filter *and* the
     /// `themeQuery` name search (case- and diacritic-insensitive); the whole list when
     /// both are neutral. The Themes surface renders this instead of `themes` so its
-    /// shared-header search field and segmented filter both apply (C3/TH-3). Colors still
+    /// shared-header search field and segmented filter both apply. Colors still
     /// load lazily per visible row; the Dark/Light filter reads only *already-classified*
     /// appearance, so `classifyThemesIfNeeded()` — not this getter — is what forces the
-    /// batch read. The name match is the kit's `ThemeParser.nameMatches` (unit-tested, E1).
+    /// batch read. The name match is the kit's `ThemeParser.nameMatches` (unit-tested).
     public var filteredThemes: [ThemeRef] {
         var result = themes
         switch themeFilter {
@@ -959,7 +958,7 @@ public final class AppModel {
     }
 
     /// On the first Dark/Light filter selection, read every still-unclassified theme's
-    /// colors off the main actor so `appearance` resolves for all of them (U15 / GAP-5).
+    /// colors off the main actor so `appearance` resolves for all of them.
     /// Determinate (`classifyProgress` counts down), cancellable (the per-iteration
     /// provider-identity guard drops a run whose provider was swapped by a re-bootstrap),
     /// and memoized (`didClassifyAll`) so a later Dark/Light tap is instant. Sequential —
@@ -992,7 +991,7 @@ public final class AppModel {
     }
 
     /// The theme names the current `theme = …` value selects — one for a single
-    /// theme, both for a `light:…,dark:…` pair (E2). The Themes browser drives its
+    /// theme, both for a `light:…,dark:…` pair. The Themes browser drives its
     /// "Current" highlight from membership in this set rather than string equality,
     /// so both rows of a pair read as current (`ThemeParser.selectedThemeNames`).
     public var currentSelectedThemeNames: Set<String> {
@@ -1001,12 +1000,12 @@ public final class AppModel {
     }
 
     /// The current theme value parsed into a single/pair selection, for the pinned
-    /// "Current theme" section (E2/E4). `nil` when no theme is set.
+    /// "Current theme" section. `nil` when no theme is set.
     public var currentThemeSelection: ThemeSelection? {
         currentTheme.map { ThemeParser.parseThemeSetting($0) }
     }
 
-    /// Whether a theme's color preview failed to load (E3). Reads the private
+    /// Whether a theme's color preview failed to load. Reads the private
     /// `failedThemes` set so the Themes browser can render a "Preview unavailable"
     /// placeholder instead of an eternal spinner. Observation tracks the read, so a
     /// row re-renders the moment its load fails.
@@ -1025,7 +1024,7 @@ public final class AppModel {
 
     /// Load the theme + font lists once, lazily (the Themes tab triggers this). A load
     /// is attempted only from `.idle`, so a prior `.failed` isn't silently retried on
-    /// every re-appear — retry is the explicit `reloadThemes()` (G3).
+    /// every re-appear — retry is the explicit `reloadThemes()`.
     public func loadThemesIfNeeded() async {
         guard case .idle = themesLoad, let provider = themeProviderIfAvailable() else { return }
         themesLoad = .loading
@@ -1051,7 +1050,7 @@ public final class AppModel {
 
     /// Force a fresh theme-list load regardless of the current phase — backs the
     /// "Try again" button on the failed-themes state so a transient `+list-themes`
-    /// failure is recoverable without relaunching (G3).
+    /// failure is recoverable without relaunching.
     public func reloadThemes() async {
         guard let provider = themeProviderIfAvailable() else { return }
         themesLoad = .loading
@@ -1096,25 +1095,25 @@ public final class AppModel {
         colorTasks.removeAll()
     }
 
-    /// Apply a theme by writing `theme = …` via the safe write path (F2). Also used
+    /// Apply a theme by writing `theme = …` via the safe write path. Also used
     /// for a light/dark pair — pass the serialized `light:…,dark:…` string, which is a
-    /// single `theme` value (one line), so the pairing rides the same primitive (E4).
+    /// single `theme` value (one line), so the pairing rides the same primitive.
     public func applyTheme(_ name: String) async {
         guard let themeOption = browser?.merged.option(named: "theme") else { return }
         await applyEdit(option: themeOption, values: [name])
     }
 
-    /// Whether a theme is starred (E4).
+    /// Whether a theme is starred.
     public func isFavorite(_ name: String) -> Bool { favoriteThemes.contains(name) }
 
-    /// Star / unstar a theme (E4). Persists via the property's `didSet`.
+    /// Star / unstar a theme. Persists via the property's `didSet`.
     public func toggleFavorite(_ name: String) {
         if favoriteThemes.contains(name) { favoriteThemes.remove(name) }
         else { favoriteThemes.insert(name) }
     }
 
     /// Set `name` as the light or dark member of a `light:…,dark:…` pair, keeping the
-    /// other member from the current selection (E4). The pure composition (which side
+    /// other member from the current selection. The pure composition (which side
     /// to keep, how to seed from a single/none) is `ThemeParser.updatedPairing`, unit-
     /// tested in the kit; this method just reads the current selection and writes the
     /// serialized result through the same safe path as a single theme.
@@ -1124,7 +1123,7 @@ public final class AppModel {
     }
 
     /// The current theme's palette (index→hex) if its colors have loaded, used to seed
-    /// unset slots in the palette editor (B8). Empty until loaded, or when no theme is set.
+    /// unset slots in the palette editor. Empty until loaded, or when no theme is set.
     public func currentThemePalette() -> [Int: String] {
         guard let name = currentTheme, let colors = themeColors[name] else { return [:] }
         return colors.palette
@@ -1133,7 +1132,7 @@ public final class AppModel {
     /// Kick off loading the current theme's colors so the palette editor can seed unset
     /// slots from it: load the theme list (to resolve the `ThemeRef`), then trigger the
     /// lazy per-theme color load. A no-op when no theme is set. Falls back gracefully —
-    /// the editor shows blank slots + a hint if the colors never arrive (B8).
+    /// the editor shows blank slots + a hint if the colors never arrive.
     public func loadCurrentThemeColorsIfNeeded() async {
         guard currentTheme != nil else { return }
         await loadThemesIfNeeded()
@@ -1141,7 +1140,7 @@ public final class AppModel {
         ensureColors(for: ref)
     }
 
-    // MARK: - Keybindings (U5)
+    // MARK: - Keybindings
 
     /// The `keybind` repeatable option, joined with the user's bindings. Present
     /// even when unset (the catalog always carries `keybind`), so a first edit
@@ -1153,7 +1152,7 @@ public final class AppModel {
 
     /// Lazily load (once) Ghostty's default keybinds + action list, mirroring
     /// `loadThemesIfNeeded`. Reset on re-`bootstrap`. Degrades to empty lists when
-    /// the binary can't list them (the editor still edits user bindings, R19).
+    /// the binary can't list them (the editor still edits user bindings).
     public func loadKeybindReferenceIfNeeded() async {
         guard keybindReference == nil, let environment else { return }
         let provider = KeybindReferenceProvider.live(environment)
@@ -1168,12 +1167,12 @@ public final class AppModel {
         keybindDefaults = defaults
     }
 
-    /// Ghostty's defaults merged with the user's bindings, marking overrides (RK1),
+    /// Ghostty's defaults merged with the user's bindings, marking overrides,
     /// padded with an empty row per still-unbound action so the whole action set is
     /// listed and bindable inline, then **grouped into one entry per action** so Copy's
-    /// two triggers render as a single row with two chord capsules (U17, KB-1).
+    /// two triggers render as a single row with two chord capsules.
     ///
-    /// Disabled defaults are **kept** (the LOCKED behavior flip, KB-2): an action whose
+    /// Disabled defaults are **kept** (the LOCKED behavior flip): an action whose
     /// default the user turned off renders that chord struck-through in place, with a
     /// one-click re-enable, instead of collapsing to an empty "No shortcut" row. Because
     /// the disabled chord carries the action, `withUnboundActions` already treats the
@@ -1187,7 +1186,7 @@ public final class AppModel {
         let merged = KeybindMerge.merge(defaults: keybindDefaults, user: user)
         let padded = KeybindMerge.withUnboundActions(merged, allActions: keybindActions)
         // Fold Ghostty's redundant physical+character digit pair (super+digit_N / super+N)
-        // into one clean ⌘N capsule per tab (CB-digit); edits still disable both lines.
+        // into one clean ⌘N capsule per tab; edits still disable both lines.
         return KeybindMerge.collapsingRedundantDigits(KeybindMerge.group(padded))
     }
 
@@ -1229,16 +1228,16 @@ public final class AppModel {
         await writeKeybinds { $0.removingAction(action, defaultTriggers: triggers, knownActions: keybindActionNames) }
     }
 
-    /// The single file the writer would target for `keybind` (R8). New/edited
-    /// bindings land here; bindings defined elsewhere are shown read-only (R-F).
+    /// The single file the writer would target for `keybind`. New/edited
+    /// bindings land here; bindings defined elsewhere are shown read-only.
     private var keybindTargetPath: String? {
         guard let model = browser?.merged.model else { return nil }
         return ConfigWriter().targetFile(forOption: "keybind", in: model).resolvedPath
     }
 
     /// True when a chord's user binding lives outside the writer's target file, so
-    /// editing it here would risk duplicating it across files (R-F). Evaluated per
-    /// chord (U17): two chords for one action can live in different files, and only the
+    /// editing it here would risk duplicating it across files. Evaluated per
+    /// chord: two chords for one action can live in different files, and only the
     /// out-of-target ones render read-only.
     public func isReadOnly(_ chord: MergedKeybind) -> Bool {
         guard let source = chord.source, let target = keybindTargetPath else { return false }
@@ -1247,9 +1246,9 @@ public final class AppModel {
 
     /// Add a new binding (`originalTrigger == nil`) or update an existing one. When
     /// editing, `originalTrigger` is the row's canonical trigger so a trigger change
-    /// *moves* the binding instead of orphaning the old one (R8/R11/RK4). Pre-validates
-    /// in the kit (KTD7/RK5) and short-circuits to a failure before touching disk,
-    /// then reuses the safe write path (R17).
+    /// *moves* the binding instead of orphaning the old one. Pre-validates
+    /// in the kit and short-circuits to a failure before touching disk,
+    /// then reuses the safe write path.
     public func applyKeybindEdit(originalTrigger: String? = nil, trigger: String, action: String) async {
         let trigger = trigger.trimmingCharacters(in: .whitespaces)
         let action = action.trimmingCharacters(in: .whitespaces)
@@ -1267,7 +1266,7 @@ public final class AppModel {
     /// the shortcut" expectation). Pre-validates like `applyKeybindEdit`.
     ///
     /// `alsoUnbind` carries a merged capsule's companion triggers (the physical
-    /// `super+digit_N` folded onto `⌘N`, CB-digit) so a rebind disables them too — otherwise
+    /// `super+digit_N` folded onto `⌘N`) so a rebind disables them too — otherwise
     /// the hidden physical key would keep firing the old action.
     public func rebindDefaultKeybind(oldTrigger: String, newTrigger: String, action: String, alsoUnbind companions: [String] = []) async {
         let newTrigger = newTrigger.trimmingCharacters(in: .whitespaces)
@@ -1281,7 +1280,7 @@ public final class AppModel {
     }
 
     /// Remove a user binding (any default with that trigger reactivates). `alsoRemove`
-    /// clears a merged capsule's companion lines in the same write (CB-digit) — re-enabling
+    /// clears a merged capsule's companion lines in the same write — re-enabling
     /// a folded `⌘N` drops both its `super+N=unbind` and `super+digit_N=unbind`, so both
     /// default keys come back together.
     public func removeKeybind(trigger: String, alsoRemove companions: [String] = []) async {
@@ -1289,13 +1288,13 @@ public final class AppModel {
     }
 
     /// Disable a default by writing `trigger=unbind`. `alsoUnbind` turns off a merged
-    /// capsule's companion triggers in the same write (CB-digit) so both the character and
+    /// capsule's companion triggers in the same write so both the character and
     /// physical digit keys go quiet together.
     public func unbindDefaultKeybind(trigger: String, alsoUnbind companions: [String] = []) async {
         await writeKeybinds { $0.unbindingDefaults(triggers: [trigger] + companions) }
     }
 
-    /// Scope the user's keybinds to the writer's target file (R-F), apply a pure
+    /// Scope the user's keybinds to the writer's target file, apply a pure
     /// transform to get the next ordered value list, and route it through the
     /// existing repeatable-key write path. A transform that changes nothing is a
     /// no-op (no needless write/backup).
@@ -1325,7 +1324,7 @@ public final class AppModel {
         resolvedBinaryPath == nil || configMissing || problemCount > 0
     }
 
-    /// A concise, honest caption for the sidebar Status footer (G1). "All clear" when
+    /// A concise, honest caption for the sidebar Status footer. "All clear" when
     /// healthy; otherwise the single most salient, actionable reason — prioritized
     /// problems → missing config → missing binary — so the footer names a real issue
     /// instead of a vague "needs attention". Mirrors `statusNeedsAttention`'s conditions.
@@ -1347,7 +1346,7 @@ public final class AppModel {
         guard let browser else { return [] }
         let q = query.trimmingCharacters(in: .whitespaces)
         if !q.isEmpty {
-            // A local filter is scoped to the current category (R9/F3): on a category
+            // A local filter is scoped to the current category: on a category
             // surface it returns only that category's matches; the whole-catalog search is
             // the separate global Find overlay. `localSearchScopeCategory` is nil off a
             // category surface (e.g. Customized), so that search stays unscoped.
@@ -1379,7 +1378,7 @@ public final class AppModel {
 
     /// The category currently browsed as a plain list, or `nil` when searching or on
     /// a non-category surface (customized/problems/themes) — those never split into
-    /// Common/Advanced sections (B1). A search always shows all ranked hits flat.
+    /// Common/Advanced sections. A search always shows all ranked hits flat.
     private var browsedCategory: String? {
         guard query.trimmingCharacters(in: .whitespaces).isEmpty else { return nil }
         if case .category(let category) = selection { return category }
@@ -1387,7 +1386,7 @@ public final class AppModel {
     }
 
     /// True when the current surface should render Common + collapsible Advanced
-    /// sections rather than one flat list (B1).
+    /// sections rather than one flat list.
     public var showsSplitSections: Bool { browsedCategory != nil }
 
     /// The Common options for the browsed category (curated common tier + promoted
@@ -1404,7 +1403,7 @@ public final class AppModel {
         return browser.advancedOptions(in: category).filter { $0.option.name != "theme" }
     }
 
-    /// One titled Recommended group, resolved to the catalog's merged options (F1).
+    /// One titled Recommended group, resolved to the catalog's merged options.
     /// `id` is the section title (unique within the bundled list).
     public struct RecommendedGroup: Identifiable {
         public let id: String
@@ -1412,8 +1411,8 @@ public final class AppModel {
         public var title: String { id }
     }
 
-    /// The curated "Recommended" sections (F1), each resolved to the merged options
-    /// present in the catalog. A key the catalog doesn't carry is skipped — the KTD1
+    /// The curated "Recommended" sections, each resolved to the merged options
+    /// present in the catalog. A key the catalog doesn't carry is skipped — the
     /// orphan-key test keeps the bundled list honest, but the runtime degrades to a
     /// shorter list rather than a blank row if a future catalog ever drops a key.
     /// `theme` is intentionally *kept* here (unlike the option lists that filter it
@@ -1428,13 +1427,13 @@ public final class AppModel {
 
     /// Whether the catalog carries an option with this name — gates the Problems
     /// deep-link so only a validation `key` that resolves to a real control becomes a
-    /// button (G5); unmapped rows keep their "Reveal in editor" fallback.
+    /// button; unmapped rows keep their "Reveal in editor" fallback.
     public func hasOption(named name: String) -> Bool {
         browser?.merged.option(named: name) != nil
     }
 
     /// The value an option now shows after a disk reload — the input a stale edit's Reload
-    /// & Review compares the retained draft against (F2/R5/AE3). Returns the effective
+    /// & Review compares the retained draft against. Returns the effective
     /// (explicit or default) presentation value; `nil` only when the option is no longer in
     /// the catalog at all, which the caller treats as "target disappeared" and disables
     /// Apply rather than guessing. Never itself writes.
@@ -1453,7 +1452,7 @@ public final class AppModel {
     }
 }
 
-/// The next action a Problems row exposes (F4/R10). A validation message whose key names a
+/// The next action a Problems row exposes. A validation message whose key names a
 /// real catalog option focuses that setting ("Show Setting"); a file-only diagnostic (a
 /// footgun finding, or a keyless/unmapped validation line) opens the source file at its
 /// line ("Open Config at Line" / "Reveal in Finder"). Kept separate from its view so the
@@ -1465,7 +1464,7 @@ public enum ProblemAction: Equatable, Sendable {
     case openFile(path: String, line: Int?)
 }
 
-/// Pure routing for Problems rows (F4/R10), independent of `AppModel`'s live browser so it
+/// Pure routing for Problems rows, independent of `AppModel`'s live browser so it
 /// unit-tests against the reference catalog. `hasOption` is the mapped-key check the model
 /// supplies; `fallbackPath` is the primary config, used when a keyless line carries no file.
 public enum ProblemActionPolicy {
@@ -1489,7 +1488,7 @@ public enum ProblemActionPolicy {
     }
 }
 
-/// The app-side instance lister behind `GhosttyReloader.live` (KTD2/KTD3).
+/// The app-side instance lister behind `GhosttyReloader.live`.
 ///
 /// Lives in the app target — not the kit — because `NSRunningApplication` is AppKit
 /// system state the kit deliberately stays free of. It is a plain (`nonisolated`)
@@ -1507,7 +1506,7 @@ enum GhosttyInstanceLister {
     }
 
     /// The bundle's `CFBundleShortVersionString` — but **only** when the app can confirm
-    /// the running process is actually executing that bundle's code (KTD4 part b). When it
+    /// the running process is actually executing that bundle's code. When it
     /// cannot confirm (the on-disk code looks newer than the process, or anything is
     /// unreadable), returns an **empty** string so the kit gate fails closed and never
     /// signals it — `SIGUSR2` to a stale pre-1.2 binary would terminate the user's terminal.
@@ -1564,7 +1563,7 @@ enum GhosttyInstanceLister {
 
     /// The inode change time (`st_ctime`) of a path. Unlike `mtime`, `st_ctime` cannot be
     /// set by userspace, so it is a trustworthy "when did this land on this machine" signal
-    /// for the upgrade-in-place safety gate (KTD4 part b). Uses `stat`, mirroring
+    /// for the upgrade-in-place safety gate. Uses `stat`, mirroring
     /// `ConfigWriter`'s POSIX helpers.
     private static func inodeChangeDate(ofPath path: String) -> Date? {
         var info = stat()

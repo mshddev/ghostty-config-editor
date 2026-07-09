@@ -5,7 +5,7 @@ import GhosttyConfigKit
 /// The Keybindings editor surface: Ghostty's whole action set as **one row per action**
 /// (defaults + the user's bindings + every still-unbound action), each action carrying
 /// its chords as capsules — click a capsule and press the new keys to rebind, exactly
-/// like a system shortcuts pane (RK1–RK4, R16, AE4, U17). A trailing "+" capsule adds a
+/// like a system shortcuts pane. A trailing "+" capsule adds a
 /// second shortcut; advanced grammar and per-chord edits live in each row's `⋯` menu and
 /// context menus. Edits route through `AppModel` to the safe write path, and the existing
 /// footgun lint is shown inline.
@@ -13,10 +13,10 @@ struct KeybindEditorView: View {
     @Environment(AppModel.self) private var model
     @State private var didLoad = false
     @State private var filter = ""
-    /// The selected section-filter pill (D); `nil` = "All". View-local like `filter`, so it
+    /// The selected section-filter pill; `nil` = "All". View-local like `filter`, so it
     /// resets when the user navigates to another sidebar surface.
     @State private var selectedSection: String? = nil
-    /// A captured chord to search by (D) — the canonical trigger of a shortcut the user
+    /// A captured chord to search by — the canonical trigger of a shortcut the user
     /// *pressed* rather than typed; `nil` = not chord-searching. Mutually exclusive with the
     /// text `filter` (capturing clears the text).
     @State private var chordFilter: String? = nil
@@ -33,19 +33,19 @@ struct KeybindEditorView: View {
         let groups = selectedSection.map { ActionCategoryCatalog.bundled.groups(base, inSection: $0) } ?? base
         // Which base actions carry >1 distinct param, so their param folds into the title
         // (goto_tab:1…8) rather than reading as a lone caption (copy_to_clipboard:mixed).
-        // Computed over the *full* set so filtering never changes a row's title (KB-4).
+        // Computed over the *full* set so filtering never changes a row's title.
         let foldParams = ActionLabelCatalog.multiParamActions(in: all.map(\.action))
         return VStack(spacing: 0) {
             SurfaceHeader(
                 title: OptionCategorizer.keybindingsCategory,
                 subtitle: didLoad ? countSummary(all) : nil
             )
-            // The search bar: text filter + a "press keys" chord capture (D).
+            // The search bar: text filter + a "press keys" chord capture.
             if didLoad {
                 KeybindSearchBar(text: $filter, chord: $chordFilter)
                     .padding(.bottom, DesignTokens.Spacing.standard)
             }
-            // A horizontal section filter for quick jumps to a group (D). Only once loaded and
+            // A horizontal section filter for quick jumps to a group. Only once loaded and
             // when there's more than one section to choose between.
             if didLoad && sectionItems.count > 1 {
                 SectionFilterBar(items: sectionItems, selection: $selectedSection)
@@ -88,7 +88,7 @@ struct KeybindEditorView: View {
     }
 
     /// The header count, matching the visible rows: every listed action, and how many
-    /// carry an active shortcut (KB-7/CM-12 — the count is over *actions* now, not
+    /// carry an active shortcut (the count is over *actions* now, not
     /// triggers, so it can't undercount against the rows on screen). Disabled defaults
     /// and unbound actions aren't "with a shortcut".
     private func countSummary(_ all: [KeybindActionGroup]) -> String {
@@ -98,7 +98,7 @@ struct KeybindEditorView: View {
     }
 
     /// Filter by friendly title, raw action name, or any chord's shortcut text
-    /// (case-insensitive), so ~140 rows stay navigable. Matches the raw id too (R8: a
+    /// (case-insensitive), so ~140 rows stay navigable. Matches the raw id too (a
     /// power user who knows `copy_to_clipboard` still finds it), and searches *across*
     /// an action's chords so ⌘C finds Copy even though the physical key is its first chord.
     private func filtered(_ groups: [KeybindActionGroup]) -> [KeybindActionGroup] {
@@ -129,8 +129,8 @@ struct KeybindEditorView: View {
     private func bindingList(_ groups: [KeybindActionGroup], foldParams: Set<String>) -> some View {
         // Computed once per render, not per row.
         let restorable = model.restorableActions
-        // Read the ~140 actions under curated functional sections instead of one flat wall
-        // (KB-9). Sectioning is applied to the *filtered* groups, so a search shows only the
+        // Read the ~140 actions under curated functional sections instead of one flat wall.
+        // Sectioning is applied to the *filtered* groups, so a search shows only the
         // sections that still have matches.
         let sections = ActionCategoryCatalog.bundled.sections(for: groups)
         return List {
@@ -142,7 +142,7 @@ struct KeybindEditorView: View {
                                    canRestoreDefault: restorable.contains(group.action))
                     }
                 } header: {
-                    // A prominent group heading (D) — the default List section header reads
+                    // A prominent group heading — the default List section header reads
                     // too muted to anchor a group. Primary color + headline weight, and
                     // `.textCase(nil)` keeps the curated casing ("Splits", not "SPLITS").
                     Text(section.title)
@@ -198,7 +198,7 @@ struct KeybindEditorView: View {
     }
 }
 
-/// The Keyboard Shortcuts search bar (D): the usual text filter with a trailing "press keys"
+/// The Keyboard Shortcuts search bar: the usual text filter with a trailing "press keys"
 /// button that flips the field into a chord-capture mode, so a shortcut can be found by
 /// *pressing* it, not just typing its name. Three states — text / capturing / captured-chord
 /// — styled to match the shared `SurfaceSearchField`. The capture reuses the proven
@@ -224,7 +224,7 @@ private struct KeybindSearchBar: View {
         .padding(.vertical, DesignTokens.Spacing.snug)
         .background(DesignTokens.subtleFill, in: RoundedRectangle(cornerRadius: DesignTokens.Radius.field))
         .padding(.horizontal, DesignTokens.Spacing.surface)
-        // Preserve the ⌘F route (B1): focus this surface's search — dropping any chord capture
+        // Preserve the ⌘F route: focus this surface's search — dropping any chord capture
         // and returning to the text field.
         .focusedSceneValue(\.focusSurfaceFilter, {
             chord = nil
@@ -284,8 +284,8 @@ private struct KeybindSearchBar: View {
 /// A horizontal layout that wraps its subviews onto additional lines when they don't fit the
 /// proposed width, keeping every one visible and reachable — so a keyboard-shortcut row's
 /// chords (recorder + remove, the add "+", the ⋯ menu) move to a new line at narrow widths or
-/// under large Dynamic Type rather than squeezing the action title off the row (R12,
-/// scenario 2/5). Nothing is hidden behind an overflow menu, so Rebind / Disable / Add / More
+/// under large Dynamic Type rather than squeezing the action title off the row. Nothing is
+/// hidden behind an overflow menu, so Rebind / Disable / Add / More
 /// stay reachable at any width. Each line is trailing-aligned so a single-line row keeps the
 /// established right-hugging look; the layout fills the width it's offered so that alignment
 /// has room to work.
@@ -348,12 +348,12 @@ struct ChordFlowLayout: Layout {
 /// chords on the right as capsules — each an **inline key recorder** (click and press
 /// the new chord to rebind) with a remove affordance, plus a trailing "+" to add another
 /// shortcut. A default the user turned off shows struck-through in place with a one-click
-/// re-enable (KB-2). Out-of-target chords render read-only (Risk R-F); an action with no
+/// re-enable. Out-of-target chords render read-only; an action with no
 /// shortcut renders a single empty, bindable recorder.
 private struct KeybindRow: View {
     @Environment(AppModel.self) private var model
     let group: KeybindActionGroup
-    /// Base actions whose `:param` folds into the title (KB-4) — passed down so the whole
+    /// Base actions whose `:param` folds into the title — passed down so the whole
     /// list agrees, and the decision doesn't change under search.
     let foldParams: Set<String>
     /// True when this action has a Ghostty default the user has changed, so a
@@ -366,7 +366,7 @@ private struct KeybindRow: View {
     /// guidance the compact capsule no longer shows). Reading it in the body is also what
     /// re-lays-out the row on the recording toggle, so the recorder's width is always current.
     @State private var isRecordingActive = false
-    /// A pending conflict-at-capture prompt (F4): the chord the user just recorded, the
+    /// A pending conflict-at-capture prompt: the chord the user just recorded, the
     /// action it already collides with, and which edit to commit on Replace.
     @State private var pendingConflict: PendingConflict?
     /// "Add another shortcut" popover (a second trigger for this row's action).
@@ -380,7 +380,7 @@ private struct KeybindRow: View {
         VStack(alignment: .leading, spacing: 6) {
             // The action title keeps its width (layoutPriority) and the chords fill the rest,
             // wrapping to a new line at narrow widths (or large Dynamic Type) rather than
-            // squeezing the title into truncation (R12, scenario 2/5). The old `Spacer` is
+            // squeezing the title into truncation. The old `Spacer` is
             // gone: the chord area itself fills the trailing space and right-aligns its
             // capsules, so the layout still reads right-hugging while it can now wrap.
             HStack(alignment: .top, spacing: 12) {
@@ -390,7 +390,7 @@ private struct KeybindRow: View {
                     .popover(isPresented: $showingAddAnother, arrowEdge: .bottom) { addAnotherEditor }
                     .popover(item: $textEditChord, arrowEdge: .bottom) { chord in textEditor(chord) }
             }
-            // H2/A11Y-3: the row is NOT `.combine`d — that flattened the key recorders
+            // The row is NOT `.combine`d — that flattened the key recorders
             // (NSViews with their own role/label/value) and the ⋯ menu out of VoiceOver's
             // reach. Only the action column collapses to one element (below); the recorders
             // and menu stay first-class, individually focusable and operable.
@@ -407,7 +407,7 @@ private struct KeybindRow: View {
             } else if isRecordingActive {
                 // The capsule shows only a compact recording dot now, so the guidance lives
                 // here. Reading `isRecordingActive` also re-lays-out the row on the recording
-                // toggle, keeping the content-sized recorder's width current (Phase G review).
+                // toggle, keeping the content-sized recorder's width current.
                 Label("Press the new keys — ⌫ clears, esc cancels.", systemImage: "record.circle")
                     .font(.caption2)
                     .foregroundStyle(.secondary)
@@ -419,8 +419,8 @@ private struct KeybindRow: View {
 
     // MARK: Action (the config item)
 
-    /// The friendly action title (A2), folding a humanized `:param` into the title only
-    /// for multi-param base actions (KB-4). The raw id (params included) stays reachable
+    /// The friendly action title, folding a humanized `:param` into the title only
+    /// for multi-param base actions. The raw id (params included) stays reachable
     /// as the title's tooltip and via search.
     private var friendlyTitle: String {
         ActionLabelCatalog.bundled.displayTitle(for: group.action, foldingParamsFor: foldParams)
@@ -437,7 +437,7 @@ private struct KeybindRow: View {
     private var actionColumn: some View {
         VStack(alignment: .leading, spacing: 2) {
             // Primary: the friendly title (system font, so it reads as a name, not code).
-            // The raw action id is demoted to the tooltip (KB-5/CB-7) — off the row but
+            // The raw action id is demoted to the tooltip — off the row but
             // still discoverable on hover, and matched by search regardless.
             Text(friendlyTitle)
                 .font(.body)
@@ -454,19 +454,19 @@ private struct KeybindRow: View {
                     .truncationMode(.tail)
             }
             // Badge only when the action *deviates* from its default — a wall of "Default"
-            // pills across ~140 rows carries no signal (KB-5, badges = deviations only).
+            // pills across ~140 rows carries no signal (badges = deviations only).
             if let badgeText {
                 Pill(text: badgeText, tint: badgeTint, style: .prominent)
             }
         }
         // Collapse the action column's fragments (title, summary, badge) into one VoiceOver
         // element read as name + state — the raw id is a sighted power-user tooltip, so it's
-        // dropped from the spoken label (H2). The chord recorders/menu are deliberately
+        // dropped from the spoken label. The chord recorders/menu are deliberately
         // outside this element (see body).
         .accessibilityElement(children: .combine)
         .accessibilityLabel(actionColumnA11yLabel)
         // The raw action id stays reachable for VoiceOver users who rely on it — surfaced as
-        // on-demand custom content (VO rotor) rather than spoken on every row (U26/GAP-3).
+        // on-demand custom content (VO rotor) rather than spoken on every row.
         .accessibilityCustomContent("Action ID", group.action)
     }
 
@@ -501,8 +501,8 @@ private struct KeybindRow: View {
 
     private var chordArea: some View {
         // A wrapping layout (not an `HStack`) so many chords + the add "+" + the ⋯ menu flow
-        // onto a second line at narrow widths instead of stealing the action title's room
-        // (R12, scenario 2/5). Every control stays present and reachable — nothing collapses
+        // onto a second line at narrow widths instead of stealing the action title's room.
+        // Every control stays present and reachable — nothing collapses
         // into a hidden overflow.
         ChordFlowLayout(spacing: 6, lineSpacing: 6) {
             ForEach(group.chords) { chord in
@@ -542,7 +542,7 @@ private struct KeybindRow: View {
             onWarning: { warning = $0 },
             onRecordingChanged: { isRecordingActive = $0 }
         )
-        // Content-sized (U27): a ⌘n chip stays ~50pt (not a fixed 108) so two-chord rows
+        // Content-sized: a ⌘n chip stays ~50pt (not a fixed 108) so two-chord rows
         // keep the action title readable at the minimum window width. Height stays 30.
         .frame(height: 30)
     }
@@ -602,7 +602,7 @@ private struct KeybindRow: View {
         }
     }
 
-    /// A chord defined in another file: shown but not editable here (Risk R-F).
+    /// A chord defined in another file: shown but not editable here.
     private func readOnlyCapsule(_ chord: MergedKeybind) -> some View {
         HStack(spacing: 4) {
             triggerPill(chord, strikethrough: false)
@@ -620,7 +620,7 @@ private struct KeybindRow: View {
         let physical = KeybindTrigger.isPhysicalNamedKey(chord.trigger)
         Text(KeybindTrigger.displaySymbol(for: chord.trigger))
             // A physical key (the hardware Copy/Paste key) reads as a mono small-caps chip
-            // so a lone word doesn't look like prose beside the ⌘⌃⌥⇧ glyph chords (KB-3/CB-6).
+            // so a lone word doesn't look like prose beside the ⌘⌃⌥⇧ glyph chords.
             .font(physical ? .system(.caption, design: .monospaced).smallCaps() : .body)
             .foregroundStyle(strikethrough ? AnyShapeStyle(.tertiary) : AnyShapeStyle(.secondary))
             .strikethrough(strikethrough, color: .secondary)
@@ -665,7 +665,7 @@ private struct KeybindRow: View {
 
     private var groupHasReadOnly: Bool { group.chords.contains { model.isReadOnly($0) } }
     /// Restore is only offered when the action's customization lives in the writer's
-    /// target file — a rebind in an include can't be reverted from here (R-F).
+    /// target file — a rebind in an include can't be reverted from here.
     private var canRestore: Bool { canRestoreDefault && !groupHasReadOnly }
 
     /// The chords the user can retype as advanced grammar here (editable, in-target).
@@ -773,7 +773,7 @@ private struct KeybindRow: View {
     }
 
     /// A recorded chord and the action it collides with, held while the user chooses
-    /// Replace or Cancel (F4).
+    /// Replace or Cancel.
     private struct PendingConflict: Equatable {
         let token: String
         let conflictingAction: String
@@ -781,7 +781,7 @@ private struct KeybindRow: View {
     }
 
     /// Route a captured chord: no-op when re-recording a chord's own keys; hold a conflict
-    /// prompt when the chord already drives a *different* action (F4); otherwise commit.
+    /// prompt when the chord already drives a *different* action; otherwise commit.
     private func capture(_ token: String, edit: ChordEdit) {
         warning = nil
         let token = token.trimmingCharacters(in: .whitespaces)
@@ -868,7 +868,7 @@ private struct KeybindRow: View {
 
     // MARK: Conflict prompt
 
-    /// The conflict-at-capture prompt (F4, CONTROLS-10/11): a rebind onto a chord that
+    /// The conflict-at-capture prompt: a rebind onto a chord that
     /// already drives a different action asks before stealing it — surfaced *at capture*,
     /// ahead of the after-the-fact lint bar. Two choices: Replace (bind here, overriding
     /// the other) or Cancel. There's no "keep both" — one chord maps to one action, so a

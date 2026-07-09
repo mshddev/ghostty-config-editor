@@ -3,7 +3,7 @@ import Foundation
 /// Pure helpers for the `palette` repeatable option, whose values are `index=color`
 /// fragments (`palette = 0=#1d1f21`). The editor UI stays thin by parsing the user's
 /// current values into slots, applying one edit, and serializing back through the
-/// existing repeatable write path (B8, R5).
+/// existing repeatable write path.
 public enum GhosttyPalette {
 
     /// The number of ANSI palette slots Ghostty exposes (0–15).

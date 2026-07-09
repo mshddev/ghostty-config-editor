@@ -1,11 +1,11 @@
 import SwiftUI
 import GhosttyConfigKit
 
-/// The flagship theme-row actions (R12/AE8): exactly one Apply, one Favorite, and one Theme
+/// The flagship theme-row actions: exactly one Apply, one Favorite, and one Theme
 /// Options control per theme, each with a distinct, task-specific accessibility label shared by
 /// the list row AND the grid card — so neither can drift into a duplicate or "mystery" control,
 /// and Apply / Favorite / Options stay three separate accessibility elements. Pure, so the
-/// one-of-each + distinct-label guarantee is unit-testable without rendering SwiftUI (KTD7).
+/// one-of-each + distinct-label guarantee is unit-testable without rendering SwiftUI.
 enum ThemeActionPolicy {
     enum Kind: String, CaseIterable, Hashable, Sendable { case apply, favorite, options }
 
@@ -26,7 +26,7 @@ enum ThemeActionPolicy {
         let apply: Descriptor
         let favorite: Descriptor
         let options: Descriptor
-        /// All three in canonical order — one per kind (AE8).
+        /// All three in canonical order — one per kind.
         var all: [Descriptor] { [apply, favorite, options] }
     }
 
@@ -43,11 +43,11 @@ enum ThemeActionPolicy {
     }
 }
 
-/// The pure browsing-bucket dedup behind the Themes list/grid (TH-1/IA-7, R12): a Current
+/// The pure browsing-bucket dedup behind the Themes list/grid: a Current
 /// theme is pinned and never re-appears in Favorites or the main browse list, and the Favorites
 /// band (only surfaced while browsing everything) never doubles the Current theme. Extracted
 /// from the view so the dedup survives the flagship-row cleanup and is unit-testable across
-/// favorite/filter/current transitions (AE8 scenario 4).
+/// favorite/filter/current transitions.
 enum ThemeSectionPolicy {
     struct Buckets: Equatable {
         var favorites: [ThemeRef]
@@ -77,13 +77,13 @@ enum ThemeSectionPolicy {
 }
 
 /// The theme browser: live palette previews over Ghostty's built-in themes, with
-/// honest fidelity labeling and apply-via-safe-write (F2, R12, R14).
+/// honest fidelity labeling and apply-via-safe-write.
 ///
-/// Phase E adds: name search + a light/dark appearance badge per row (E1), a pinned
+/// It also provides: name search + a light/dark appearance badge per row, a pinned
 /// "Current theme" section with a non-color "Current" signal that handles light/dark
-/// pairs (E2), the fidelity disclaimer folded into the header's info popover plus a
-/// non-spinning placeholder for previews that failed to load (E3), and per-row
-/// favorites + a light/dark pairing menu (E4).
+/// pairs, the fidelity disclaimer folded into the header's info popover plus a
+/// non-spinning placeholder for previews that failed to load, and per-row
+/// favorites + a light/dark pairing menu.
 struct ThemeBrowserView: View {
     @Environment(AppModel.self) private var model
 
@@ -99,18 +99,18 @@ struct ThemeBrowserView: View {
                 subtitle: model.themes.isEmpty ? nil : "\(filtered.count) theme\(filtered.count == 1 ? "" : "s")",
                 searchText: $model.themeQuery,
                 searchPrompt: "Search themes",
-                // E3: the permanent fidelity disclaimer becomes an info popover instead
+                // The permanent fidelity disclaimer becomes an info popover instead
                 // of a row that permanently eats vertical space.
                 infoText: ThemeParser.previewFidelityDisclaimer
             )
-            // U15: appearance/favorites filter + list/grid toggle, only once themes load
+            // Appearance/favorites filter + list/grid toggle, only once themes load
             // (no filter to offer over a spinner or an error).
             if case .loaded = model.themesLoad {
                 themeToolbar(model: model)
             }
             Divider()
             content(filtered: filtered)
-            // The shared save-state bar (C3) — carries the failure banner, the
+            // The shared save-state bar — carries the failure banner, the
             // auto-reload caption, and Undo, consistent with every other surface.
             SurfaceFeedbackBar(applyState: model.applyState)
         }
@@ -124,7 +124,7 @@ struct ThemeBrowserView: View {
             ProgressView("Loading themes…")
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
         case .failed(let reason):
-            // G3: a failed `+list-themes` is a distinct, recoverable state — an error with
+            // A failed `+list-themes` is a distinct, recoverable state — an error with
             // a "Try again", not the eternal spinner it used to show (themeColors[name] nil).
             ContentUnavailableView {
                 Label("Couldn't load themes", systemImage: "exclamationmark.triangle")
@@ -139,7 +139,7 @@ struct ThemeBrowserView: View {
         }
     }
 
-    /// U15 (TH-3, TH-5): the appearance/favorites filter and the list/grid toggle. The
+    /// The appearance/favorites filter and the list/grid toggle. The
     /// first Dark/Light selection kicks off the one-time batch classification (its
     /// determinate count shows inline); a later selection is instant (memoized).
     private func themeToolbar(model: AppModel) -> some View {
@@ -180,10 +180,10 @@ struct ThemeBrowserView: View {
         .padding(.bottom, 10)
     }
 
-    // MARK: - Deduped section model (U15 / TH-1, IA-7)
+    // MARK: - Deduped section model
 
     /// The three browsing buckets after dedupe, computed once so a favorite never also
-    /// appears in the main list (TH-1) and Current never doubles inside Favorites (IA-7).
+    /// appears in the main list and Current never doubles inside Favorites.
     /// The current theme intentionally *stays* in the main list (highlighted in place),
     /// while also appearing in its pinned "Current theme" section (2026-07-09).
     private struct Sections {
@@ -195,8 +195,8 @@ struct ThemeBrowserView: View {
     }
 
     private func sections(filtered: [ThemeRef]) -> Sections {
-        // The pinned/favorites/browse dedup is the pure `ThemeSectionPolicy` (unit-tested,
-        // AE8 scenario 4) so it survives the flagship-row cleanup unchanged.
+        // The pinned/favorites/browse dedup is the pure `ThemeSectionPolicy` (unit-tested)
+        // so it survives the flagship-row cleanup unchanged.
         let buckets = ThemeSectionPolicy.buckets(filtered: filtered,
                                                  currentNames: model.currentSelectedThemeNames,
                                                  isFavorite: { model.isFavorite($0) },
@@ -226,13 +226,13 @@ struct ThemeBrowserView: View {
         // full-size preview lives, so the list deliberately never enlarges or previews on
         // hover — nothing moves or pops as you scan (2026-07-08).
         List {
-            // E2: the current theme is pinned at the very top (a quick jump-reference) and
+            // The current theme is pinned at the very top (a quick jump-reference) and
             // stays visible even while filtering. It ALSO stays in the list below,
             // highlighted in place, so applying a theme never makes it vanish (2026-07-09).
             if let selection = s.current {
                 Section("Current theme") { currentRows(selection, layout: .row) }
             }
-            // E4: starred themes, quick-access under the pin.
+            // Starred themes, quick-access under the pin.
             if !s.favorites.isEmpty {
                 Section("Favorites") { ForEach(s.favorites) { ThemeRow(theme: $0) } }
             }
@@ -277,16 +277,16 @@ struct ThemeBrowserView: View {
         }
     }
 
-    // MARK: - Grid mode (U15 / TH-5)
+    // MARK: - Grid mode
 
     /// The minimum card width; the grid fits as many columns of at least this width as the
-    /// pane allows and degrades to one column below the threshold (GAP-4). Themes now use the
+    /// pane allows and degrades to one column below the threshold. Themes now use the
     /// wider bounded canvas (`ContentWidthPolicy.wideMaxWidth`, 1000pt) rather than the 640pt
     /// form measure, so a maximized window fits three columns of 280pt where it used to fit
-    /// two — Themes "uses available width" (R11/AE6) while forms stay readable.
+    /// two — Themes "uses available width" while forms stay readable.
     private static let minCardWidth: CGFloat = 280
 
-    /// Grid browsing (TH-5): the deduped sections as `LazyVGrid`s under plain headers in
+    /// Grid browsing: the deduped sections as `LazyVGrid`s under plain headers in
     /// one `ScrollView`. The column count is measured from the pane width (a `GeometryReader`)
     /// and rendered with `.flexible()` columns, so the grid always fills the pane — a plain
     /// `.adaptive` grid collapsed to a single left-aligned column in this split-view detail.
@@ -344,12 +344,12 @@ struct ThemeBrowserView: View {
             .textCase(.uppercase)
     }
 
-    // MARK: - Current-theme rows/cards (E2 / TH-10)
+    // MARK: - Current-theme rows/cards
 
     /// The pinned Current-theme entries: one for a single theme, or a labeled Light/Dark
     /// pair. Rendered as rows or cards via the shared `themeItem`, which reuses `ThemeRow`
     /// (so the same preview/star/pairing affordances) and falls back to a placeholder-
-    /// preview row for a value not present in `+list-themes` (TH-10).
+    /// preview row for a value not present in `+list-themes`.
     @ViewBuilder
     private func currentRows(_ selection: ThemeSelection, layout: ThemeRow.Layout) -> some View {
         let entries = currentEntries(selection)
@@ -370,7 +370,7 @@ struct ThemeBrowserView: View {
         if let ref = model.themes.first(where: { $0.name == name }) {
             ThemeRow(theme: ref, roleCaption: roleCaption, layout: layout)
         } else {
-            // TH-10: a current value that isn't a listed theme (a custom name, or one
+            // A current value that isn't a listed theme (a custom name, or one
             // removed on a Ghostty upgrade). Keep the row *consistent* — a synthetic ref
             // whose preview is forced to the "unavailable" placeholder, with the star and
             // pairing menu (keyed by name) still working — rather than a bare text line.
@@ -385,7 +385,7 @@ struct ThemeBrowserView: View {
 /// Tapping the preview/name applies the theme as a single selection. All state is
 /// derived from the model so a row re-renders the moment its colors load or fail.
 private struct ThemeRow: View {
-    /// Row (list) vs card (grid) presentation of the same theme (U15).
+    /// Row (list) vs card (grid) presentation of the same theme.
     enum Layout { case row, card }
 
     @Environment(AppModel.self) private var model
@@ -395,21 +395,21 @@ private struct ThemeRow: View {
     /// the appearance badge — so "Light mode" (the slot) never collides visually with
     /// the "Light" appearance badge (the theme's own color).
     var roleCaption: String? = nil
-    /// Row or card layout (U15).
+    /// Row or card layout.
     var layout: Layout = .row
-    /// TH-10: force the "unavailable" placeholder preview and skip color loading — for the
+    /// Force the "unavailable" placeholder preview and skip color loading — for the
     /// synthetic current-theme fallback (a name not in `+list-themes`), so an unknown
     /// current theme still reads as a proper row (star + menu work) rather than bare text.
     var forcePlaceholder: Bool = false
-    /// Drives the light/dark pairing dialog (U11 — replaces the two-click borderless menu).
+    /// Drives the light/dark pairing dialog (replaces the two-click borderless menu).
     @State private var showingPairing = false
 
     var body: some View {
         let colors = forcePlaceholder ? nil : model.themeColors[theme.name]
         let failed = forcePlaceholder || model.previewFailed(theme.name)
         let isCurrent = model.currentSelectedThemeNames.contains(theme.name)
-        // The one Apply / Favorite / Theme Options descriptor set (AE8), shared by the row
-        // and card so both read identical labels from a single pure source (R12).
+        // The one Apply / Favorite / Theme Options descriptor set, shared by the row
+        // and card so both read identical labels from a single pure source.
         let actions = ThemeActionPolicy.actions(
             themeName: theme.name,
             isFavorite: model.isFavorite(theme.name),
@@ -430,7 +430,7 @@ private struct ThemeRow: View {
         HStack(spacing: 8) {
             // Apply: the preview/name IS the button; it announces the theme identity and
             // carries "Apply this theme" as its hint — a distinct, single accessibility
-            // element (AE8), never merged with the star/options controls beside it.
+            // element, never merged with the star/options controls beside it.
             Button {
                 Task { await model.applyTheme(theme.name) }
             } label: {
@@ -457,7 +457,7 @@ private struct ThemeRow: View {
             ThemePreviewSwatch(colors: colors, failed: failed)
                 .frame(width: 180, height: 40)
                 .clipShape(RoundedRectangle(cornerRadius: 6))
-                // E2: only a subtle accent preview border marks the current theme —
+                // Only a subtle accent preview border marks the current theme —
                 // the old full-row accent fill (which mimicked selection) is gone.
                 .overlay(
                     RoundedRectangle(cornerRadius: 6).strokeBorder(
@@ -465,7 +465,7 @@ private struct ThemeRow: View {
                         lineWidth: isCurrent ? 2 : 1
                     )
                 )
-                // MO-3: the current border settles in when a theme is applied.
+                // The current border settles in when a theme is applied.
                 .animation(MotionSystem.gated(MotionSystem.settle, reduceMotion: reduceMotion),
                            value: isCurrent)
             VStack(alignment: .leading, spacing: 3) {
@@ -475,7 +475,7 @@ private struct ThemeRow: View {
                         .lineLimit(1)
                     if isCurrent { currentPill }
                 }
-                // MO-6: the "Current" pill scales in when a theme is applied, matching the
+                // The "Current" pill scales in when a theme is applied, matching the
                 // option-row state dot. Keyed to `isCurrent` so nothing else animates.
                 .animation(MotionSystem.gated(MotionSystem.settle, reduceMotion: reduceMotion),
                            value: isCurrent)
@@ -492,7 +492,7 @@ private struct ThemeRow: View {
         .contentShape(Rectangle())
     }
 
-    // MARK: - Card body (grid, U15)
+    // MARK: - Card body (grid)
 
     private func cardBody(colors: ThemeColors?, failed: Bool, isCurrent: Bool,
                           actions: ThemeActionPolicy.Actions) -> some View {
@@ -510,7 +510,7 @@ private struct ThemeRow: View {
                             lineWidth: isCurrent ? 2 : 1
                         )
                     )
-                    // MO-3: the current border settles in on apply.
+                    // The current border settles in on apply.
                     .animation(MotionSystem.gated(MotionSystem.settle, reduceMotion: reduceMotion),
                                value: isCurrent)
                     .contentShape(RoundedRectangle(cornerRadius: DesignTokens.Radius.card))
@@ -523,7 +523,7 @@ private struct ThemeRow: View {
                 // Name + pill + badge repeat what the apply Button's `accessibilityLabel`
                 // already announces (unlike the list row, where they live *inside* the
                 // Button's label). Hidden from VoiceOver so a card is one announcement, not
-                // three; the star/pairing keep their own labels (AE8: three separate elements).
+                // three; the star/pairing keep their own labels (three separate elements).
                 Text(theme.name)
                     .fontWeight(isCurrent ? .semibold : .regular)
                     .lineLimit(1)
@@ -549,12 +549,12 @@ private struct ThemeRow: View {
     }
 
     /// The "Current" signal — a non-color pill (icon + text), so it reads without
-    /// relying on hue alone (A11Y-7).
+    /// relying on hue alone.
     private var currentPill: some View {
         Pill(text: "Current", systemImage: "checkmark.circle.fill", tint: .accentColor, style: .prominent)
     }
 
-    /// E1: light/dark badge, shown once the theme's colors have loaded (never forces
+    /// Light/dark badge, shown once the theme's colors have loaded (never forces
     /// an eager read — an unclassified theme is simply unlabeled).
     private func appearanceBadge(_ appearance: ThemeAppearance) -> some View {
         let isDark = appearance == .dark
@@ -563,15 +563,15 @@ private struct ThemeRow: View {
                     style: .prominent)
     }
 
-    // MARK: - Favorite + pairing controls (E4)
+    // MARK: - Favorite + pairing controls
 
-    /// The one Favorite control (AE8), driven by the shared `ThemeActionPolicy` descriptor so
+    /// The one Favorite control, driven by the shared `ThemeActionPolicy` descriptor so
     /// the star glyph + label are identical in list and grid. State reads without color: the
     /// filled/empty star and the "Star"/"Unstar" label both carry it (scenario 6).
     private func favoriteButton(_ descriptor: ThemeActionPolicy.Descriptor) -> some View {
         let starred = model.isFavorite(theme.name)
         return Button {
-            // TH-9: animate the section membership move (All ↔ Favorites) so the row
+            // Animate the section membership move (All ↔ Favorites) so the row
             // visibly relocates rather than teleporting.
             withAnimation(MotionSystem.gated(MotionSystem.settle, reduceMotion: reduceMotion)) {
                 model.toggleFavorite(theme.name)
@@ -584,15 +584,15 @@ private struct ThemeRow: View {
         .accessibilityLabel(descriptor.accessibilityLabel)
     }
 
-    /// The one Theme Options control (AE8), driven by the shared `ThemeActionPolicy`
+    /// The one Theme Options control, driven by the shared `ThemeActionPolicy`
     /// descriptor. Its purpose is now *only* the light/dark pairing — the former "Use for
     /// both" item was a hidden second Apply (identical to tapping the preview), the
-    /// duplicate/mystery action AE8 flags, so it's removed: Apply lives in exactly one place
+    /// duplicate/mystery action, so it's removed: Apply lives in exactly one place
     /// (the preview button) and Theme Options is unambiguously "assign to a light/dark slot".
     ///
     /// A left-click button opening a `confirmationDialog` — **not** a borderless `Menu`: an
     /// `NSMenu` runs a nested modal event loop that *consumes* the click dismissing it, so
-    /// applying a different theme while it was open took two clicks (U11/MO-1). A
+    /// applying a different theme while it was open took two clicks. A
     /// `confirmationDialog` dismisses cleanly and each action applies on one click.
     private func pairingMenu(_ descriptor: ThemeActionPolicy.Descriptor) -> some View {
         Button {
@@ -605,7 +605,7 @@ private struct ThemeRow: View {
         .confirmationDialog("Use \(theme.name) for…",
                             isPresented: $showingPairing,
                             titleVisibility: .visible) {
-            // CM-11/TH-8: action-first copy that reads back as a sentence with the title —
+            // Action-first copy that reads back as a sentence with the title —
             // "Use <name> for… Use for Light mode / Use for Dark mode". "Use for both" is
             // gone (it duplicated Apply); apply-as-single is the preview button.
             Button("Use for Light mode") {
@@ -630,10 +630,10 @@ private struct ThemeRow: View {
     }
 }
 
-// MARK: - Shared preview swatch (U14)
+// MARK: - Shared preview swatch
 
-/// The theme preview swatch content (U14: a miniature terminal, not a chip grid): a live
-/// `TerminalMockup`, or a non-spinning "unavailable" placeholder (E3), or a loading tile.
+/// The theme preview swatch content (a miniature terminal, not a chip grid): a live
+/// `TerminalMockup`, or a non-spinning "unavailable" placeholder, or a loading tile.
 /// Shared by the list row and the grid card so both render an identical swatch from one
 /// source — compact in the list, full-size (`enlarged`) in the grid.
 private struct ThemePreviewSwatch: View {
@@ -648,7 +648,7 @@ private struct ThemePreviewSwatch: View {
             TerminalMockup(model: model, large: enlarged)
         } else if failed || colors != nil {
             // A failed load, *or* colors that loaded but lack background/foreground: the
-            // U14 nil-fallback contract renders the placeholder, never an empty cell.
+            // nil-fallback contract renders the placeholder, never an empty cell.
             unavailablePreview
         } else {
             Rectangle().fill(.quaternary)
@@ -656,7 +656,7 @@ private struct ThemePreviewSwatch: View {
         }
     }
 
-    /// E3/U14: a distinct, non-spinning placeholder — a failed (or bg/fg-less) theme file
+    /// A distinct, non-spinning placeholder — a failed (or bg/fg-less) theme file
     /// used to spin forever because `themeColors[name]` stays nil.
     private var unavailablePreview: some View {
         ZStack {
@@ -670,14 +670,14 @@ private struct ThemePreviewSwatch: View {
     }
 }
 
-/// A miniature terminal that previews a theme's *actual* colors (U14 / TH-2, CB-2): a
+/// A miniature terminal that previews a theme's *actual* colors: a
 /// prompt line in a palette accent, an output line carrying a selected token, and — when
 /// enlarged — a foreground sample, over the theme background with a 16-color ANSI footer
-/// strip. Flat composition (no material, no shadow) so 400+ of them scroll smoothly (the
-/// U27 gate). The row's Button owns the accessibility label, so the mockup is decorative.
+/// strip. Flat composition (no material, no shadow) so 400+ of them scroll smoothly.
+/// The row's Button owns the accessibility label, so the mockup is decorative.
 private struct TerminalMockup: View {
     let model: ThemePreviewModel
-    /// The enlarged form — the grid card (U15) and the hover preview (U16): bigger type,
+    /// The enlarged form — the grid card and the hover preview: bigger type,
     /// a third foreground line, a taller footer.
     var large: Bool = false
 

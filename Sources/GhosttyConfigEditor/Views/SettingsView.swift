@@ -6,7 +6,7 @@ import GhosttyConfigKit
 /// of the primary editing navigation while preserving one place to inspect Ghostty,
 /// Customized values, and Problems.
 ///
-/// Laid out **health-first** in three grouped cards (G-2): **Health** (Problems +
+/// Laid out **health-first** in three grouped cards: **Health** (Problems +
 /// Customized as prominent tiles up top, so "is anything wrong?" reads first),
 /// **Environment** (the Ghostty binary, the config file, and the auto-reload behavior —
 /// where things live and how saving behaves), and **Manage** (backup + reset). This
@@ -29,7 +29,7 @@ struct StatusView: View {
             }
             .formStyle(.grouped)
             // Import / reset route through the shared write engine, so their outcome
-            // (Saved · Undo / error + Reload) shows in the same bar as every surface (G4).
+            // (Saved · Undo / error + Reload) shows in the same bar as every surface.
             SurfaceFeedbackBar(applyState: model.applyState)
         }
         .confirmationDialog(
@@ -45,7 +45,7 @@ struct StatusView: View {
         }
     }
 
-    // MARK: - Health (G-2) — Problems + Customized, up top, 2-up
+    // MARK: - Health — Problems + Customized, up top, 2-up
 
     /// Health leads the surface: the two things you'd want to know at a glance, rendered
     /// as free-standing tiles (cleared row chrome) side by side. Problems carries health
@@ -96,7 +96,7 @@ struct StatusView: View {
         }
     }
 
-    // MARK: - Environment (G-2) — binary, config file, auto-reload behavior
+    // MARK: - Environment — binary, config file, auto-reload behavior
 
     @ViewBuilder
     private var environmentSection: some View {
@@ -115,7 +115,7 @@ struct StatusView: View {
     }
 
     /// The Ghostty binary: version + health glyph, with Choose… (and an escape back to
-    /// auto-detected when a manual binary is in force). (FEATURES-2)
+    /// auto-detected when a manual binary is in force).
     private var ghosttyRow: some View {
         let detected = model.resolvedBinaryPath != nil
         return HStack(spacing: DesignTokens.Spacing.cozy) {
@@ -141,7 +141,7 @@ struct StatusView: View {
     }
 
     /// The config file: its resolved path + health glyph, with reveal, and create when
-    /// it's missing (config-missing's single home now). (FEATURES-3)
+    /// it's missing (config-missing's single home now).
     private var configFileRow: some View {
         HStack(spacing: DesignTokens.Spacing.cozy) {
             healthGlyph(model.configMissing ? "exclamationmark.triangle.fill" : "checkmark.circle.fill",
@@ -164,10 +164,10 @@ struct StatusView: View {
         }
     }
 
-    // MARK: - Manage (G-2) — backup + reset
+    // MARK: - Manage — backup + reset
 
     /// Backup actions and the destructive reset, merged. Reset renders red via
-    /// DestructiveRowButton (a grouped Form drops `role:`-only styling, DS-7) and only
+    /// DestructiveRowButton (a grouped Form drops `role:`-only styling) and only
     /// appears when there's something to reset.
     @ViewBuilder
     private var manageSection: some View {
@@ -225,7 +225,7 @@ struct StatusView: View {
     }
 }
 
-/// One compact health tile (G-2 Grouped cards). A labeled value with an optional review
+/// One compact health tile. A labeled value with an optional review
 /// action, sized to sit 2-up. Health tiles carry health color; Customized stays neutral.
 private struct StatusHealthTile: View {
     let systemImage: String
@@ -256,7 +256,7 @@ private struct StatusHealthTile: View {
     }
 }
 
-/// Import/export of the whole config, shared by the Status pane and the File menu (G4).
+/// Import/export of the whole config, shared by the Status pane and the File menu.
 /// Export writes the current bytes to a chosen file; import reads a file, confirms the
 /// replace (the write engine backs up the current config first and the import is
 /// undoable), and returns the text for `AppModel.importConfig` to validate + commit.
@@ -292,7 +292,7 @@ enum ConfigTransfer {
 }
 
 /// A native file chooser for the Ghostty binary, shared by the Status pane and the
-/// not-found/unsupported recovery screens (G1). If the user picks `Ghostty.app`, it
+/// not-found/unsupported recovery screens. If the user picks `Ghostty.app`, it
 /// resolves to the inner CLI binary the locator actually probes (`BinaryLocator` wants
 /// an executable, not the bundle).
 enum BinaryChooser {

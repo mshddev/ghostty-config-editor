@@ -3,7 +3,7 @@ import Foundation
 /// One of Ghostty's *default* keybinds, as listed by `+list-keybinds --default`.
 /// Used only as the discover-and-override reference set — never as the source of
 /// truth for the user's own bindings, which we parse prefix-preserving from the
-/// config model (KTD3).
+/// config model.
 public struct DefaultKeybind: Sendable, Equatable, Identifiable {
     public var id: String { trigger }
     public let trigger: String
@@ -14,13 +14,13 @@ public struct DefaultKeybind: Sendable, Equatable, Identifiable {
         self.action = action
     }
 
-    /// The trigger normalized for matching against a user binding (KTD4).
+    /// The trigger normalized for matching against a user binding.
     public var canonicalTrigger: String { KeybindTrigger.parse(trigger).canonical() }
     /// The action name without `:params`.
     public var actionName: String { Keybind.actionName(action) }
 }
 
-/// One of Ghostty's bindable actions, as listed by `+list-actions` (RK2).
+/// One of Ghostty's bindable actions, as listed by `+list-actions`.
 public struct KeybindAction: Sendable, Equatable, Identifiable, Comparable {
     public var id: String { name }
     public let name: String
@@ -30,13 +30,13 @@ public struct KeybindAction: Sendable, Equatable, Identifiable, Comparable {
     public static func < (lhs: KeybindAction, rhs: KeybindAction) -> Bool { lhs.name < rhs.name }
 }
 
-/// Parses `+list-keybinds --default` and `+list-actions` output (RK1, RK2).
+/// Parses `+list-keybinds --default` and `+list-actions` output.
 public enum KeybindReference {
 
     /// Parse `+list-keybinds --default --plain`: each line is `keybind = TRIGGER=ACTION`.
-    /// Reuses U2's action-set-aware value parser so `=`/`+` keys split correctly.
+    /// Reuses the action-set-aware value parser so `=`/`+` keys split correctly.
     /// Parses whatever lines are present — no count or `--default`⊆effective
-    /// assumption (Risk R-B). Non-`keybind` lines and whole-value specials are skipped.
+    /// assumption. Non-`keybind` lines and whole-value specials are skipped.
     public static func parseDefaults(_ output: String, knownActions: Set<String> = []) -> [DefaultKeybind] {
         var defaults: [DefaultKeybind] = []
         for rawLine in output.split(separator: "\n", omittingEmptySubsequences: false) {
@@ -67,7 +67,7 @@ public enum KeybindReference {
 }
 
 /// Loads and caches Ghostty's default keybinds + action list from the live binary,
-/// mirroring `ThemeProvider`/`CatalogProvider` (KTD2: reuse `GhosttyCLI`, never
+/// mirroring `ThemeProvider`/`CatalogProvider` (reuse `GhosttyCLI`, never
 /// spawn a fresh `Process`).
 public actor KeybindReferenceProvider {
     private let loadDefaults: @Sendable () async throws -> String

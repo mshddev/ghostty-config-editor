@@ -14,7 +14,7 @@ public struct ThemeRef: Sendable, Equatable, Identifiable {
     }
 }
 
-/// The colors a theme file defines (R12). `palette` covers indices 0–15.
+/// The colors a theme file defines. `palette` covers indices 0–15.
 public struct ThemeColors: Sendable, Equatable {
     public var palette: [Int: String]
     public var background: String?
@@ -48,10 +48,10 @@ public struct ThemeColors: Sendable, Equatable {
     }
 
     /// The theme's overall appearance — light or dark — from its background color's
-    /// perceived luminance (E1). `nil` when there's no background or it can't be
+    /// perceived luminance. `nil` when there's no background or it can't be
     /// parsed (X11 names, `cell-background`, …), so an unclassifiable theme is left
     /// unlabeled rather than guessed. Computed per-theme only once its colors have
-    /// loaded, so it never forces an eager read (KTD: lazy per-row color loading).
+    /// loaded, so it never forces an eager read (lazy per-row color loading).
     public var appearance: ThemeAppearance? {
         guard let background,
               let luminance = ThemeParser.relativeLuminance(ofHex: background) else { return nil }
@@ -59,16 +59,16 @@ public struct ThemeColors: Sendable, Equatable {
     }
 }
 
-/// Whether a theme reads as light or dark (E1), from its background luminance.
+/// Whether a theme reads as light or dark, from its background luminance.
 public enum ThemeAppearance: Sendable, Equatable {
     case light
     case dark
 }
 
-/// The resolved colors a miniature terminal preview renders (U14 / TH-2, CB-2). Built
+/// The resolved colors a miniature terminal preview renders. Built
 /// from a theme's `ThemeColors` by applying Ghostty's own nil-fallback rules, because
 /// `cursorColor`/`selection*` are optional and *commonly absent* — Ghostty derives them
-/// at runtime, so most theme files never state them (KTD6: the four parsed-but-unused
+/// at runtime, so most theme files never state them (the four parsed-but-unused
 /// fields finally earn their keep). Pure and deterministic: the same `ThemeColors` always
 /// yields the same model, so a preview never assigns colors at random and the fallback
 /// chain is unit-testable. `resolve` returns `nil` when `background` or `foreground` is
@@ -125,13 +125,13 @@ public struct ThemePreviewModel: Sendable, Equatable {
     }
 }
 
-/// How a `theme = …` value selects a theme (R12 supports light/dark).
+/// How a `theme = …` value selects a theme (supports light/dark).
 public enum ThemeSelection: Sendable, Equatable {
     case single(String)
     case lightDark(light: String, dark: String)
 }
 
-/// Which half of a `light:…,dark:…` theme pairing a chosen theme fills (E4).
+/// Which half of a `light:…,dark:…` theme pairing a chosen theme fills.
 public enum ThemeRole: Sendable {
     case light
     case dark
@@ -224,7 +224,7 @@ public enum ThemeParser {
     }
 
     /// Compose the light/dark pairing that results from assigning `name` to one role,
-    /// keeping the other member from the `current` selection (E4). An existing pair
+    /// keeping the other member from the `current` selection. An existing pair
     /// keeps its untouched member; a current single seeds both sides (so the untouched
     /// role inherits it rather than going blank); no current selection seeds both with
     /// `name` — a lone `light:`/`dark:` isn't valid Ghostty light/dark syntax, and
@@ -247,7 +247,7 @@ public enum ThemeParser {
     }
 
     /// The set of theme names a `theme = …` value selects — one for a single theme,
-    /// both members for a `light:…,dark:…` pair (E2). The current-theme highlight
+    /// both members for a `light:…,dark:…` pair. The current-theme highlight
     /// reads from this set, not string equality, so **both** rows of a light/dark
     /// pair correctly read as "Current" (a naive `currentTheme == theme.name` would
     /// match neither, since `currentTheme` is the whole `light:…,dark:…` string).
@@ -258,7 +258,7 @@ public enum ThemeParser {
         }
     }
 
-    /// Perceived luminance (0…1) of a hex color, for light/dark classification (E1).
+    /// Perceived luminance (0…1) of a hex color, for light/dark classification.
     /// Accepts an optional `#`/`0x` prefix and 3- (rgb), 6- (rrggbb), or 8-digit
     /// (rrggbbaa) forms; alpha is ignored. Returns `nil` for anything unparseable —
     /// X11 names, `cell-foreground`, empty — so the caller leaves it unlabeled.
@@ -280,7 +280,7 @@ public enum ThemeParser {
     }
 
     /// Case- and diacritic-insensitive substring match of a theme name against a
-    /// search query (E1). An empty/whitespace query matches everything, so the
+    /// search query. An empty/whitespace query matches everything, so the
     /// browser shows the whole list. Extracted here so it's unit-tested, with the
     /// app's `filteredThemes` delegating to it.
     public static func nameMatches(_ name: String, query: String) -> Bool {
@@ -304,13 +304,13 @@ public enum ThemeParser {
         return families
     }
 
-    /// Honest preview-fidelity disclaimer (R14).
+    /// Honest preview-fidelity disclaimer.
     public static let previewFidelityDisclaimer =
         "Color previews are faithful. Font rendering, ligatures, blur, and cursor effects are best-effort approximations — the real look only appears in Ghostty."
 }
 
 /// Lists themes and fonts from the live binary and lazily loads theme colors,
-/// caching by theme path (R12).
+/// caching by theme path.
 public actor ThemeProvider {
     private let loadList: @Sendable () async throws -> String
     private let loadFontList: @Sendable () async throws -> String

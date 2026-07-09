@@ -2,37 +2,37 @@ import Foundation
 import CryptoKit
 
 public enum ConfigWriteError: Error, Equatable, Sendable {
-    /// The file changed on disk since it was read — refuse rather than clobber (R22).
+    /// The file changed on disk since it was read — refuse rather than clobber.
     case staleOnDisk(path: String)
-    /// The proposed config failed `+validate-config`; nothing was written (R15).
+    /// The proposed config failed `+validate-config`; nothing was written.
     case validationFailed([ValidationMessage])
     case backupFailed(String)
     case stageFailed(String)
     case renameFailed(String)
     /// A key or value contained a newline — writing it would split into extra
-    /// config directives (e.g. an injected `config-file`), so it is refused (R8).
+    /// config directives (e.g. an injected `config-file`), so it is refused.
     case invalidValue(String)
     /// The write would produce a zero-byte config. Ghostty's `+validate-config`
     /// rejects an empty file with exit 1 and no diagnostic, so we refuse it up
-    /// front with a clear message instead of the opaque "didn't validate" (A).
+    /// front with a clear message instead of the opaque "didn't validate".
     case emptyConfig
 }
 
 /// The kind of value being edited, so the error normalizer can speak in the editor's
-/// own vocabulary (a bad color says "color", a generic value stays generic) (KTD4).
+/// own vocabulary (a bad color says "color", a generic value stays generic).
 public enum EditValueKind: Sendable, Equatable {
     case color
     case generic
 }
 
-/// Plain-language presentation of a write/validation failure (KTD4, R3).
+/// Plain-language presentation of a write/validation failure.
 ///
 /// The single application-boundary normalizer: it turns `ConfigWriteError` cases and raw
 /// Ghostty diagnostics (`error.InvalidCharacter`, `unknown error error.…`) into a concise
 /// user-facing `message` while keeping the raw text as secondary `detail` for the
 /// info/detail context. No `message` it produces ever prints an implementation type name.
 public struct EditErrorPresentation: Equatable, Sendable {
-    /// The concise, user-facing sentence — never contains an impl type name (R3).
+    /// The concise, user-facing sentence — never contains an impl type name.
     public let message: String
     /// The raw diagnostic/text, retained as secondary detail for troubleshooting. Nil when
     /// there is nothing beyond the message.
@@ -49,7 +49,7 @@ public struct EditErrorPresentation: Equatable, Sendable {
 
     /// Normalize any thrown error at the write boundary. A `ConfigWriteError` maps by case;
     /// anything else keeps its raw description as `detail` under a generic headline so the
-    /// old raw-`localizedDescription` leak (KTD4/R3) can never reach row feedback.
+    /// old raw-`localizedDescription` leak can never reach row feedback.
     public static func present(_ error: Error, kind: EditValueKind = .generic) -> EditErrorPresentation {
         if let writeError = error as? ConfigWriteError {
             return present(writeError, kind: kind)
@@ -61,7 +61,7 @@ public struct EditErrorPresentation: Equatable, Sendable {
         )
     }
 
-    /// Normalize a `ConfigWriteError` case into plain language (KTD4).
+    /// Normalize a `ConfigWriteError` case into plain language.
     public static func present(_ error: ConfigWriteError, kind: EditValueKind = .generic) -> EditErrorPresentation {
         switch error {
         case .validationFailed(let messages):
@@ -126,34 +126,34 @@ public struct EditErrorPresentation: Equatable, Sendable {
     }
 }
 
-/// The outcome of a successful write, carrying everything needed to undo it (R24).
+/// The outcome of a successful write, carrying everything needed to undo it.
 public struct WriteReceipt: Sendable {
     public let resolvedPath: String
     public let backupURL: URL?
     public let newIdentity: FileIdentity?
-    /// The bytes that were on disk before this write (last-write undo, R10/R24).
+    /// The bytes that were on disk before this write (last-write undo).
     public let previousText: String?
 }
 
 /// Writes config changes back to disk, treating the target as a symlinked,
-/// git-managed dotfile edited by multiple actors (KTD8, R8–R11, R20–R24).
+/// git-managed dotfile edited by multiple actors.
 ///
 /// Two layers:
 ///  - **Content** — mutate only the model nodes that changed; re-emit every
-///    other line verbatim (R8, R11). Pure, no disk.
+///    other line verbatim. Pure, no disk.
 ///  - **Filesystem** — stale-check, out-of-repo backup, same-dir temp + fsync +
 ///    atomic rename onto the symlink-resolved real path + dir fsync, with
 ///    permission/encoding fidelity and abort-untouched on any failure.
 ///
-/// Note on R20 ("preserve the inode"): a crash-safe atomic rename necessarily
+/// Note on "preserve the inode": a crash-safe atomic rename necessarily
 /// installs a new inode at the path — only an in-place truncate keeps the inode,
-/// and that is not crash-safe. We prioritize crash-safety (R21) and the invariant
+/// and that is not crash-safe. We prioritize crash-safety and the invariant
 /// that actually matters for dotfiles: the **symlink is preserved** (never
 /// replaced by a regular file) and keeps resolving to the same real path, with
 /// permissions/encoding intact. We assert that, not literal inode identity.
 public struct ConfigWriter: Sendable {
     public let backupDirectory: URL
-    /// Max backups retained per file (R24 bounded retention).
+    /// Max backups retained per file (bounded retention).
     public let retentionLimit: Int
 
     public init(backupDirectory: URL = ConfigWriter.defaultBackupDirectory, retentionLimit: Int = 20) {
@@ -170,7 +170,7 @@ public struct ConfigWriter: Sendable {
     // MARK: - Content layer (pure)
 
     /// The file an option write targets: the file where the option already
-    /// lives, else the primary config (R8). Multi-file precedence is deferred.
+    /// lives, else the primary config. Multi-file precedence is deferred.
     public func targetFile(forOption name: String, in model: ConfigModel) -> ConfigFile {
         for file in model.allFiles where file.lines.contains(where: { $0.key == name }) {
             return file
@@ -179,7 +179,7 @@ public struct ConfigWriter: Sendable {
     }
 
     /// Produce the target file with `name` set to `values` (empty = unset),
-    /// changing only the affected lines (AE2, AE3). Repeatable keys reconcile
+    /// changing only the affected lines. Repeatable keys reconcile
     /// position-wise so untouched occurrences stay byte-identical.
     public func editedFile(setting name: String, to values: [String], isRepeatable: Bool, in model: ConfigModel) -> ConfigFile {
         let target = targetFile(forOption: name, in: model)
@@ -200,14 +200,14 @@ public struct ConfigWriter: Sendable {
             self.isRepeatable = isRepeatable
         }
 
-        /// An "unset this option" op (reset-to-default), the batch's main use (KTD5).
+        /// An "unset this option" op (reset-to-default), the batch's main use.
         public static func unset(_ key: String, isRepeatable: Bool) -> BatchOperation {
             BatchOperation(key: key, values: [], isRepeatable: isRepeatable)
         }
     }
 
     /// Fold several mutations into the **primary** file's lines in one pass and return the
-    /// edited primary (KTD5). Unlike looping `editedFile(setting:)` — which retargets and
+    /// edited primary. Unlike looping `editedFile(setting:)` — which retargets and
     /// commits per call, yielding N backups / N validations / N reloads and a depth-1 undo
     /// that reverts only the last op — this produces one file so a single `commit` gives one
     /// backup / one validation / one receipt (hence one ⌘Z reverts the whole batch).
@@ -257,7 +257,7 @@ public struct ConfigWriter: Sendable {
 
     private static func settingLine(key: String, value: String, lineEnding: String) -> ConfigLine {
         // Carry the file's line ending so editing a line in a CRLF file doesn't
-        // silently rewrite just that line as LF (R23 byte fidelity).
+        // silently rewrite just that line as LF (byte fidelity).
         let terminator = lineEnding == "\r\n" ? "\r" : ""
         return ConfigLine(raw: "\(key) = \(value)\(terminator)", kind: .setting(key: key, value: value), lineNumber: 0)
     }
@@ -281,7 +281,7 @@ public struct ConfigWriter: Sendable {
 
     /// Refuse a key/value containing a newline — it would serialize into extra
     /// config directives (e.g. an injected `config-file`). Guards the public
-    /// write entry points so a multi-line value can never reach disk (R8).
+    /// write entry points so a multi-line value can never reach disk.
     private static func rejectLineBreaks(key: String, values: [String]) throws {
         func hasBreak(_ s: String) -> Bool { s.contains("\n") || s.contains("\r") }
         if hasBreak(key) { throw ConfigWriteError.invalidValue(key) }
@@ -295,13 +295,13 @@ public struct ConfigWriter: Sendable {
     /// file — with exit 1 and no diagnostic, which the presenter can only render as the
     /// opaque "The change didn't validate." So the check is strictly `.isEmpty` to match
     /// Ghostty exactly, and it runs before validation so the clear message wins and the
-    /// binary is never asked (A). Also a `performCommit` backstop: no path writes empty.
+    /// binary is never asked. Also a `performCommit` backstop: no path writes empty.
     private static func rejectEmptyConfig(_ file: ConfigFile) throws {
         if file.serialized().isEmpty { throw ConfigWriteError.emptyConfig }
     }
 
     /// Validate the proposed change against the live binary BEFORE writing, then
-    /// commit only if it's valid (R15, R17). Throws `.validationFailed` without
+    /// commit only if it's valid. Throws `.validationFailed` without
     /// touching the real file when the result wouldn't validate.
     @discardableResult
     public func validateAndApply(
@@ -326,7 +326,7 @@ public struct ConfigWriter: Sendable {
 
     /// Validate a whole batch (all ops folded into the primary) then commit it once, so a
     /// reset-all / reset-category is one backup, one validation, one reload, one undoable
-    /// receipt (KTD5, G4). Same validate-before-write contract as the single-option path.
+    /// receipt. Same validate-before-write contract as the single-option path.
     @discardableResult
     public func validateAndApplyBatch(
         operations: [BatchOperation],
@@ -346,7 +346,7 @@ public struct ConfigWriter: Sendable {
         return try commit(edited)
     }
 
-    /// Replace the ENTIRE primary config with `text` after validating it (G4 import =
+    /// Replace the ENTIRE primary config with `text` after validating it (import =
     /// replace-with-backup). Validates the imported bytes in their real include context,
     /// then commits — so a bad paste is rejected over one backup and never reaches disk.
     /// The new file is stamped with the **current on-disk identity** (not the imported
@@ -425,7 +425,7 @@ public struct ConfigWriter: Sendable {
     @discardableResult
     public func commit(_ newFile: ConfigFile, fileManager: FileManager = .default) throws -> WriteReceipt {
         // Lock on the canonical real path so every spelling of the same inode
-        // (symlink, ".."-laden, in-memory default) converges on one lock (H4).
+        // (symlink, ".."-laden, in-memory default) converges on one lock.
         let realPath = ConfigReader.canonicalPath(newFile.resolvedPath)
         return try Self.locks.withLock(path: realPath) {
             try performCommit(newFile, realPath: realPath, fileManager: fileManager)
@@ -435,14 +435,14 @@ public struct ConfigWriter: Sendable {
     private func performCommit(_ newFile: ConfigFile, realPath: String, fileManager: FileManager) throws -> WriteReceipt {
         // Backstop for direct `commit()` callers: never let a zero-byte config reach disk,
         // independent of what's on disk. The validated entry points already reject empty
-        // before validation; this guarantees the invariant for every path (A).
+        // before validation; this guarantees the invariant for every path.
         try Self.rejectEmptyConfig(newFile)
         // ONE read of the live file drives both the stale check and the backup,
-        // so there is no window for an external write to slip between them (H1).
+        // so there is no window for an external write to slip between them.
         let existing = fileManager.contents(atPath: realPath)
         let currentHash = existing.map { Self.sha256($0) }
 
-        // Stale-overwrite guard (R22): the single read must match the read-time stamp.
+        // Stale-overwrite guard: the single read must match the read-time stamp.
         if let readStamp = newFile.identity {
             guard let currentHash, currentHash == readStamp.sha256 else {
                 throw ConfigWriteError.staleOnDisk(path: realPath)
@@ -457,7 +457,7 @@ public struct ConfigWriter: Sendable {
         // For a first write (no config yet) make sure the directory exists.
         try? fileManager.createDirectory(at: dirURL, withIntermediateDirectories: true)
 
-        // Out-of-repo backup of the exact bytes we just read (R24). Abort if it fails.
+        // Out-of-repo backup of the exact bytes we just read. Abort if it fails.
         var backupURL: URL?
         var previousText: String?
         if let existing {
@@ -469,7 +469,7 @@ public struct ConfigWriter: Sendable {
             }
         }
 
-        // Stage + atomic rename, preserving permissions/xattrs (R20, R21, R23).
+        // Stage + atomic rename, preserving permissions/xattrs.
         try stageAndRename(newData, to: realPath, dirURL: dirURL,
                            fallbackPermissions: newFile.identity?.permissions, fileManager: fileManager)
 
@@ -481,9 +481,9 @@ public struct ConfigWriter: Sendable {
         )
     }
 
-    /// Restore the bytes captured in a receipt (last-write undo, R10). Backs up
+    /// Restore the bytes captured in a receipt (last-write undo). Backs up
     /// the CURRENT bytes first, so the undo is itself undoable and never blindly
-    /// destroys an external edit made since the apply (H2); preserves attributes (H3).
+    /// destroys an external edit made since the apply; preserves attributes.
     @discardableResult
     public func restore(from receipt: WriteReceipt, fileManager: FileManager = .default) throws -> Bool {
         guard let previous = receipt.previousText else { return false }
@@ -514,7 +514,7 @@ public struct ConfigWriter: Sendable {
             if fileManager.fileExists(atPath: realPath) {
                 Self.copyExtendedAttributes(from: realPath, to: tempURL.path)
             }
-            Self.fullSyncPath(tempURL.path) // F_FULLFSYNC: flush to stable media (R21)
+            Self.fullSyncPath(tempURL.path) // F_FULLFSYNC: flush to stable media
         } catch {
             try? fileManager.removeItem(at: tempURL)
             throw ConfigWriteError.stageFailed("\(error)")
@@ -528,7 +528,7 @@ public struct ConfigWriter: Sendable {
     }
 
     /// Remove orphaned write temps left behind by a crashed prior write (crash
-    /// recovery, KTD8). Safe to call at launch: a live write holds the path lock,
+    /// recovery). Safe to call at launch: a live write holds the path lock,
     /// and at startup there is no concurrent write in flight.
     public func sweepStaleTempFiles(inDirectoryOf path: String, fileManager: FileManager = .default) {
         let dir = (ConfigReader.canonicalPath(path) as NSString).deletingLastPathComponent
@@ -538,7 +538,7 @@ public struct ConfigWriter: Sendable {
         }
     }
 
-    // MARK: - Backups (R24)
+    // MARK: - Backups
 
     private func makeBackup(of data: Data, realPath: String, fileManager: FileManager) throws -> URL {
         let dir = backupDirectory.appendingPathComponent(Self.backupFolderName(for: realPath), isDirectory: true)
@@ -567,7 +567,7 @@ public struct ConfigWriter: Sendable {
     }
 
     static func backupFolderName(for path: String) -> String {
-        // Deterministic per real path across launches (R24 retention/recovery).
+        // Deterministic per real path across launches (retention/recovery).
         // hashValue is per-process randomized and must never be persisted.
         let base = (path as NSString).lastPathComponent
         let digest = sha256(Data(path.utf8)).prefix(16)
@@ -625,7 +625,7 @@ public struct ConfigWriter: Sendable {
 }
 
 /// Per-path in-process lock so two windows (or a double-apply) can't race on the
-/// same file (KTD8). Belt-and-suspenders for a single-window app, but cheap.
+/// same file. Belt-and-suspenders for a single-window app, but cheap.
 final class PathLocks: @unchecked Sendable {
     private let master = NSLock()
     private var locks: [String: NSRecursiveLock] = [:]

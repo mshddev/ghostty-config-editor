@@ -13,9 +13,9 @@ public struct CLIResult: Sendable {
 
 /// Errors surfaced by the CLI layer.
 public enum GhosttyCLIError: Error, Equatable, Sendable {
-    /// No `ghostty` binary could be located by the probe (R19).
+    /// No `ghostty` binary could be located by the probe.
     case binaryNotFound
-    /// The binary was found but `+version` did not parse / verify (R19).
+    /// The binary was found but `+version` did not parse / verify.
     case versionUnverified(String)
     /// The subprocess could not be launched.
     case launchFailed(String)
@@ -26,7 +26,7 @@ public enum GhosttyCLIError: Error, Equatable, Sendable {
 /// Runs `ghostty` subcommands, capturing stdout/stderr asynchronously.
 ///
 /// Uses `Foundation.Process` with **concurrent, deadline-bounded** pipe draining
-/// (KTD4 fallback):
+/// (fallback):
 ///  - Verbose output such as `+show-config --default --docs` (~176 KB here) would
 ///    deadlock a naive read-then-wait because the child blocks once the 64 KB
 ///    pipe buffer fills. Reading stdout and stderr concurrently avoids that.
@@ -175,7 +175,7 @@ public struct GhosttyCLI: Sendable {
     }
 }
 
-/// A located and version-verified Ghostty installation (R18, R19).
+/// A located and version-verified Ghostty installation.
 public struct GhosttyEnvironment: Sendable {
     public let cli: GhosttyCLI
     public let version: String

@@ -1,6 +1,6 @@
 import Foundation
 
-/// The tier + within-category rank for one option (IA-1, IA-3).
+/// The tier + within-category rank for one option.
 public struct OptionTier: Sendable, Codable, Equatable {
     public enum Tier: String, Sendable, Codable {
         case common     // shown first, above the Advanced disclosure
@@ -17,7 +17,7 @@ public struct OptionTier: Sendable, Codable, Equatable {
     }
 }
 
-/// Bundled common/advanced tiering, keyed by option name (A3).
+/// Bundled common/advanced tiering, keyed by option name.
 ///
 /// Only the curated **Common** set is listed; every other option defaults to
 /// `advanced` with no rank, so the tier data stays small and an option we forget
@@ -34,7 +34,7 @@ public struct OptionTierCatalog: Sendable {
     /// The within-category rank, or a sentinel that sorts after every ranked option.
     public func rank(for name: String) -> Int { tiers[name]?.rank ?? Int.max }
 
-    /// Option names carrying an explicit tier — used by the orphan-key guard (KTD1).
+    /// Option names carrying an explicit tier — used by the orphan-key guard.
     public var tieredOptionNames: Set<String> { Set(tiers.keys) }
 
     private struct File: Codable { let tiers: [String: OptionTier] }
@@ -53,7 +53,7 @@ public struct OptionTierCatalog: Sendable {
     }()
 }
 
-/// The single comparator for ordering options within a category (IA-1).
+/// The single comparator for ordering options within a category.
 ///
 /// Both the category list (`OptionCatalog.options(in:)`) and search
 /// (`CatalogBrowser.options(in:)`) sort through this, so browsing and searching

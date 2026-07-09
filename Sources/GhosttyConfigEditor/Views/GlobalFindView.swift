@@ -1,12 +1,12 @@
 import SwiftUI
 import GhosttyConfigKit
 
-/// The global **Find** overlay (⇧⌘F — U20, search tier 2). Unlike a surface's own local
+/// The global **Find** overlay (⇧⌘F — search tier 2). Unlike a surface's own local
 /// filter (which narrows *that* surface), Find searches **every** option — by name,
 /// description, and described behavior (the intent map) — from anywhere in the app, and
 /// presents ranked results with provenance: a category pill on every row, and for a
 /// behavior match the curated phrase that surfaced it. Picking a result jumps straight
-/// to that option via the shared `focus(optionNamed:)` navigation primitive (D1).
+/// to that option via the shared `focus(optionNamed:)` navigation primitive.
 ///
 /// The field is a plain `TextField` driven by `@FocusState` — not `.searchable`, which
 /// exposes no programmatic-focus API — so opening Find (⇧⌘F or the toolbar button) can
@@ -73,7 +73,7 @@ struct GlobalFindView: View {
         } else {
             // A broad query can rank hundreds of options (name + intent + full-text doc
             // match), so results use a virtualized List — matching the option list's own
-            // search branch (C3 review fix), not an eager Form.
+            // search branch, not an eager Form.
             List(hits.map(FindResult.init)) { result in
                 FindResultRow(hit: result.hit, option: result.option)
             }
@@ -96,7 +96,7 @@ private struct FindResult: Identifiable {
 
 /// One global-Find result: the option's friendly title, a category pill, a provenance
 /// note (why it matched, when the name didn't), and its one-line summary. The whole row
-/// is a button that jumps to the option (D1's `focus(optionNamed:)`) and dismisses Find.
+/// is a button that jumps to the option (`focus(optionNamed:)`) and dismisses Find.
 private struct FindResultRow: View {
     @Environment(AppModel.self) private var model
     let hit: SearchHit
@@ -130,7 +130,7 @@ private struct FindResultRow: View {
             .contentShape(Rectangle())
             .padding(.vertical, RowMetrics.rowVerticalPadding)
         }
-        // U12: the whole result row lifts on hover/focus so it reads as the jump target.
+        // the whole result row lifts on hover/focus so it reads as the jump target.
         .buttonStyle(HoverAffordanceButtonStyle(cornerRadius: DesignTokens.Radius.standard,
                                                 insets: EdgeInsets()))
         .accessibilityElement(children: .combine)

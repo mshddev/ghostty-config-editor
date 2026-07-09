@@ -1,9 +1,9 @@
 import Foundation
 
-/// Pure value models for the two high-friction mini-languages U4 replaces with semantic
-/// controls (R7): the `mouse-scroll-multiplier` composite and the `bell-features` flag set.
+/// Pure value models for the two high-friction mini-languages the editor replaces with semantic
+/// controls: the `mouse-scroll-multiplier` composite and the `bell-features` flag set.
 ///
-/// Both keep a raw fallback so unknown/future fragments round-trip verbatim (R8): the scroll
+/// Both keep a raw fallback so unknown/future fragments round-trip verbatim: the scroll
 /// composite carries any fragment it doesn't model in `unknown`, and the flag set keeps its
 /// whole token list, so toggling one labeled feature never rewrites — or drops — the rest.
 /// No SwiftUI/AppKit here so the parse/serialize contract is unit-tested (see
@@ -14,14 +14,14 @@ import Foundation
 /// `mouse-scroll-multiplier` is either a bare number applied to all devices, or a
 /// comma-separated set of `precision:` / `discrete:` fragments (`precision:0.5,discrete:3`).
 /// The two labeled keys map to editor fields; every other fragment (a bare value, or a
-/// `key:value` we don't recognize) is preserved verbatim so an edit is lossless (R8).
+/// `key:value` we don't recognize) is preserved verbatim so an edit is lossless.
 public struct ScrollMultiplierValue: Equatable, Sendable {
     /// The `precision:` device multiplier, or nil when the fragment is absent.
     public var precision: String?
     /// The `discrete:` device multiplier, or nil when the fragment is absent.
     public var discrete: String?
     /// Fragments we don't model (a bare all-devices value, or an unknown `key:value`),
-    /// kept in their original relative order and reserialized untouched (R8).
+    /// kept in their original relative order and reserialized untouched.
     public var unknown: [String]
 
     public init(precision: String? = nil, discrete: String? = nil, unknown: [String] = []) {
@@ -40,7 +40,7 @@ public struct ScrollMultiplierValue: Equatable, Sendable {
             } else if let value = prefixedValue(piece, key: "discrete") {
                 result.discrete = value
             } else {
-                result.unknown.append(piece)      // bare value / unknown key:value → verbatim (R8)
+                result.unknown.append(piece)      // bare value / unknown key:value → verbatim
             }
         }
         return result
@@ -75,7 +75,7 @@ public struct ScrollMultiplierValue: Equatable, Sendable {
 
 /// `bell-features` is a comma-separated list of feature tokens; a `no-` prefix disables a
 /// feature and an omitted feature keeps its documented default. The value string is kept as
-/// an ordered token list so unknown/future tokens survive verbatim (R8) and toggling one
+/// an ordered token list so unknown/future tokens survive verbatim and toggling one
 /// labeled feature preserves every omitted feature and every unknown token (a single edit
 /// replaces or appends exactly one token — it never rewrites the whole set).
 public struct BellFeaturesValue: Equatable, Sendable {
@@ -91,7 +91,7 @@ public struct BellFeaturesValue: Equatable, Sendable {
         ("border", false),
     ]
 
-    /// The raw tokens in file order, preserved verbatim for round-tripping (R8).
+    /// The raw tokens in file order, preserved verbatim for round-tripping.
     public private(set) var tokens: [String]
 
     public init(tokens: [String] = []) {

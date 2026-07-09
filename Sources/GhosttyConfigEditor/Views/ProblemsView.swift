@@ -2,8 +2,8 @@ import SwiftUI
 import AppKit
 import GhosttyConfigKit
 
-/// The Problems surface: `+validate-config` errors and static footgun warnings
-/// (R15, R16). Read-only in M1.
+/// The Problems surface: `+validate-config` errors and static footgun warnings.
+/// Read-only.
 struct ProblemsView: View {
     @Environment(AppModel.self) private var model
 
@@ -46,7 +46,7 @@ struct ProblemsView: View {
                         }
                         if !report.findings.isEmpty {
                             // "Footgun" is our internal term (kept in CONCEPTS.md/code); the
-                            // surface says it in plain language (CM-9).
+                            // surface says it in plain language.
                             Section("Potential problems") {
                                 ForEach(report.findings) { finding in
                                     findingRow(finding)
@@ -115,7 +115,7 @@ struct ProblemsView: View {
                 if let line = message.line {
                     Text("line \(line)").font(.caption.monospaced()).foregroundStyle(.tertiary)
                 }
-                // F4/R10: each row exposes the right next action — Show Setting for a
+                // Each row exposes the right next action — Show Setting for a
                 // message whose key names a real control (clears search, selects its
                 // category, scrolls it in via `focus(optionNamed:)`), else an explicit
                 // file action for a keyless/unmapped diagnostic.
@@ -125,10 +125,10 @@ struct ProblemsView: View {
         .padding(.vertical, RowMetrics.rowVerticalPadding)
     }
 
-    /// The next-action row shared by validation and finding rows (F4/R10): Show Setting for
+    /// The next-action row shared by validation and finding rows: Show Setting for
     /// a mapped key, or Open Config at Line + Reveal in Finder for a file-only diagnostic.
     /// Each action carries an accessible label so the recovery path is conveyed without
-    /// relying on the icon or link color (A11Y).
+    /// relying on the icon or link color.
     @ViewBuilder
     private func problemActions(_ action: ProblemAction?) -> some View {
         if let action {
@@ -158,7 +158,7 @@ struct ProblemsView: View {
         HStack(alignment: .top, spacing: 8) {
             Image(systemName: icon(for: finding.severity))
                 .foregroundStyle(color(for: finding.severity))
-                // H2/A11Y-8: severity is conveyed as a word, not color/icon alone.
+                // Severity is conveyed as a word, not color/icon alone.
                 .accessibilityLabel(severityLabel(for: finding.severity))
             VStack(alignment: .leading, spacing: 2) {
                 // Group the title + message into one VoiceOver element (a finding is one
@@ -169,7 +169,7 @@ struct ProblemsView: View {
                         .fixedSize(horizontal: false, vertical: true)
                 }
                 .accessibilityElement(children: .combine)
-                // A footgun finding is a file-only warning (F4/R10): offer Open Config at
+                // A footgun finding is a file-only warning: offer Open Config at
                 // Line + Reveal in Finder for its source location, with the file:line as a
                 // caption so the location stays visible.
                 if let location = finding.locations.first {

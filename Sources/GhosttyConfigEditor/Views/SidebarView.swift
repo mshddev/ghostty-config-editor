@@ -7,14 +7,14 @@ import GhosttyConfigKit
 struct SidebarView: View {
     @Environment(AppModel.self) private var model
 
-    /// The sidebar's selection reads as **nil while a global Find is in progress** (IA-3),
+    /// The sidebar's selection reads as **nil while a global Find is in progress**,
     /// so no category stays falsely highlighted when the detail pane is showing Find
     /// results instead. Writing through ends Find on *any* pick and navigates: the setter
     /// calls `endFind()` explicitly rather than relying on the app's `onChange(selection)`,
     /// because re-picking the row Find was started from writes an **equal** selection —
     /// which `onChange` wouldn't fire, leaving the click dead. When Find ends, the previous
-    /// highlight returns. The Customized/Problems drill-downs keep `selection == .status`
-    /// (KTD6), so the footer stays selected while either secondary surface is open; landing
+    /// highlight returns. The Customized/Problems drill-downs keep `selection == .status`,
+    /// so the footer stays selected while either secondary surface is open; landing
     /// on `.status` resets the drill-down to the hub via the model's `selection` `didSet`.
     private var sidebarSelection: Binding<SidebarSelection?> {
         Binding(get: { displayedSelection },
@@ -35,8 +35,8 @@ struct SidebarView: View {
             ScrollViewReader { proxy in
                 List(selection: sidebarSelection) {
                     // Get started — the exploratory surfaces a newcomer opens first.
-                    // Recommended is pinned at the top (the curated "start here" set, F1);
-                    // the app still *launches* on Themes to preserve its identity (OQ #2).
+                    // Recommended is pinned at the top (the curated "start here" set);
+                    // the app still *launches* on Themes to preserve its identity.
                     Section("Get started") {
                         Label("Recommended", systemImage: "sparkles")
                             .tag(SidebarSelection.recommended)
@@ -45,7 +45,7 @@ struct SidebarView: View {
                             .tag(SidebarSelection.themes)
                             .id(SidebarSelection.themes)
                     }
-                    // Options — the option categories in newcomer-frequency order (A3).
+                    // Options — the option categories in newcomer-frequency order.
                     // Status is reserved for environment and maintenance summaries below.
                     Section("Options") {
                         ForEach(model.categories, id: \.self) { category in
@@ -71,7 +71,7 @@ struct SidebarView: View {
     /// its visibility never depends on how many category rows fit above it at any window
     /// height. It's a second single-row `List` sharing the same selection binding, so it
     /// gets the native sidebar highlight for free. A leading health glyph + a caption
-    /// **spelling out** the state (G1) — "All clear", or the salient reason ("3 problems",
+    /// **spelling out** the state — "All clear", or the salient reason ("3 problems",
     /// "Config file not found") — so the footer actually indicates a status rather than
     /// relying on a lone dot. Customized stays out of it: a changed value is not an error.
     private var statusFooter: some View {
@@ -100,7 +100,7 @@ struct SidebarView: View {
                 .accessibilityLabel("Status")
                 .accessibilityValue(needsAttention ? "Needs attention, \(summary)" : "All clear")
                 .help(needsAttention ? "Status needs attention — \(summary)" : "Status is healthy")
-                // AE7: reselecting the already-highlighted Status footer must return to the
+                // reselecting the already-highlighted Status footer must return to the
                 // hub. A `List(selection:)` binding doesn't fire for a re-pick of the current
                 // row (the value is unchanged), so this gesture catches the re-pick while a
                 // Customized/Problems drill-down is showing; the model's `selection` `didSet`

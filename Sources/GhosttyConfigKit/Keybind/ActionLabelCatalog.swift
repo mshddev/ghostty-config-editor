@@ -1,7 +1,6 @@
 import Foundation
 
-/// Plain-language names and summaries for Ghostty's bindable actions (R1,
-/// CONTENT-3, A11Y-4).
+/// Plain-language names and summaries for Ghostty's bindable actions.
 ///
 /// Ghostty names actions by their raw snake_case identifier (`copy_to_clipboard`,
 /// `goto_split`). The Keybindings editor lists ~140 of them, so every action gets a
@@ -9,7 +8,7 @@ import Foundation
 /// and any `:param` is humanized separately so a parameterized action reads as
 /// "Focus a split (previous)" rather than `goto_split:previous`.
 ///
-/// Shares A1's humanizer: an action identifier is mapped from snake_case onto the
+/// Shares the humanizer: an action identifier is mapped from snake_case onto the
 /// kebab-case form `LabelCatalog.humanize` already handles.
 public struct ActionLabelCatalog: Sendable {
 
@@ -29,7 +28,7 @@ public struct ActionLabelCatalog: Sendable {
         self.curated = curated
     }
 
-    /// Curated action names — used by the orphan-key guard (KTD1).
+    /// Curated action names — used by the orphan-key guard.
     public var curatedActionNames: Set<String> {
         Set(curated.keys)
     }
@@ -37,7 +36,7 @@ public struct ActionLabelCatalog: Sendable {
     // MARK: - Read API
 
     /// Friendly title for a param-less action name. Curated wins; otherwise the
-    /// humanized identifier. Never empty (R1).
+    /// humanized identifier. Never empty.
     public func displayTitle(forAction name: String) -> String {
         if let title = curated[name]?.title, !title.isEmpty { return title }
         return Self.humanizeActionName(name)
@@ -62,7 +61,7 @@ public struct ActionLabelCatalog: Sendable {
     /// the base action carries more than one distinct param across the visible set
     /// (`foldParams`, from `multiParamActions(in:)`) — so `goto_tab:1…8` disambiguate as
     /// "Go to tab (1)…(8)", but `copy_to_clipboard:mixed`, the sole variant, reads simply
-    /// as "Copy" with its param left to the caption/help (KB-4). An action with no param,
+    /// as "Copy" with its param left to the caption/help. An action with no param,
     /// or one not in `foldParams`, gets its base title alone.
     public func displayTitle(for action: String, foldingParamsFor foldParams: Set<String>) -> String {
         let base = Keybind.actionName(action)
@@ -72,8 +71,8 @@ public struct ActionLabelCatalog: Sendable {
     }
 
     /// The set of base action names that carry more than one distinct `:param` across
-    /// `actions` — the actions whose param is load-bearing enough to fold into the title
-    /// (KB-4). Kept in the kit so the fold decision is unit-testable independent of the
+    /// `actions` — the actions whose param is load-bearing enough to fold into the title.
+    /// Kept in the kit so the fold decision is unit-testable independent of the
     /// view. `goto_tab` (params 1…8) qualifies; `copy_to_clipboard` (only `mixed`) doesn't.
     public static func multiParamActions(in actions: [String]) -> Set<String> {
         var paramsByBase: [String: Set<String>] = [:]
@@ -104,7 +103,7 @@ public struct ActionLabelCatalog: Sendable {
         return words.isEmpty ? "" : "(\(words))"
     }
 
-    /// Sentence-case an action identifier, reusing A1's humanizer by mapping
+    /// Sentence-case an action identifier, reusing the humanizer by mapping
     /// snake_case onto its kebab-case input.
     public static func humanizeActionName(_ name: String) -> String {
         LabelCatalog.humanize(name.replacingOccurrences(of: "_", with: "-"))
@@ -129,7 +128,7 @@ public struct ActionLabelCatalog: Sendable {
 }
 
 public extension KeybindAction {
-    /// Friendly name for this action, from the bundled `ActionLabelCatalog` (R1).
+    /// Friendly name for this action, from the bundled `ActionLabelCatalog`.
     var displayTitle: String { ActionLabelCatalog.bundled.displayTitle(forAction: name) }
 }
 

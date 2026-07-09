@@ -3,7 +3,7 @@ import AppKit
 import GhosttyConfigKit
 
 /// The main column: a searchable list of options for the current selection.
-/// Each row edits its option inline (U7), so there is no separate detail pane —
+/// Each row edits its option inline, so there is no separate detail pane —
 /// the value control lives on the row and the fuller docs/metadata/actions live
 /// in a popover behind the row's info button.
 struct OptionListView: View {
@@ -15,14 +15,14 @@ struct OptionListView: View {
         @Bindable var model = model
         VStack(spacing: 0) {
             // The shared header owns the search field now (moved off the toolbar's
-            // `.searchable`), so search sits in the same place on every surface (C3).
+            // `.searchable`), so search sits in the same place on every surface.
             SurfaceHeader(
                 title: title,
                 subtitle: headerSubtitle,
                 searchText: $model.query,
                 // Name the local scope — "Search Appearance" — so the per-category filter
                 // reads as scoped to the current category, distinct from the whole-catalog
-                // global Find overlay (R9/F3).
+                // global Find overlay.
                 searchPrompt: model.localSearchPrompt
             )
             Divider()
@@ -33,7 +33,7 @@ struct OptionListView: View {
             // Gated on `pendingFocusScroll` so it fires only for an explicit focus — via
             // `onChange` when the list is already mounted (a Customized deep-link), and
             // via `onAppear` when the list remounts (a Find result swaps Find out and the
-            // list in, so `onChange` never sees the change) (D1/D2).
+            // list in, so `onChange` never sees the change).
             ScrollViewReader { proxy in
                 content
                     .onAppear { scrollToFocusTarget(proxy) }
@@ -41,7 +41,7 @@ struct OptionListView: View {
             }
             // Reset-all is a batch op with no per-row anchor (`applyingOptionName == nil`),
             // so its Saved · Undo / error feedback shows in a surface bar here instead of on
-            // a row (G4). Per-row edits keep `applyingOptionName` set, so this stays hidden
+            // a row. Per-row edits keep `applyingOptionName` set, so this stays hidden
             // for them and the per-row feedback is the single source.
             if model.applyingOptionName == nil {
                 SurfaceFeedbackBar(applyState: model.applyState)
@@ -69,7 +69,7 @@ struct OptionListView: View {
     }
 
     /// On the Appearance surface, a one-line cross-link clarifying that colors come from
-    /// the active theme, with a jump to the Themes browser (D1). Hidden elsewhere and
+    /// the active theme, with a jump to the Themes browser. Hidden elsewhere and
     /// while searching (the note is category context, not a search result).
     @ViewBuilder
     private var appearanceCrossLink: some View {
@@ -119,7 +119,7 @@ struct OptionListView: View {
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
         } else if model.showsSplitSections {
             // A browsed category splits into a Common section and a collapsible
-            // Advanced section (B1); the subview owns the per-category
+            // Advanced section; the subview owns the per-category
             // expand/collapse state, keyed so each category remembers its own.
             // `.id(categoryName)` gives each category a distinct view identity, so
             // its `@AppStorage("advancedExpanded.<category>")` is re-initialized per
@@ -142,10 +142,10 @@ struct OptionListView: View {
                         customizedRow(option)
                     }
                 }
-                // Reset everything back to defaults in one undoable step (G4), only on the
+                // Reset everything back to defaults in one undoable step, only on the
                 // Customized surface where "everything you changed" is the list you see. A
                 // grouped Form drops `role:`-only red styling, so render via
-                // DestructiveRowButton for explicit red (DS-7).
+                // DestructiveRowButton for explicit red.
                 if model.isShowingCustomized && model.resettableCount > 0 {
                     Section {
                         DestructiveRowButton(title: "Reset All to Defaults…") { confirmingReset = true }
@@ -157,7 +157,7 @@ struct OptionListView: View {
     }
 
     /// A row on the Customized surface. The two flagship keys with a rich dedicated
-    /// editor deep-link to it instead of dead-ending on a raw token (F3): `theme` →
+    /// editor deep-link to it instead of dead-ending on a raw token: `theme` →
     /// the Themes browser, `keybind` → the Keyboard Shortcuts surface. Everything else
     /// edits inline as usual. Only applied on the Customized surface — the plain `.none`
     /// fallback and search results still render ordinary rows.
@@ -215,7 +215,7 @@ struct OptionListView: View {
 
     private var title: String {
         // While filtering, the title names the local scope too ("Search Appearance"), so
-        // the header — like the field prompt — reads as scoped to the current category (R9/F3).
+        // the header — like the field prompt — reads as scoped to the current category.
         if isSearching {
             return model.localSearchScopeCategory.map { "Search \($0)" } ?? "Search"
         }
@@ -249,7 +249,7 @@ struct OptionListView: View {
         }
     }
 
-    /// The empty-Customized state as a springboard (F3): instead of a dead-end "nothing
+    /// The empty-Customized state as a springboard: instead of a dead-end "nothing
     /// here", offer the three next steps a newcomer actually wants — reusing the same
     /// jump-in destinations as the welcome pane so the vocabulary stays consistent.
     private var customizedSpringboard: some View {
@@ -277,7 +277,7 @@ struct OptionListView: View {
 }
 
 /// A browsed category rendered as a **Common** section over a collapsible
-/// **Advanced (N)** section (B1, IA-2). Newcomer-frequent options sit up top; the
+/// **Advanced (N)** section. Newcomer-frequent options sit up top; the
 /// long tail is tucked behind a disclosure that's collapsed by default, with its
 /// expanded state persisted per category so each one remembers how you left it.
 ///
@@ -320,7 +320,7 @@ private struct CategoryOptionList: View {
                     // rows conditionally rendered in the card below it.
                     Section {
                         if advancedExpanded {
-                            // Try a fade on the revealed rows (MO-4/CB-12). Grouped-Form
+                            // Try a fade on the revealed rows. Grouped-Form
                             // Sections are documented-fragile with insertions, so this may
                             // resolve to instant appearance — which is fine: the rotating
                             // chevron is the honest cue either way (never removed).
@@ -336,7 +336,7 @@ private struct CategoryOptionList: View {
         .formStyle(.grouped)
         // A `focus(optionNamed:)` deep-link to an *advanced* option would land behind a
         // collapsed disclosure and never scroll into view — so expand Advanced when the
-        // focus target lives there (D1). On appear too, so a focus that navigates into
+        // focus target lives there. On appear too, so a focus that navigates into
         // this category (mounting a fresh list) still reveals the target.
         .onAppear { expandAdvancedIfFocusTargetIsAdvanced() }
         .onChange(of: model.focusRequestID) { _, _ in expandAdvancedIfFocusTargetIsAdvanced() }
@@ -351,14 +351,14 @@ private struct CategoryOptionList: View {
 
     private func advancedHeader(count: Int) -> some View {
         Button {
-            // One motion helper for the whole app (U2): reduce-motion resolves to
+            // One motion helper for the whole app: reduce-motion resolves to
             // `withAnimation(nil)` — an instant toggle — through the same gate.
             withAnimation(MotionSystem.gated(MotionSystem.quickFade, reduceMotion: reduceMotion)) {
                 advancedExpanded.toggle()
             }
         } label: {
             HStack(spacing: DesignTokens.Spacing.snug) {
-                // Tinted disclosure bar (E1): the header rides in a subtle grey bar
+                // Tinted disclosure bar: the header rides in a subtle grey bar
                 // (restingFill below) so it reads as a distinct, tappable control that's
                 // impossible to miss — kept neutral to match the rest of the UI. The bright
                 // "Advanced" title + rotating chevron carry the heading; the trailing
@@ -414,10 +414,10 @@ struct OptionRow: View {
                 VStack(alignment: .leading, spacing: 1) {
                     Text(option.option.displayTitle)
                         .font(RowMetrics.titleFont)
-                        // The raw key is demoted to the popover (and search, R8); a
+                        // The raw key is demoted to the popover (and search); a
                         // hover tooltip keeps it a keystroke away for power users.
                         .help(option.option.name)
-                        // Speak the merged state (A5's one vocabulary) alongside the
+                        // Speak the merged state (one vocabulary) alongside the
                         // name, so VoiceOver conveys what the state dot shows sighted
                         // users — for every state, including the dot-less ones.
                         .accessibilityValue(Text(option.state.displayName))
@@ -425,7 +425,7 @@ struct OptionRow: View {
                         Text(subtitle)
                             .font(RowMetrics.subtitleFont)
                             .foregroundStyle(.secondary)
-                            // The row owns truncation now (CM-7): the summary arrives
+                            // The row owns truncation now: the summary arrives
                             // uncapped and wraps to at most two lines rather than being
                             // ellipsized mid-word by the kit.
                             .lineLimit(1...2)
@@ -433,15 +433,15 @@ struct OptionRow: View {
                     }
                 }
                 // `layoutPriority(1)` so the label claims its natural width first and a
-                // title never wraps to make room for the accessory (DS-9).
+                // title never wraps to make room for the accessory.
                 .layoutPriority(1)
-                // MO-6: the state cue scales in/out when a value is customized or reset —
+                // The state cue scales in/out when a value is customized or reset —
                 // keyed to `option.state` only, so the hover dot↔reset swap stays instant.
                 stateAccessory
                     .animation(MotionSystem.gated(MotionSystem.settle, reduceMotion: reduceMotion),
                                value: option.state)
                 Spacer(minLength: 12)
-                // Transient save confirmation, tucked just left of the value control (F2):
+                // Transient save confirmation, tucked just left of the value control:
                 // it rides in the row's flexible gap, so it never overlaps the control/ⓘ,
                 // never reflows the list, and leaves no residue. A failure or an
                 // info-carrying save falls through to the roomier block below.
@@ -455,7 +455,7 @@ struct OptionRow: View {
         .onHover { isHovering = $0 }
     }
 
-    /// The customized-state cue (U5, DS-5/DS-9/DS-11, F1) — replacing the accent
+    /// The customized-state cue — replacing the accent
     /// "Customized" pill + reset cluster that squeezed labels and repeated to noise, and
     /// then the separate dot/pencil marker. A single **reset glyph** now does both jobs:
     /// dim at rest it reads as "this row is customized" (a width-stable, fixed slot so it
@@ -466,7 +466,7 @@ struct OptionRow: View {
     @ViewBuilder
     private var stateAccessory: some View {
         if option.state == .setNonDefault {
-            // One affordance carries both meanings (F1): the reset glyph is the at-rest
+            // One affordance carries both meanings: the reset glyph is the at-rest
             // "this row is customized" cue *and* the click-to-revert action — no separate
             // dot/pencil. Dim at rest so a customized row stays glanceable without shouting;
             // the hover fill + full opacity make it clearly clickable. (The old orange dot
@@ -487,17 +487,17 @@ struct OptionRow: View {
             .help("Reset to default")
             .accessibilityLabel("Reset \(option.option.displayTitle) to default")
             .frame(width: 22, height: 22)   // width-stable slot
-            // MO-6: the same scale-in the theme "Current" pill uses, so the cue reads
+            // The same scale-in the theme "Current" pill uses, so the cue reads
             // consistently. Driven by the `.animation(value: option.state)` above.
             .transition(.scale(scale: 0.9).combined(with: .opacity))
         }
     }
 
-    /// The editor rendered on this row, chosen by the pure `OptionEditorRoute` policy (U4)
-    /// so every editable repeatable resolves to a real editor — never an info-only dead row
-    /// (R6). Dedicated names (fonts/palette/keybind) still win; structured kinds
-    /// (scroll multiplier, bell flag-set, color, path) get their semantic controls (R7); and
-    /// any other repeatable falls back to the lossless generic add/remove list (KTD3, R8).
+    /// The editor rendered on this row, chosen by the pure `OptionEditorRoute` policy
+    /// so every editable repeatable resolves to a real editor — never an info-only dead row.
+    /// Dedicated names (fonts/palette/keybind) still win; structured kinds
+    /// (scroll multiplier, bell flag-set, color, path) get their semantic controls; and
+    /// any other repeatable falls back to the lossless generic add/remove list.
     /// `.color` renders the dedicated `ColorOptionEditor` (any color-valued option, even one
     /// whose inferred type isn't `.color`); `.inline` renders `InlineOptionEditor` for scalars.
     @ViewBuilder
@@ -525,8 +525,8 @@ struct OptionRow: View {
             Image(systemName: "info.circle")
                 .imageScale(.medium)
                 .foregroundStyle(.secondary)
-                // ~28pt hit target so the info affordance is comfortably tappable
-                // (A11Y-10) — the bare glyph was a ~16pt target.
+                // ~28pt hit target so the info affordance is comfortably tappable —
+                // the bare glyph was a ~16pt target.
                 .frame(width: 28, height: 28)
                 .contentShape(Rectangle())
         }
@@ -537,7 +537,7 @@ struct OptionRow: View {
             OptionInfoPopover(option: option)
         }
         // One click to close-and-act: dismissing the popover by clicking elsewhere (a
-        // sidebar row, another control) shouldn't cost a wasted first click (U11/MO-1).
+        // sidebar row, another control) shouldn't cost a wasted first click.
         .passthroughPopoverDismiss(isPresented: $showingInfo)
     }
 
@@ -546,18 +546,18 @@ struct OptionRow: View {
         return doc.isEmpty ? "No documentation available." : doc
     }
 
-    /// A plain-language one-line description of what the option does (A1). The
+    /// A plain-language one-line description of what the option does. The
     /// default/value context that used to live here ("default: X" / "no default" /
     /// "default: default") now lives in the info popover, so the row reads as
     /// name + purpose. Empty when the catalog has no summary, and the line is then
-    /// hidden rather than showing filler. Uncapped (CM-7): the row's `lineLimit(1...2)`
+    /// hidden rather than showing filler. Uncapped: the row's `lineLimit(1...2)`
     /// owns truncation, so a real sentence wraps rather than ellipsizing mid-word.
     private var subtitle: String {
         option.option.subtitleSummary
     }
 }
 
-/// The compact, transient save confirmation for an inline edit (F2, U6, MO-2): a pill
+/// The compact, transient save confirmation for an inline edit: a pill
 /// overlaid on the trailing end of the edited row. It never reflows the list and clears
 /// completely — no lingering checkmark. Only the happy path lives here ("Saving…", then
 /// "<headline> · Undo"); a save whose caption carries a notice or an actionable reload
@@ -646,7 +646,7 @@ private struct RowSavePill: View {
     }
 }
 
-/// The roomy per-row feedback block, rendered *below* the row (U6). Reserved now for the
+/// The roomy per-row feedback block, rendered *below* the row. Reserved now for the
 /// cases the compact trailing pill can't hold: a validation **failure** (whose message +
 /// Reload action need space and must persist until the next edit), and a **save that
 /// carries a notice or an actionable reload caption** (Ghostty not running, manual reload
@@ -690,7 +690,7 @@ private struct OptionRowFeedback: View {
             HStack(alignment: .firstTextBaseline, spacing: 8) {
                 ApplyFeedbackContent(state: model.applyState)
                 // Stale-on-disk is the one failure a reload fixes — offer it inline right
-                // where the error shows, so "reload and try again" is one click (G3).
+                // where the error shows, so "reload and try again" is one click.
                 if presentation.offersReload {
                     Button("Reload") { Task { await model.reloadFromDisk() } }
                         .buttonStyle(.link).font(.caption2)
@@ -703,7 +703,7 @@ private struct OptionRowFeedback: View {
     }
 
     @ViewBuilder private func succeeded() -> some View {
-        // Clears completely after the window — no lingering checkmark (F2); the row's reset
+        // Clears completely after the window — no lingering checkmark; the row's reset
         // glyph still marks it customized and ⌘Z stays the durable undo.
         if !collapsed {
             VStack(alignment: .leading, spacing: 4) {
@@ -732,7 +732,7 @@ private struct OptionRowFeedback: View {
     }
 }
 
-// MARK: - Inline editor (U7)
+// MARK: - Inline editor
 
 /// A type-appropriate editing control rendered directly on the row. Discrete
 /// controls (toggle, dropdown, stepper) apply immediately on change; free-text
@@ -740,8 +740,8 @@ private struct OptionRowFeedback: View {
 /// model, so on failure the control snaps back to the value that's actually saved.
 /// The shared VoiceOver label for an option's inline control: name + default + state,
 /// so a control announced on its own (a VO user swiping controls, not row titles) still
-/// conveys everything the sighted row shows — the plan's "Font size, default 13,
-/// customized" (H1, A11Y-1/2/17). The control's own trait adds the type ("text field")
+/// conveys everything the sighted row shows — for example, "Font size, default 13,
+/// customized". The control's own trait adds the type ("text field")
 /// and its live value is the `accessibilityValue`. Used across every editor struct so the
 /// announcement is identical whichever control renders.
 func optionControlA11yLabel(_ option: MergedOption) -> Text {
@@ -765,22 +765,22 @@ private struct InlineOptionEditor: View {
     @Environment(AppModel.self) private var model
     let option: MergedOption
     @State private var draft: String = ""
-    /// The transactional state for the long-value popover (KTD2/U3, R4/R5): Apply commits,
+    /// The transactional state for the long-value popover: Apply commits,
     /// Cancel discards, and incidental dismissal (Escape / click-outside) follows Cancel — it
     /// NEVER commits. A stale write stays reviewable and a rejected write retains the draft.
     /// Discrete controls above (toggle, picker, stepper) stay immediate and use `draft`
     /// directly, not this. (Color-valued options render their own `ColorOptionEditor`.)
     @State private var transaction = EditTransaction(savedValue: "")
-    /// Drives the wide multi-line editor for long scalar values (B7).
+    /// Drives the wide multi-line editor for long scalar values.
     @State private var showingLongEditor = false
     /// Tracks the inline free-text field's focus so a blurred, dirty field commits
-    /// instead of silently reverting (B7).
+    /// instead of silently reverting.
     @FocusState private var textFieldFocused: Bool
 
     /// Long scalar options whose value is awkward in a 160pt field — edited in a wide
-    /// multi-line popover instead (B7). `config-file` / `font-feature` are *repeatable*
-    /// and handled by their own editors (B8); `working-directory` is a `.path` kind routed
-    /// to the folder chooser (U4), so they're deliberately absent here.
+    /// multi-line popover instead. `config-file` / `font-feature` are *repeatable*
+    /// and handled by their own editors; `working-directory` is a `.path` kind routed
+    /// to the folder chooser, so they're deliberately absent here.
     private static let longValueOptions: Set<String> = [
         "command", "initial-command", "custom-shader",
     ]
@@ -807,7 +807,7 @@ private struct InlineOptionEditor: View {
         if option.option.isBooleanish {
             // "Boolean impostors" (accept true/false alongside richer values) render
             // toggle-first regardless of their inferred type, so the on/off axis is a
-            // switch, not a text box reading `false` (B4).
+            // switch, not a text box reading `false`.
             BooleanishEditor(
                 option: option,
                 savedValue: currentValue,
@@ -826,7 +826,7 @@ private struct InlineOptionEditor: View {
             Toggle("", isOn: boolBinding)
                 .labelsHidden()
                 .toggleStyle(.switch)
-                .controlSize(.small)   // matched to sibling controls (was .mini) (B4)
+                .controlSize(.small)   // matched to sibling controls (was .mini)
                 .accessibilityLabel(optionControlA11yLabel(option))
         case .enumeration:
             // Rows come from the kit helper (not raw enumValues) so a saved
@@ -863,7 +863,7 @@ private struct InlineOptionEditor: View {
 
     /// The inline free-text field for ordinary scalar values. Commits on Return *and*
     /// on focus-loss (a blurred, dirty field saves rather than silently reverting),
-    /// with a subtle "Return to save" hint while dirty (B7). A full-value tooltip
+    /// with a subtle "Return to save" hint while dirty. A full-value tooltip
     /// covers the truncation at 160pt.
     private var freeTextField: some View {
         VStack(alignment: .trailing, spacing: 1) {
@@ -879,7 +879,7 @@ private struct InlineOptionEditor: View {
                 // the single write path, and resigning clears the field editor's undo
                 // stack so a following ⌘Z targets the config revert (undoLastApply), not
                 // the just-typed text — otherwise smart ⌘Z can't undo a text-option write
-                // while the field stays focused (adversarial review #2).
+                // while the field stays focused.
                 .onSubmit { textFieldFocused = false }
                 .help(currentValue.isEmpty ? "" : currentValue)
                 .accessibilityLabel(optionControlA11yLabel(option))
@@ -890,12 +890,12 @@ private struct InlineOptionEditor: View {
         .onChange(of: textFieldFocused) { _, focused in
             guard !focused else { return }
             if draft != currentValue {
-                commit()   // commit-on-blur (B7)
+                commit()   // commit-on-blur
             } else {
                 // Nothing to save — the field already holds the saved value (either
                 // untouched, or snapped back after a rejected write). Blurring here is the
                 // inline field's "abandon", so clear a stale validation error it left on the
-                // row (A-2). No-op when there's no failure or it belongs to another option.
+                // row. No-op when there's no failure or it belongs to another option.
                 model.dismissApplyFailure(forOptionNamed: option.option.name)
             }
         }
@@ -903,7 +903,7 @@ private struct InlineOptionEditor: View {
 
     /// For long scalar values, an "Edit…" button opening a wide, monospaced,
     /// multi-line-tolerant editor showing the whole value — no more squinting at a
-    /// truncated 160pt field (B7).
+    /// truncated 160pt field.
     private var longValueButton: some View {
         Button { showingLongEditor.toggle() } label: {
             HStack(spacing: 4) {
@@ -919,11 +919,11 @@ private struct InlineOptionEditor: View {
         .popover(isPresented: $showingLongEditor, arrowEdge: .bottom) { longValueEditor }
         .onChange(of: showingLongEditor) { _, open in
             // Same transactional contract as the color popover: Apply commits, incidental
-            // dismissal discards. Replaces the old commit-on-close (R4).
+            // dismissal discards. Replaces the old commit-on-close.
             if open { transaction = EditTransaction(savedValue: currentValue) }
             else {
                 transaction.cancel()
-                model.dismissApplyFailure(forOptionNamed: option.option.name)   // A-2
+                model.dismissApplyFailure(forOptionNamed: option.option.name)
             }
         }
     }
@@ -962,7 +962,7 @@ private struct InlineOptionEditor: View {
         option.valuePresentation.value ?? ""
     }
 
-    /// A hint for an empty field, via the shared kit fallback (CV-7): a docs example for
+    /// A hint for an empty field, via the shared kit fallback: a docs example for
     /// untyped/text options → the default value → a title-derived "Enter a …" prompt —
     /// never a bare "value". Example-mining is limited to untyped/text options so a
     /// number field doesn't borrow a stray backtick token.
@@ -1019,10 +1019,10 @@ private struct InlineOptionEditor: View {
         )
     }
 
-    // MARK: Transactional apply (long-value popover, U3)
+    // MARK: Transactional apply (long-value popover)
 
-    /// Shared inline status for the text-bearing popovers (R3/R4/R5): the local/validation/
-    /// stale message, a Reload & Review action for a stale conflict (F2), and the
+    /// Shared inline status for the text-bearing popovers: the local/validation/
+    /// stale message, a Reload & Review action for a stale conflict, and the
     /// side-by-side disk-vs-draft comparison after a reload. Reads as an error unless it's
     /// the neutral stale-review hint.
     @ViewBuilder private var transactionFeedback: some View {
@@ -1046,8 +1046,8 @@ private struct InlineOptionEditor: View {
 
     /// Apply the transaction's draft through the SAME safe-write path (`model.applyEdit`),
     /// then map the outcome back onto the transaction: success commits and closes; a stale
-    /// conflict retains the draft and awaits an explicit Reload & Review (never auto-retry,
-    /// R5); any other rejection retains the draft under a normalized message (R3). The
+    /// conflict retains the draft and awaits an explicit Reload & Review (never auto-retry);
+    /// any other rejection retains the draft under a normalized message. The
     /// reducer's `beginApply` guard makes this one write despite repeated draft callbacks.
     private func commitTransaction(closing isPresented: Binding<Bool>) {
         guard transaction.beginApply() else { return }
@@ -1068,7 +1068,7 @@ private struct InlineOptionEditor: View {
         }
     }
 
-    /// Stale recovery (F2/AE3): reload disk into the model, then refresh the transaction's
+    /// Stale recovery: reload disk into the model, then refresh the transaction's
     /// saved value so the externally-changed value shows beside the retained draft and a
     /// SECOND explicit Apply can commit. If the option vanished, stop with an actionable
     /// message and leave Apply disabled rather than guessing a target.
@@ -1086,7 +1086,7 @@ private struct InlineOptionEditor: View {
     }
 }
 
-// MARK: - Color editor (U4/R7)
+// MARK: - Color editor
 
 /// The dedicated editor for any color-valued option — an inferred `.color` type OR an explicit
 /// `.color` editor-kind override whose empty catalog default the parser couldn't type as color
@@ -1098,8 +1098,8 @@ private struct InlineOptionEditor: View {
 /// any value Ghostty accepts (a hex, an X11 name, or `cell-foreground` / `cell-background`) is
 /// resolvable in the same place you pick one visually. We roll our own because the system color
 /// well's popover has no text field and SwiftUI's `ColorPicker` floats the shared panel at a
-/// screen corner. Text-bearing, so it uses the U3 transaction via the shared `TransactionApply`:
-/// Apply commits, Cancel and incidental dismissal discard and NEVER write (R4/AE2).
+/// screen corner. Text-bearing, so it uses the transaction via the shared `TransactionApply`:
+/// Apply commits, Cancel and incidental dismissal discard and NEVER write.
 private struct ColorOptionEditor: View {
     @Environment(AppModel.self) private var model
     let option: MergedOption
@@ -1125,13 +1125,13 @@ private struct ColorOptionEditor: View {
             .disabled(isApplyingThis)
             .help("Edit color")
             // A swatch is pure color — VoiceOver would otherwise announce nothing but
-            // "button", so name+state+the color value are made explicit here (H1).
+            // "button", so name+state+the color value are made explicit here.
             .accessibilityLabel(optionControlA11yLabel(option))
             .accessibilityValue(Text(currentValue.isEmpty ? "not set" : currentValue))
             .popover(isPresented: $showing, arrowEdge: .bottom) { editor }
             // Seed a fresh transaction from the saved value each time the popover opens.
             // Incidental dismissal (Escape / click-outside) follows Cancel — it must NEVER
-            // commit a draft (R4/AE2); the explicit Apply button is the sole write path. A
+            // commit a draft; the explicit Apply button is the sole write path. A
             // successful Apply has already written before it closes, so the cancel here is
             // then a harmless reset of spent state.
             .onChange(of: showing) { _, isOpen in
@@ -1139,7 +1139,7 @@ private struct ColorOptionEditor: View {
                 else {
                     transaction.cancel()
                     // Abandoning the edit also clears any error the last Apply left on the
-                    // row (A-2) — otherwise the global `.failed` outlives the popover.
+                    // row — otherwise the global `.failed` outlives the popover.
                     model.dismissApplyFailure(forOptionNamed: option.option.name)
                 }
             }
@@ -1149,7 +1149,7 @@ private struct ColorOptionEditor: View {
 
     /// The row's color chip: the saved color as a fill, a *labeled* chip for values a swatch
     /// can't render (an X11 name, `cell-foreground` / `cell-background`), or a neutral fill only
-    /// when truly unset — so a named value never reads as empty (B6).
+    /// when truly unset — so a named value never reads as empty.
     private var swatch: some View {
         colorFill(currentValue)
             .frame(width: 44, height: 22)
@@ -1181,7 +1181,7 @@ private struct ColorOptionEditor: View {
         }
     }
 
-    /// The one swatch-edge rule (DS-2): a two-layer hairline — a dark ring at the very edge over
+    /// The one swatch-edge rule: a two-layer hairline — a dark ring at the very edge over
     /// a light ring one point inside — so a swatch's boundary stays visible against *any* fill in
     /// *either* card appearance. A near-black color on a dark card no longer reads as an
     /// unset/empty swatch, and a white color on a light card still shows an edge. The explicit
@@ -1215,7 +1215,7 @@ private struct ColorOptionEditor: View {
                 // The native color wheel + eyedropper. Opacity is off so we never emit an
                 // `#rrggbbaa` that a non-background color option would reject; the wheel edits the
                 // draft live as a preview and no longer writes on close — Apply is the sole
-                // commit (R4).
+                // commit.
                 ColorPicker("", selection: colorWellBinding, supportsOpacity: false)
                     .labelsHidden()
                     .help("Pick with the color wheel or eyedropper")
@@ -1226,7 +1226,7 @@ private struct ColorOptionEditor: View {
             LazyVGrid(columns: Array(repeating: GridItem(.fixed(22), spacing: 5), count: 8), spacing: 5) {
                 ForEach(Self.colorPresets, id: \.self) { hex in
                     Button {
-                        // A preset sets the draft (live preview); Apply commits it (R4).
+                        // A preset sets the draft (live preview); Apply commits it.
                         transaction.edit(hex, locallyValid: colorDraftLocallyValid(hex))
                     } label: {
                         RoundedRectangle(cornerRadius: 4)
@@ -1244,7 +1244,7 @@ private struct ColorOptionEditor: View {
                     .buttonStyle(.plain)
                     .help(hex)
                     // A preset swatch is pure color — VoiceOver gets the hex as its name and the
-                    // selected one is announced as selected (H3, A11Y-6).
+                    // selected one is announced as selected.
                     .accessibilityLabel("Color \(hex)")
                     .accessibilityAddTraits(isSelectedPreset(hex) ? .isSelected : [])
                 }
@@ -1271,7 +1271,7 @@ private struct ColorOptionEditor: View {
 
     /// The hex/name field binding, routed through the transaction with a local color-syntax gate
     /// so an obviously-malformed hex (`#zzzzzz`) disables Apply and shows the reason inside the
-    /// editor (AE2) instead of round-tripping to Ghostty.
+    /// editor instead of round-tripping to Ghostty.
     private var colorDraftBinding: Binding<String> {
         Binding(
             get: { transaction.draft },
@@ -1287,9 +1287,9 @@ private struct ColorOptionEditor: View {
         )
     }
 
-    /// A local syntax gate for a color draft (R4): reject an empty value or a malformed hex
+    /// A local syntax gate for a color draft: reject an empty value or a malformed hex
     /// outright; an X11 name or `cell-*` token can't be verified locally, so it passes here and
-    /// Ghostty validates it on Apply (unknown/future tokens still round-trip, R8).
+    /// Ghostty validates it on Apply (unknown/future tokens still round-trip).
     private func colorDraftLocallyValid(_ s: String) -> Bool {
         let t = s.trimmingCharacters(in: .whitespaces)
         if t.isEmpty { return false }
@@ -1314,7 +1314,7 @@ private struct ColorOptionEditor: View {
 
     /// Commit the draft through the shared safe-write path (the same `TransactionApply` the
     /// scroll/path editors use): success closes; a stale conflict routes to Reload & Review; any
-    /// other rejection retains the draft under a normalized message (R3/R5).
+    /// other rejection retains the draft under a normalized message.
     private func commit() {
         TransactionApply.commit($transaction, option: option,
                                 values: [transaction.draft],
@@ -1322,9 +1322,9 @@ private struct ColorOptionEditor: View {
     }
 }
 
-// MARK: - Numeric editor (U9)
+// MARK: - Numeric editor
 
-/// The numeric editing control, chosen by the option's `NumericSpec` (B3):
+/// The numeric editing control, chosen by the option's `NumericSpec`:
 ///   - `.slider` → a Slider over [min,max] with a live read-out, committing once on
 ///     release so the live terminal reloads per gesture, not per pixel
 ///   - `.field`  → a clamped number field + debounced stepper, with an optional unit
@@ -1349,7 +1349,7 @@ private struct NumericOptionEditor: View {
     /// The pending debounced stepper write, cancelled by the next tick so a burst of
     /// increments collapses to a single write.
     @State private var pendingStep: Task<Void, Never>?
-    /// Field focus, so a blurred numeric field commits like the free-text fields (B7).
+    /// Field focus, so a blurred numeric field commits like the free-text fields.
     @FocusState private var fieldFocused: Bool
 
     private var spec: NumericSpec? { option.option.numericSpec }
@@ -1372,7 +1372,7 @@ private struct NumericOptionEditor: View {
         // as a fallback for the whole group.
         .accessibilityLabel(optionControlA11yLabel(option))
         .onChange(of: fieldFocused) { _, focused in
-            if !focused { commitOnBlur() }   // commit-on-blur (B7)
+            if !focused { commitOnBlur() }   // commit-on-blur
         }
         // Don't let a queued debounce write for a row that's been scrolled/filtered away.
         .onDisappear { pendingStep?.cancel() }
@@ -1404,7 +1404,7 @@ private struct NumericOptionEditor: View {
                 .accessibilityLabel(optionControlA11yLabel(option))
                 .accessibilityValue(Text(spec.displayString(for: spec.clamp(live))))
                 // Read-out via the spec's display transform: a 0–1 opacity reads "85%",
-                // a contrast slider stays a plain number (no scale) (DS-1/U3).
+                // a contrast slider stays a plain number (no scale).
                 Text(spec.displayString(for: spec.clamp(live)))
                     .font(.caption.monospaced())
                     .foregroundStyle(.secondary)
@@ -1413,7 +1413,7 @@ private struct NumericOptionEditor: View {
             }
             if let minLabel = spec.minLabel, let maxLabel = spec.maxLabel {
                 // Endpoint captions resolve an ambiguous direction (which way is solid?),
-                // aligned under the 120pt track (DS-1).
+                // aligned under the 120pt track.
                 HStack(spacing: 4) {
                     Text(minLabel)
                     Spacer(minLength: 4)
@@ -1466,10 +1466,10 @@ private struct NumericOptionEditor: View {
         }
     }
 
-    /// A bounded `Stepper(value:in:step:)` so +/- dim at the spec's range ends (CV-6) —
+    /// A bounded `Stepper(value:in:step:)` so +/- dim at the spec's range ends —
     /// the old callback stepper stayed lit past the boundary. Its binding routes through
     /// the same debounced commit as the field, so a key-repeat burst still collapses to
-    /// one write (KTD8 single write path). Falls back to the callback stepper when a
+    /// one write (single write path). Falls back to the callback stepper when a
     /// `.field` spec somehow lacks a finite range.
     @ViewBuilder
     private func boundedStepper(_ spec: NumericSpec) -> some View {
@@ -1528,8 +1528,8 @@ private struct NumericOptionEditor: View {
         let formatted = bytes > 0 ? NumericSpec.formatBytes(bytes) : ""
         return VStack(alignment: .trailing, spacing: 1) {
             // Primary: the human-readable size — the way a storage limit is actually
-            // spoken ("10 MB"), not a wall of digits (CB-5). Hidden from VoiceOver here
-            // because it's folded into the editable field's value below (CM-8).
+            // spoken ("10 MB"), not a wall of digits. Hidden from VoiceOver here
+            // because it's folded into the editable field's value below.
             if !formatted.isEmpty {
                 Text(formatted)
                     .font(.callout)
@@ -1545,7 +1545,7 @@ private struct NumericOptionEditor: View {
                 .focused($fieldFocused)
                 .onSubmit { fieldFocused = false }   // resign → commit-on-blur; ⌘Z targets config (review #2)
                 .accessibilityLabel(optionControlA11yLabel(option))
-                // VoiceOver announces the friendly size, not the raw digits (CM-8).
+                // VoiceOver announces the friendly size, not the raw digits.
                 .accessibilityValue(Text(formatted.isEmpty ? draft : formatted))
         }
     }
@@ -1632,15 +1632,15 @@ private struct NumericOptionEditor: View {
     }
 }
 
-// MARK: - Boolean-ish editor (U10)
+// MARK: - Boolean-ish editor
 
 /// A toggle-first control for "boolean impostor" options — those that accept
-/// `true`/`false` alongside richer values (B4). The switch handles the on/off axis
+/// `true`/`false` alongside richer values. The switch handles the on/off axis
 /// the way a newcomer expects (no more editing a text box that reads `false`); a
 /// trailing menu exposes the extra states (`always`, `left`, `osc8`, glass styles…)
 /// with friendly labels for anyone who needs them.
 ///
-/// Value round-trip (R8): turning **On** restores the last non-`false` value the user
+/// Value round-trip: turning **On** restores the last non-`false` value the user
 /// had — client-cached across the toggle — or `true` if none; turning **Off** writes
 /// `false` while *preserving* that cache, so a custom value (a blur radius, a `left`
 /// Option mapping) survives an off→on cycle instead of collapsing to a bare `true`.
@@ -1656,7 +1656,7 @@ private struct BooleanishEditor: View {
     /// snapping to a bare `true`. Seeded from the saved value and kept in sync with it.
     @State private var lastOnValue: String?
 
-    /// Default / On / Off, for options whose effective boolean can't be resolved (R1).
+    /// Default / On / Off, for options whose effective boolean can't be resolved.
     private enum TriState: Hashable { case unset, on, off }
 
     var body: some View {
@@ -1670,7 +1670,7 @@ private struct BooleanishEditor: View {
     }
 
     /// An explicit three-way choice for an unset option with no documented default,
-    /// so the control never renders a bare Off it can't justify (R1, U2, AE-adjacent).
+    /// so the control never renders a bare Off it can't justify.
     private var defaultOnOffPicker: some View {
         Picker("", selection: triStateBinding) {
             Text("Default").tag(TriState.unset)
@@ -1707,13 +1707,13 @@ private struct BooleanishEditor: View {
                 .controlSize(.small)
                 .accessibilityLabel(optionControlA11yLabel(option))
             // Exactly one extra state reads as a labeled checkbox refining "on" — no
-            // mystery single-item menu (CV-5). It's a modifier of the on-state, so it
+            // mystery single-item menu. It's a modifier of the on-state, so it
             // appears only while the switch is on. Two or more extras keep the menu.
             if isOn(savedValue), let single = singleExtra {
                 Toggle(isOn: extraBinding(single)) {
                     // Short, one-line label ("Always") so the long qualifier
                     // ("Always, even when unfocused") can't wrap almost vertically in the
-                    // cramped trailing slot (E2); the full text stays on hover and in ⓘ.
+                    // cramped trailing slot; the full text stays on hover and in ⓘ.
                     Text(shortLabel(single.label)).font(.callout)
                 }
                 .toggleStyle(.checkbox)
@@ -1759,14 +1759,14 @@ private struct BooleanishEditor: View {
             .filter { $0.value != "true" && $0.value != "false" && !$0.value.isEmpty }
     }
 
-    /// The sole extra state when there's exactly one, rendered as a checkbox (CV-5).
+    /// The sole extra state when there's exactly one, rendered as a checkbox.
     private var singleExtra: EnumChoice? {
         extraChoices.count == 1 ? extraChoices.first : nil
     }
 
     /// A compact one-line checkbox label: the primary term before any ", …" qualifier
     /// ("Always, even when unfocused" → "Always"). The full label stays in the checkbox's
-    /// tooltip and the ⓘ info, so the narrow trailing slot can't wrap it near-vertically (E2).
+    /// tooltip and the ⓘ info, so the narrow trailing slot can't wrap it near-vertically.
     private func shortLabel(_ label: String) -> String {
         guard let comma = label.firstIndex(of: ",") else { return label }
         return String(label[..<comma]).trimmingCharacters(in: .whitespaces)
@@ -1774,7 +1774,7 @@ private struct BooleanishEditor: View {
 
     /// Checkbox binding for the single extra: checked applies the extra value ("always"),
     /// unchecked falls back to plain "true" (still on). Caching in `onChange` keeps the
-    /// off→on round-trip (B4).
+    /// off→on round-trip.
     private func extraBinding(_ choice: EnumChoice) -> Binding<Bool> {
         Binding(
             get: { savedValue.trimmingCharacters(in: .whitespaces) == choice.value },
@@ -1837,7 +1837,7 @@ private struct FontFamilyEditor: View {
             .task { await model.loadFontsIfNeeded() }
             .popover(isPresented: $showingPicker, arrowEdge: .bottom) { picker }
             // Close-and-act: clicking the sidebar (or a control) right after the picker
-            // opens shouldn't be eaten by the popover's dismiss (U11/MO-1).
+            // opens shouldn't be eaten by the popover's dismiss.
             .passthroughPopoverDismiss(isPresented: $showingPicker)
     }
 
@@ -1885,7 +1885,7 @@ private struct FontFamilyEditor: View {
     /// font when the name doesn't resolve), like a real font menu.
     private var primaryPreviewFont: Font {
         // `relativeTo:` so the face preview scales with the user's text-size setting
-        // instead of being pinned at 12pt (H3, Dynamic Type).
+        // instead of being pinned at 12pt (Dynamic Type).
         if let primary = selected.first { return .custom(displayName(primary), size: 12, relativeTo: .callout) }
         return .system(.callout)
     }
@@ -1895,7 +1895,7 @@ private struct FontFamilyEditor: View {
     private var picker: some View {
         VStack(alignment: .leading, spacing: 8) {
             // Friendly title over the raw key as a mono caption — matching the info
-            // popover's header pattern, so the picker names "Font", not "font-family" (CB-3).
+            // popover's header pattern, so the picker names "Font", not "font-family".
             VStack(alignment: .leading, spacing: 1) {
                 Text(option.option.displayTitle)
                     .font(.callout.weight(.semibold))
@@ -2098,7 +2098,7 @@ private struct FontRow: View {
     /// A fixed terminal-representative sample: mixed-case letterforms, digits, the
     /// programming ligature triggers (`->`, `=>`, `!=`), and a check glyph — so
     /// monospacing, ligatures, and Nerd-Font coverage are visible in the row's own
-    /// face rather than guessed from the name alone (CV-12).
+    /// face rather than guessed from the name alone.
     private static let sample = "AaBbGg 0123 -> => != ✓"
 
     var body: some View {
@@ -2111,7 +2111,7 @@ private struct FontRow: View {
                     Text(name)
                         // Each name rendered in its own face, so the list reads like a
                         // font menu; unresolvable names fall back to the system font.
-                        // `relativeTo:` lets the list scale with Dynamic Type (H3).
+                        // `relativeTo:` lets the list scale with Dynamic Type.
                         .font(.custom(name, size: 14, relativeTo: .body))
                         .lineLimit(1)
                     Text(Self.sample)
@@ -2134,17 +2134,17 @@ private struct FontRow: View {
         }
         .buttonStyle(.plain)
         // The font name renders in its own face (a visual cue lost to VoiceOver), so
-        // name it and announce the current pick as selected (H3, A11Y-6).
+        // name it and announce the current pick as selected.
         .accessibilityLabel(selectionLabel.map { "\(name), \($0)" } ?? name)
         .accessibilityAddTraits(isSelected ? .isSelected : [])
     }
 }
 
-// MARK: - Palette editor (U14)
+// MARK: - Palette editor
 
 /// A 16-swatch grid for the `palette` repeatable option — each ANSI slot picked with
 /// the native color well, rebuilding the `index=#hex` value list through the safe
-/// repeatable write path (B8, R5). Unset slots are seeded from the current theme's
+/// repeatable write path. Unset slots are seeded from the current theme's
 /// palette so the grid shows the colors actually in effect; only slots the user edits
 /// are written, leaving the rest to follow the theme. When the theme's colors haven't
 /// loaded yet the untouched slots simply render blank with a hint — a graceful
@@ -2328,7 +2328,7 @@ private struct OptionInfoPopover: View {
             Divider()
             // Only the prose scrolls; the decision facts (Your value / Default / where
             // it's defined / Reset) pin as a footer below, so they never hide behind long
-            // documentation (CM-4, Xcode Quick Help pattern).
+            // documentation (Xcode Quick Help pattern).
             ScrollView {
                 documentation
                     .frame(maxWidth: .infinity, alignment: .leading)
@@ -2352,7 +2352,7 @@ private struct OptionInfoPopover: View {
                 .font(.headline)
                 .textSelection(.enabled)
             // The raw config key, demoted beneath the friendly title but selectable
-            // so a power user can copy the exact key to paste into a config (R8).
+            // so a power user can copy the exact key to paste into a config.
             Text(option.option.name)
                 .font(.caption.monospaced())
                 .foregroundStyle(.secondary)
@@ -2360,7 +2360,7 @@ private struct OptionInfoPopover: View {
             HStack(spacing: 8) {
                 Pill(text: option.option.category, systemImage: "folder")
                 // The friendly type name ("Choice", "On/off"), and no chip at all for an
-                // untyped option — a bare "unknown" told the reader nothing (CM-10/CV-4).
+                // untyped option — a bare "unknown" told the reader nothing.
                 if let typeName = option.option.valueType.displayName {
                     Pill(text: typeName, systemImage: "tag")
                 }
@@ -2376,7 +2376,7 @@ private struct OptionInfoPopover: View {
     private var stateBadge: some View {
         switch option.state {
         case .setNonDefault:
-            // DS-4: render the state's own display name ("Customized"), not a lowercase literal.
+            // Render the state's own display name ("Customized"), not a lowercase literal.
             Pill(text: option.state.displayName, systemImage: "pencil", tint: .accentColor)
         case .setToDefault:
             Pill(text: "at default", systemImage: "equal", tint: .secondary)
@@ -2416,7 +2416,7 @@ private struct OptionInfoPopover: View {
 
     /// Style one reflowed doc block (`DocFormatter` already joined hard wraps and lifted
     /// bullets): render `backtick` spans monospaced and — for the summary paragraph only
-    /// — bold the first sentence so it stands out (H3/GAP-8/U9). Deliberately NOT full
+    /// — bold the first sentence so it stands out. Deliberately NOT full
     /// Markdown; only the two cues Ghostty docs actually use.
     static func styled(_ text: String, boldFirstSentence: Bool) -> AttributedString {
         var result = AttributedString()
@@ -2469,7 +2469,7 @@ private struct OptionInfoPopover: View {
     }
 
     /// A metadata value's display form: enum / boolean-ish values pass through the label
-    /// humanizer ("bar" → "Bar", "true" → "On") so a raw token never shows here (KTD3);
+    /// humanizer ("bar" → "Bar", "true" → "On") so a raw token never shows here;
     /// every other value (hex, path, number) stays its exact stripped self.
     private func displayValue(_ raw: String) -> String {
         let stripped = raw.strippingConfigQuotes
@@ -2498,7 +2498,7 @@ private struct OptionInfoPopover: View {
                 Label(copied ? "Copied" : "Copy snippet", systemImage: copied ? "checkmark" : "doc.on.doc")
             }
             if let source = option.sources.first {
-                // Split the old single "Reveal in editor" (H3/GAP-8): Reveal in Finder
+                // Split the old single "Reveal in editor": Reveal in Finder
                 // always works; Open in editor opens the file, falling back to TextEdit
                 // for the extensionless `config` (which has no default handler app).
                 Button {
@@ -2512,7 +2512,7 @@ private struct OptionInfoPopover: View {
                     Label("Open in editor", systemImage: "arrow.up.forward.app")
                 }
             }
-            // Only offer a reset when there's a user value to clear (B5). Writing an
+            // Only offer a reset when there's a user value to clear. Writing an
             // empty value list is the existing "unset" path — the writer removes the
             // option's line(s) — so no kit change is needed.
             if option.isSet {
@@ -2546,8 +2546,8 @@ private struct OptionInfoPopover: View {
 extension String {
     /// Strip one surrounding pair of double quotes — Ghostty's quoting for values
     /// with spaces (`font-family = "MesloLGS NF"`). The quotes are a config-syntax
-    /// artifact, not part of the value the user thinks in, so display strips them
-    /// (CONTENT-16). Trims surrounding whitespace first. Promoted from
+    /// artifact, not part of the value the user thinks in, so display strips them.
+    /// Trims surrounding whitespace first. Promoted from
     /// `FontFamilyEditor.displayName` so every place a value renders as text can reuse it.
     var strippingConfigQuotes: String {
         let trimmed = trimmingCharacters(in: .whitespaces)
@@ -2560,7 +2560,7 @@ extension String {
 
 extension Color {
     /// `#rrggbb` for this color in sRGB, for writing a wheel/eyedropper pick back as
-    /// a Ghostty hex value (B6). Nil if it can't be represented in RGB.
+    /// a Ghostty hex value. Nil if it can't be represented in RGB.
     var ghosttyHex: String? { NSColor(self).ghosttyHex }
 }
 

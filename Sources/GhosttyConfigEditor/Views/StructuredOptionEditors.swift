@@ -2,7 +2,7 @@ import SwiftUI
 import AppKit
 import GhosttyConfigKit
 
-// U4 (R6/R7/R8, KTD3): the structured and repeatable-setting editors, extracted from
+// The structured and repeatable-setting editors, extracted from
 // OptionListView so the option row dispatches through one tested routing policy and the
 // large list/path/flag editors live together. Every editor here routes its writes through
 // the model's existing safe apply path; the structured parsers keep a raw fallback so
@@ -10,8 +10,8 @@ import GhosttyConfigKit
 
 // MARK: - Editor routing policy
 
-/// Which editor renders an option row (U4). A pure value so the "no editable repeatable ends
-/// as an info-only dead row" guarantee (R6) is a tested app-logic fact instead of something
+/// Which editor renders an option row. A pure value so the "no editable repeatable ends
+/// as an info-only dead row" guarantee is a tested app-logic fact instead of something
 /// buried in a SwiftUI ViewBuilder. `OptionRow.editor` switches on this, and
 /// `PresentationPolicyTests` asserts no editable repeatable ever resolves to `.infoOnly`.
 enum OptionEditorRoute: Equatable {
@@ -26,7 +26,7 @@ enum OptionEditorRoute: Equatable {
     case keybindDeepLink   // keybind is edited on its own Keyboard Shortcuts surface
     case color             // shared color editor (selection-*, unfocused-split-fill, …)
     case inline            // scalar inline control (toggle/picker/number/text)
-    /// The forbidden state (R6): an editable repeatable with no editor. The resolver must
+    /// The forbidden state: an editable repeatable with no editor. The resolver must
     /// never return this for an editable repeatable; only a read-only/excluded row does.
     case infoOnly
 
@@ -42,7 +42,7 @@ enum OptionEditorRoute: Equatable {
     }
 
     /// The primitive form, so the routing policy is exhaustively testable across every
-    /// `OptionEditorKind` without constructing a full catalog (R6 structural guard).
+    /// `OptionEditorKind` without constructing a full catalog (structural guard).
     static func resolve(
         name: String,
         editorKind: OptionEditorKind,
@@ -50,7 +50,7 @@ enum OptionEditorRoute: Equatable {
         isRepeatable: Bool,
         valueType: OptionValueType
     ) -> OptionEditorRoute {
-        // A read-only/excluded row never renders an editable control; R6 only governs
+        // A read-only/excluded row never renders an editable control; the guarantee only governs
         // editable rows, so this is the one legitimate `.infoOnly`.
         guard editability == .editable else { return .infoOnly }
 
@@ -68,28 +68,28 @@ enum OptionEditorRoute: Equatable {
         case .color: return .color
         case .dedicated:
             // keybind has a real dedicated surface; the remaining dedicated repeatables
-            // (env, codepoint maps, font-variation…) get the lossless generic list (R6).
+            // (env, codepoint maps, font-variation…) get the lossless generic list.
             return name == "keybind" ? .keybindDeepLink : .repeatableList
         case .automatic:
             if valueType == .color { return .color }
             // A repeatable with no override still needs a real editor — the generic list is
-            // the R6 safety net so a new repeatable Ghostty option is never a dead row.
+            // the safety net so a new repeatable Ghostty option is never a dead row.
             return isRepeatable ? .repeatableList : .inline
         }
     }
 }
 
-// MARK: - Shared transactional commit + stale recovery (U3/U4, R3/R4/R5)
+// MARK: - Shared transactional commit + stale recovery
 
 /// Commit + recovery contract shared by the text-bearing structured popovers (the scroll
 /// multiplier and path editors) so the stale-on-disk Reload & Review path can't drift out of
 /// them — they previously only `markFailed`, dead-ending an external-file conflict instead of
-/// offering recovery (R5/AE3). Mirrors `InlineOptionEditor`'s color/long-value contract.
+/// offering recovery. Mirrors `InlineOptionEditor`'s color/long-value contract.
 enum TransactionApply {
     /// Apply the draft through the SAME safe write path (`model.applyEdit`), mapping the
     /// outcome onto the transaction: success commits + closes; a stale conflict awaits an
-    /// explicit Reload & Review (never auto-retry, R5); any other rejection retains the draft
-    /// under a normalized message (R3). `beginApply` makes this one write despite repeated
+    /// explicit Reload & Review (never auto-retry); any other rejection retains the draft
+    /// under a normalized message. `beginApply` makes this one write despite repeated
     /// draft callbacks.
     @MainActor
     static func commit(
@@ -116,7 +116,7 @@ enum TransactionApply {
         }
     }
 
-    /// Stale recovery (F2/AE3): reload disk, then surface the externally-changed value beside
+    /// Stale recovery: reload disk, then surface the externally-changed value beside
     /// the retained draft so a SECOND explicit Apply reconciles; if the option vanished, stop
     /// with an actionable message and leave Apply disabled rather than guessing a target.
     @MainActor
@@ -137,7 +137,7 @@ enum TransactionApply {
     }
 }
 
-/// Shared inline status for a text-bearing popover (R3/R4/R5): the local/validation/stale
+/// Shared inline status for a text-bearing popover: the local/validation/stale
 /// message, a Reload & Review action for a stale conflict, and the side-by-side disk-vs-draft
 /// comparison after a reload. `reload` should run `TransactionApply.reloadAndReview`.
 @ViewBuilder
@@ -159,14 +159,14 @@ func transactionStatusView(_ transaction: EditTransaction, reload: @escaping () 
     }
 }
 
-// MARK: - Shared live-option lookup (U3/U4, R5)
+// MARK: - Shared live-option lookup
 
 extension MergedOption {
     /// The freshest form of this option: re-read from the live merged model so a structured
     /// editor reflects an external edit or a just-applied write, falling back to this snapshot
     /// when the browser hasn't loaded or the option has since vanished. Single-sourced here so
     /// the stale-recovery lookup can't drift across the editors — the copy-paste that let some
-    /// U3/U4 editors dead-end an external-file conflict before it was consolidated (R5).
+    /// editors dead-end an external-file conflict before it was consolidated.
     @MainActor
     func live(in model: AppModel) -> MergedOption {
         model.browser?.merged.option(named: option.name) ?? self
@@ -177,7 +177,7 @@ extension MergedOption {
 
 /// keybind is edited on the dedicated Keyboard Shortcuts surface, so in a category/search row
 /// its editor is a jump there rather than a raw inline control — an action, never an info-only
-/// dead end (R6), and it "still routes to its dedicated surface" (scenario 6).
+/// dead end, and it "still routes to its dedicated surface".
 struct KeybindDeepLinkButton: View {
     @Environment(AppModel.self) private var model
     let option: MergedOption
@@ -201,9 +201,9 @@ struct KeybindDeepLinkButton: View {
 /// An add/remove/reorder list for repeatable text options (`env`, `config-file`,
 /// `command-palette-entry`, and any repeatable without a bespoke editor) — the proven
 /// "Edit…" popover over a list of value rows, each write routed through the safe repeatable
-/// path (B8, R6). Unknown/future values round-trip verbatim: a row is stored and rewritten as
-/// its exact raw string (R8). With `allowsPathChooser`, the add row also offers an
-/// NSOpenPanel chooser so path-shaped repeatables (`config-file`) can pick a file (AE5).
+/// path. Unknown/future values round-trip verbatim: a row is stored and rewritten as
+/// its exact raw string. With `allowsPathChooser`, the add row also offers an
+/// NSOpenPanel chooser so path-shaped repeatables (`config-file`) can pick a file.
 struct RepeatableListEditor: View {
     @Environment(AppModel.self) private var model
     let option: MergedOption
@@ -211,7 +211,7 @@ struct RepeatableListEditor: View {
     /// default "Add…"/"N set" count.
     var customLabel: String? = nil
     /// When true, the add row offers a "Choose File…" NSOpenPanel that appends the picked
-    /// path (path-shaped repeatables like `config-file`, AE5).
+    /// path (path-shaped repeatables like `config-file`).
     var allowsPathChooser: Bool = false
     @State private var showing = false
     @State private var newEntry = ""
@@ -263,7 +263,7 @@ struct RepeatableListEditor: View {
                 .font(.callout.monospaced())
                 .lineLimit(1).truncationMode(.middle)
             Spacer(minLength: 4)
-            // Reorder controls (R6: "add, remove, reorder") — dimmed at the ends so the
+            // Reorder controls ("add, remove, reorder") — dimmed at the ends so the
             // list order is directly editable rather than requiring a delete/re-add.
             Button { move(from: index, by: -1) } label: { Image(systemName: "chevron.up") }
                 .buttonStyle(.plain).foregroundStyle(.secondary)
@@ -303,7 +303,7 @@ struct RepeatableListEditor: View {
         apply(next)
     }
 
-    /// Reorder one entry, preserving every other value's raw form (round-trip R8).
+    /// Reorder one entry, preserving every other value's raw form (round-trip).
     private func move(from index: Int, by delta: Int) {
         var next = entries
         let target = index + delta
@@ -313,7 +313,7 @@ struct RepeatableListEditor: View {
     }
 
     /// An NSOpenPanel file chooser for path-shaped repeatables; the picked path is appended
-    /// as a new entry. A free-form/inherited value can still be typed in the field (R8).
+    /// as a new entry. A free-form/inherited value can still be typed in the field.
     private func chooseFile() {
         let panel = NSOpenPanel()
         panel.canChooseFiles = true
@@ -331,7 +331,7 @@ struct RepeatableListEditor: View {
 
 // MARK: - Font-feature (Ligatures) editor
 
-/// `font-feature` (titled "Ligatures") rendered toggle-first (CV-9): the common case is
+/// `font-feature` (titled "Ligatures") rendered toggle-first: the common case is
 /// "ligatures on or off", so a switch drives that — On strips Ghostty's `-calt, -liga,
 /// -dlig` disable set, Off writes it — over the kit `FontFeatures` tag arithmetic that
 /// preserves any user-added stylistic tags. The full per-tag list stays reachable behind
@@ -370,10 +370,10 @@ struct FontFeatureEditor: View {
 
 // MARK: - Scroll-multiplier editor
 
-/// A two-field editor for `mouse-scroll-multiplier` (R7): separate precision and discrete
+/// A two-field editor for `mouse-scroll-multiplier`: separate precision and discrete
 /// multipliers instead of the raw `precision:…,discrete:…` mini-language. Backed by the pure
-/// `ScrollMultiplierValue`, so unknown/bare fragments round-trip verbatim (R8). Text-bearing,
-/// so it uses the U3 transaction: Apply commits, Cancel/dismiss discards.
+/// `ScrollMultiplierValue`, so unknown/bare fragments round-trip verbatim. Text-bearing,
+/// so it uses the transaction: Apply commits, Cancel/dismiss discards.
 struct ScrollMultiplierEditor: View {
     @Environment(AppModel.self) private var model
     let option: MergedOption
@@ -399,7 +399,7 @@ struct ScrollMultiplierEditor: View {
             if open { transaction = EditTransaction(savedValue: savedValue) }
             else {
                 transaction.cancel()
-                model.dismissApplyFailure(forOptionNamed: option.option.name)   // A-2
+                model.dismissApplyFailure(forOptionNamed: option.option.name)
             }
         }
     }
@@ -452,7 +452,7 @@ struct ScrollMultiplierEditor: View {
     }
 
     /// The composite parsed from the current draft, so edits to one field preserve the other
-    /// field and any unknown fragments (R8).
+    /// field and any unknown fragments.
     private var parsedDraft: ScrollMultiplierValue { ScrollMultiplierValue.parse(transaction.draft) }
 
     /// A binding to one labeled field: reads/writes through the parsed composite so the raw
@@ -470,7 +470,7 @@ struct ScrollMultiplierEditor: View {
     }
 
     /// Commit the composite through the shared safe apply path; an empty result unsets the
-    /// option. Routes stale-on-disk conflicts to Reload & Review like the color editor (R5).
+    /// option. Routes stale-on-disk conflicts to Reload & Review like the color editor.
     private func commit() {
         TransactionApply.commit($transaction, option: liveOption,
                                 values: transaction.draft.isEmpty ? [] : [transaction.draft],
@@ -480,10 +480,10 @@ struct ScrollMultiplierEditor: View {
 
 // MARK: - Bell-features editor
 
-/// A labeled multi-choice editor for `bell-features` (R7): a checkbox per documented feature
+/// A labeled multi-choice editor for `bell-features`: a checkbox per documented feature
 /// instead of the raw `no-system,attention,…` flag string. Backed by the pure
 /// `BellFeaturesValue`, so omitted/default features and unknown tokens round-trip verbatim
-/// while toggling one labeled feature (R8). Each toggle writes immediately (a discrete choice,
+/// while toggling one labeled feature. Each toggle writes immediately (a discrete choice,
 /// like the palette swatches — no text-bearing draft to stage).
 struct BellFeaturesEditor: View {
     @Environment(AppModel.self) private var model
@@ -539,7 +539,7 @@ struct BellFeaturesEditor: View {
     }
 
     /// Tokens the editor doesn't model as labeled features — shown so the user knows they're
-    /// preserved (R8), never silently dropped.
+    /// preserved, never silently dropped.
     private var unknownTokens: [String] {
         let known = Set(BellFeaturesValue.knownFeatures.map(\.name))
         return parsed.tokens.filter { token in
@@ -549,7 +549,7 @@ struct BellFeaturesEditor: View {
     }
 
     /// A checkbox binding for one feature: toggling replaces/appends exactly that feature's
-    /// token via the pure model, preserving every omitted feature and unknown token (R8).
+    /// token via the pure model, preserving every omitted feature and unknown token.
     private func binding(for feature: String) -> Binding<Bool> {
         Binding(
             get: { parsed.isEnabled(feature) },
@@ -569,10 +569,10 @@ struct BellFeaturesEditor: View {
 
 // MARK: - Path chooser editor
 
-/// A single folder/file chooser for `working-directory` (R7): an NSOpenPanel plus raw text
+/// A single folder/file chooser for `working-directory`: an NSOpenPanel plus raw text
 /// entry, so a chosen directory serializes exactly while a free-form or inherited value
 /// (`window-inherit-working-directory`) still round-trips and an unset/default state is
-/// representable (R8). Text-bearing, so raw entry uses the U3 transaction (Apply commits,
+/// representable. Text-bearing, so raw entry uses the transaction (Apply commits,
 /// Cancel/dismiss discards).
 struct PathChooserEditor: View {
     @Environment(AppModel.self) private var model
@@ -602,7 +602,7 @@ struct PathChooserEditor: View {
             if open { transaction = EditTransaction(savedValue: savedValue) }
             else {
                 transaction.cancel()
-                model.dismissApplyFailure(forOptionNamed: option.option.name)   // A-2
+                model.dismissApplyFailure(forOptionNamed: option.option.name)
             }
         }
     }
@@ -652,7 +652,7 @@ struct PathChooserEditor: View {
         panel.canChooseDirectories = true
         panel.allowsMultipleSelection = false
         if panel.runModal() == .OK, let path = panel.url?.path {
-            transaction.edit(path)   // stage the pick; Apply commits (R4)
+            transaction.edit(path)   // stage the pick; Apply commits
         }
     }
 
@@ -664,7 +664,7 @@ struct PathChooserEditor: View {
     }
 
     /// Commit the path through the shared safe apply path; routes stale-on-disk conflicts to
-    /// Reload & Review like the color editor (R5), not a dead-end error.
+    /// Reload & Review like the color editor, not a dead-end error.
     private func commit() {
         TransactionApply.commit($transaction, option: liveOption,
                                 values: transaction.draft.isEmpty ? [] : [transaction.draft],

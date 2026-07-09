@@ -2,7 +2,7 @@ import SwiftUI
 import AppKit
 import GhosttyConfigKit
 
-/// The first-run welcome (F2, ONBOARD-1/7/9/10): a non-modal in-window pane shown on a
+/// The first-run welcome: a non-modal in-window pane shown on a
 /// fresh install (or whenever there's no config yet), re-openable any time from Help.
 /// It leads with a one-line value prop, then — crucially — the **safety story** before
 /// the user changes anything (writes are validated, applied live, and undoable), then
@@ -58,9 +58,9 @@ struct WelcomeView: View {
     private var header: some View {
         VStack(alignment: .leading, spacing: 8) {
             HStack(spacing: 12) {
-                // The one identity moment: the app's own icon at hero size, over U2's
+                // The one identity moment: the app's own icon at hero size, over the
                 // reserved hero type step — so the welcome outranks routine chrome
-                // (CB-8/DS-8) and reuses the real mark instead of a generic gear.
+                // and reuses the real mark instead of a generic gear.
                 Image(nsImage: NSApplication.shared.applicationIconImage)
                     .resizable()
                     .frame(width: 44, height: 44)
@@ -103,7 +103,7 @@ struct WelcomeView: View {
     }
 }
 
-/// The first-run banner (F2): a clear, one-line explanation shown at the top of the
+/// The first-run banner: a clear, one-line explanation shown at the top of the
 /// content while no config exists yet — replacing the tiny "No config" whisper with a
 /// plain statement of what the first change will do.
 struct FirstRunBanner: View {

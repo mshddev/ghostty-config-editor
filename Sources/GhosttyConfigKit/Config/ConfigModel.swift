@@ -3,8 +3,8 @@ import Foundation
 /// One physical line of a config file, classified but byte-preserving.
 ///
 /// `raw` is the exact original text (without its trailing line terminator).
-/// Re-serializing every line's `raw` verbatim is what lets the writer (U6) touch
-/// only edited lines and leave comments/blank/unknown lines untouched (R8, R11).
+/// Re-serializing every line's `raw` verbatim is what lets the writer touch
+/// only edited lines and leave comments/blank/unknown lines untouched.
 public struct ConfigLine: Sendable, Equatable {
     public enum Kind: Sendable, Equatable {
         case blank
@@ -63,21 +63,21 @@ public struct ConfigLine: Sendable, Equatable {
     }
 }
 
-/// A single parsed config file, line-preserving (KTD5).
+/// A single parsed config file, line-preserving.
 public struct ConfigFile: Sendable, Equatable {
     /// The path as referenced (may be a symlink or a relative include).
     public let path: String
-    /// The symlink-resolved canonical path (the real file the writer edits, R20).
+    /// The symlink-resolved canonical path (the real file the writer edits).
     public let resolvedPath: String
     public var lines: [ConfigLine]
-    /// "\n" or "\r\n", preserved for byte-exact round-trips (R23).
+    /// "\n" or "\r\n", preserved for byte-exact round-trips.
     public let lineEnding: String
-    /// Whether the file ended with a trailing newline (R23).
+    /// Whether the file ended with a trailing newline.
     public let hasTrailingNewline: Bool
-    /// Whether the file began with a UTF-8 BOM, re-emitted on serialize (R23).
+    /// Whether the file began with a UTF-8 BOM, re-emitted on serialize.
     public let hasBOM: Bool
     /// On-disk identity captured at read time; nil for in-memory files. The
-    /// writer uses this to detect external changes before overwriting (R22).
+    /// writer uses this to detect external changes before overwriting.
     public var identity: FileIdentity?
 
     public init(
@@ -172,7 +172,7 @@ public struct SettingLocation: Sendable, Equatable, Hashable {
 }
 
 /// The full line-preserving model: the primary config file plus any
-/// `config-file` includes, in first-seen order (KTD5, R7).
+/// `config-file` includes, in first-seen order.
 public struct ConfigModel: Sendable {
     public var primary: ConfigFile
     /// Included files in first-encountered order.

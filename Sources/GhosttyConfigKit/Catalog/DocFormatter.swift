@@ -1,13 +1,13 @@
 import Foundation
 
-/// Turns Ghostty's hard-wrapped option documentation into renderable blocks (CM-3).
+/// Turns Ghostty's hard-wrapped option documentation into renderable blocks.
 ///
 /// The raw `--docs` text is wrapped at a fixed column, so rendered verbatim it breaks
 /// mid-sentence — and worse, mid-token: a code span like `` `CSI q` `` split across a
 /// wrap becomes two ugly lines. This reflows each paragraph onto one logical line (the
 /// OS then wraps it at the real width) and lifts `* `/`- ` items into bullets. It is
 /// **deliberately not** a Markdown renderer — no headings, emphasis, or nested lists;
-/// backtick spans are left intact for the view to render as mono (U9).
+/// backtick spans are left intact for the view to render as mono.
 public enum DocFormatter {
 
     /// One renderable block of documentation.

@@ -1,6 +1,6 @@
 import Foundation
 
-/// How a row in the merged keybind list relates to Ghostty's defaults (RK1).
+/// How a row in the merged keybind list relates to Ghostty's defaults.
 public enum KeybindOrigin: Sendable, Equatable {
     /// A Ghostty default the user has not touched.
     case `default`
@@ -18,7 +18,7 @@ public enum KeybindOrigin: Sendable, Equatable {
 }
 
 /// One row of the editor's merged display: a default and/or a user binding,
-/// resolved to a single trigger (RK1).
+/// resolved to a single trigger.
 public struct MergedKeybind: Sendable, Equatable, Identifiable {
     /// Bound rows are unique by canonical trigger; an unbound-action row has no
     /// trigger, so it identifies by its action name instead (keeping SwiftUI ids
@@ -32,10 +32,10 @@ public struct MergedKeybind: Sendable, Equatable, Identifiable {
     public let canonicalTrigger: String
     public let origin: KeybindOrigin
     /// Where the user binding lives, when this row came from one (nil for an
-    /// untouched default). Drives U5's out-of-target read-only marking (Risk R-F).
+    /// untouched default). Drives the out-of-target read-only marking.
     public let source: SettingLocation?
     /// Extra **raw** triggers folded into this single capsule that must be edited/removed
-    /// together with `trigger` (CB-digit): Ghostty ships `super+digit_N` *and* `super+N`
+    /// together with `trigger`: Ghostty ships `super+digit_N` *and* `super+N`
     /// for each tab, the same physical key on macOS. `collapsingRedundantDigits` hides the
     /// physical `super+digit_N` chord and records it here on the visible `⌘N` chord, so a
     /// rebind/turn-off disables BOTH lines rather than leaving the hidden one still firing.
@@ -57,14 +57,14 @@ public struct MergedKeybind: Sendable, Equatable, Identifiable {
     }
 }
 
-/// One action's row in the editor (U17): the action plus **every chord bound to it**,
+/// One action's row in the editor: the action plus **every chord bound to it**,
 /// so Copy renders once carrying both ⌘C and the physical Copy key instead of as two
-/// separate rows (KB-1). Each element of `chords` is one `MergedKeybind` — a single
+/// separate rows. Each element of `chords` is one `MergedKeybind` — a single
 /// trigger with its own origin and source, so conflict-at-capture and read-only-by-file
 /// still evaluate per chord (two chords for one action can differ in origin/source).
 ///
 /// A disabled default stays here as a struck chord (`.userDisablesDefault`) rather than
-/// dropping the row (the LOCKED behavior flip, KB-2). An action with no shortcut at all
+/// dropping the row (the locked behavior flip). An action with no shortcut at all
 /// carries a single `.unbound` placeholder chord, so the whole action set still lists
 /// like a system shortcuts pane.
 public struct KeybindActionGroup: Sendable, Equatable, Identifiable {
@@ -84,7 +84,7 @@ public struct KeybindActionGroup: Sendable, Equatable, Identifiable {
     public var isUnbound: Bool { chords.allSatisfy { $0.origin == .unbound } }
 
     /// The chords that currently fire: excludes the empty placeholder and any default the
-    /// user turned off. Drives the truthful "N with a shortcut" header count (KB-7/CM-12).
+    /// user turned off. Drives the truthful "N with a shortcut" header count.
     public var activeChords: [MergedKeybind] {
         chords.filter { $0.origin != .unbound && $0.origin != .userDisablesDefault }
     }
@@ -108,9 +108,9 @@ public struct UserKeybind: Sendable, Equatable {
     public var isUnbind: Bool { keybind.actionName == "unbind" }
 }
 
-/// Pure transforms that combine Ghostty defaults with the user's bindings (RK1)
-/// and that produce the ordered write-list for the existing repeatable-key writer
-/// (R9, AE2). Stateless namespace; see `TargetScopedBindings` for the write side.
+/// Pure transforms that combine Ghostty defaults with the user's bindings
+/// and that produce the ordered write-list for the existing repeatable-key writer.
+/// Stateless namespace; see `TargetScopedBindings` for the write side.
 public enum KeybindMerge {
 
     /// Parse the keybind `MergedOption`'s parallel `userValues`/`sources` into
@@ -124,14 +124,14 @@ public enum KeybindMerge {
         }
     }
 
-    /// Join defaults with user bindings into the editor's display list (RK1).
+    /// Join defaults with user bindings into the editor's display list.
     /// Defaults appear first in listed order (reflecting any override/disable in
     /// place); user-added bindings (triggers not among the defaults) follow in
     /// config order. When two user bindings share a canonical trigger the last
     /// wins, matching Ghostty.
     public static func merge(defaults rawDefaults: [DefaultKeybind], user: [UserKeybind]) -> [MergedKeybind] {
         // Defaults should be unique by canonical trigger, but a degenerate listing
-        // (Risk R-B) could repeat one — collapse to the last (matches Ghostty)
+        // could repeat one — collapse to the last (matches Ghostty)
         // so merged rows keep unique ids and SwiftUI never sees a duplicate.
         var lastDefaultIndex: [String: Int] = [:]
         for (index, def) in rawDefaults.enumerated() { lastDefaultIndex[def.canonicalTrigger] = index }
@@ -177,12 +177,12 @@ public enum KeybindMerge {
         return rows
     }
 
-    /// Fold the per-chord merge output into one entry per action (U17). Each distinct
+    /// Fold the per-chord merge output into one entry per action. Each distinct
     /// action becomes a `KeybindActionGroup` carrying its chords in first-appearance
     /// order, so the list still reads defaults-first, then user-added, then the unbound
     /// tail — but Copy's two triggers now share one row. An action's disabled default is
-    /// kept in place as a struck chord (it is not dropped before grouping — the LOCKED
-    /// behavior flip, KB-2), and an otherwise-unbound action keeps its single `.unbound`
+    /// kept in place as a struck chord (it is not dropped before grouping — the locked
+    /// behavior flip), and an otherwise-unbound action keeps its single `.unbound`
     /// placeholder chord.
     public static func group(_ merged: [MergedKeybind]) -> [KeybindActionGroup] {
         var order: [String] = []
@@ -194,8 +194,8 @@ public enum KeybindMerge {
         return order.map { KeybindActionGroup(action: $0, chords: chordsByAction[$0]!) }
     }
 
-    /// Collapse Ghostty's redundant physical/character digit pair into a single capsule
-    /// (CB-digit). Ghostty ships both `super+digit_N` (the key by physical position) and
+    /// Collapse Ghostty's redundant physical/character digit pair into a single capsule.
+    /// Ghostty ships both `super+digit_N` (the key by physical position) and
     /// `super+N` (the character) for every "Go to tab N" — the *same* physical key on macOS
     /// — which otherwise renders as two capsules, one reading the raw `⌘digit_N`. Hide the
     /// physical chord and fold its trigger onto the visible `⌘N` chord as a `companion`, so
@@ -284,7 +284,7 @@ public enum KeybindMerge {
 
     /// The action a chord would collide with: the action a *different* live chord already
     /// uses for `trigger`, or nil when the chord is free (or only used by `action` itself).
-    /// Powers the conflict-at-capture prompt (F4, CONTROLS-10/11) — a rebind onto ⌘C should
+    /// Powers the conflict-at-capture prompt — a rebind onto ⌘C should
     /// warn that Copy already uses it, before the after-the-fact lint bar. Scans **per
     /// chord** across the grouped rows: skips the empty placeholder and disabled defaults
     /// (whose trigger is actually free), and ignores the action being edited (recording a
@@ -317,7 +317,7 @@ public enum KeybindMerge {
     /// couldn't list them), so the editor still works against just the bound rows.
     public static func withUnboundActions(_ merged: [MergedKeybind], allActions: [KeybindAction]) -> [MergedKeybind] {
         let bound = Set(merged.map { Keybind.actionName($0.action) })
-        // Dedupe by name via a Set (matching `merge`'s Risk R-B guard): a degenerate
+        // Dedupe by name via a Set (matching `merge`'s guard): a degenerate
         // `+list-actions` that repeats a name must not yield two `.unbound` rows sharing
         // the `action:<name>` SwiftUI id and tripping a duplicate-id fault after grouping.
         let unbound = Set(allActions.map(\.name))
@@ -331,16 +331,16 @@ public enum KeybindMerge {
 
 /// The user's keybind values **scoped to the writer's single target file**, plus
 /// the pure edit operations that produce the next ordered `[String]` for
-/// `AppModel.applyEdit(option:keybind, values:)` (KTD8).
+/// `AppModel.applyEdit(option:keybind, values:)`.
 ///
-/// Risk R-F: `ConfigReader.merge` accumulates a repeatable option's `userValues`
+/// `ConfigReader.merge` accumulates a repeatable option's `userValues`
 /// across the primary *and every include*, but `ConfigWriter` reconciles
 /// position-wise against just one file. Feeding the full cross-file list to the
 /// single-file writer would silently duplicate include-bindings into the primary.
 /// Scoping the write-list to `ConfigWriter.targetFile(forOption:)`'s resolved path
-/// keeps out-of-file bindings on disk untouched (U5 renders them read-only). All
+/// keeps out-of-file bindings on disk untouched (shown read-only). All
 /// values are kept **raw/verbatim** so the writer's reconcile leaves untouched
-/// occurrences byte-identical (AE2, R8/R11).
+/// occurrences byte-identical.
 public struct TargetScopedBindings: Sendable, Equatable {
     /// Every keybind value in the target file, in line order (raw/verbatim).
     public let rawValues: [String]
@@ -367,8 +367,8 @@ public struct TargetScopedBindings: Sendable, Equatable {
 
     /// Edit an existing binding (identified by `originalTrigger`) or add a new one.
     /// When the trigger **changed**, the old entry is removed so a trigger edit
-    /// *moves* the binding rather than leaving a duplicate behind (the orphan bug:
-    /// R8/R11/RK4). `nil` (a brand-new binding) or an unchanged trigger behaves
+    /// *moves* the binding rather than leaving a duplicate behind (the orphan bug).
+    /// `nil` (a brand-new binding) or an unchanged trigger behaves
     /// like an in-place add/update. The new value lands at the first slot that
     /// matched either the old or the new trigger, preserving order.
     public func updating(originalTrigger: String?, trigger: String, action: String) -> [String] {
@@ -396,7 +396,7 @@ public struct TargetScopedBindings: Sendable, Equatable {
     /// matching the "rebind replaces the shortcut" expectation of a normal keybinding
     /// UI. Rebinding to the same canonical trigger is a no-op. Any existing user entry
     /// at the old or new trigger is collapsed (last-wins), and unrelated lines keep
-    /// their verbatim raw text (AE2).
+    /// their verbatim raw text.
     public func movingDefault(fromTrigger oldTrigger: String, toTrigger newTrigger: String, action: String, alsoUnbind companions: [String] = []) -> [String] {
         let oldCanonical = KeybindTrigger.parse(oldTrigger).canonical()
         let newCanonical = KeybindTrigger.parse(newTrigger).canonical()
@@ -464,7 +464,7 @@ public struct TargetScopedBindings: Sendable, Equatable {
     }
 
     /// Drop the binding(s) matching any of these canonical triggers — used to re-enable a
-    /// merged capsule (CB-digit), where clearing the character's `=unbind` line must also
+    /// merged capsule, where clearing the character's `=unbind` line must also
     /// clear the physical companion's, so both default keys reactivate together. Non-matches
     /// are no-ops; unrelated lines keep their verbatim raw text.
     public func removing(triggers: [String]) -> [String] {
@@ -483,7 +483,7 @@ public struct TargetScopedBindings: Sendable, Equatable {
 
     /// Disable several defaults at once (`trigger=unbind` for each), replacing any existing
     /// user line for those triggers. Used to turn off a merged physical+character digit pair
-    /// together (CB-digit) so neither still fires. Each raw trigger is written verbatim
+    /// together so neither still fires. Each raw trigger is written verbatim
     /// (`super+digit_1=unbind`); matching against existing lines is canonical.
     public func unbindingDefaults(triggers: [String]) -> [String] {
         guard !triggers.isEmpty else { return rawValues }

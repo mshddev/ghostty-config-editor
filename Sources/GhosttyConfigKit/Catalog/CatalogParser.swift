@@ -13,7 +13,7 @@ import Foundation
 ///      `palette`). Those collapse into one option carrying every default value.
 public enum CatalogParser {
 
-    /// Keys known to be additive/repeatable in Ghostty config (R9), even when
+    /// Keys known to be additive/repeatable in Ghostty config, even when
     /// the default output lists only one (often empty) value.
     private static let knownRepeatableKeys: Set<String> = [
         "keybind", "palette", "font-feature", "env",
@@ -62,7 +62,7 @@ public enum CatalogParser {
     /// Options that accept `true`/`false` *alongside* other values — boolean
     /// impostors (`confirm-close-surface`) and open-valued booleans
     /// (`background-blur`). The editor should present these toggle-first, exposing
-    /// the extra states secondarily (U10), rather than as a bare dropdown/field.
+    /// the extra states secondarily, rather than as a bare dropdown/field.
     /// This is a *presentation hint only* — `valueType` is left untouched, so the
     /// underlying `.enumeration`/`.string` typing (and its lossless editing) is
     /// preserved. Curated + version-audited like `curatedEnumValues` /
@@ -75,13 +75,13 @@ public enum CatalogParser {
         "window-decoration",
         "background-blur",
         // Tri-state (true / false / unset-null). Presented toggle-first so a raw "true"
-        // never renders in a picker (CV-5); the unset/null state stays reachable via the
+        // never renders in a picker; the unset/null state stays reachable via the
         // row's reset, and true/false are the on/off axis.
         "cursor-style-blink",
     ]
 
     /// True when an option accepts `true`/`false` among other values, so the editor
-    /// renders toggle-first (U10). A plain `.boolean` option is *not* flagged — its
+    /// renders toggle-first. A plain `.boolean` option is *not* flagged — its
     /// type already implies a toggle.
     public static func isBooleanish(_ name: String) -> Bool {
         booleanishOptions.contains(name)
@@ -161,7 +161,7 @@ public enum CatalogParser {
 
         let options = order.compactMap { name -> CatalogOption? in
             guard let b = builders[name] else { return nil }
-            // macOS-scoped catalog (R1, R6): drop options that only take effect on
+            // macOS-scoped catalog: drop options that only take effect on
             // Linux/GTK so they never surface in browse/search/discovery. See
             // `MacOSCatalogScope`.
             guard !MacOSCatalogScope.excludes(name) else { return nil }
@@ -213,7 +213,7 @@ public enum CatalogParser {
     /// The catalog's final enum values for an option: parse the docs, fall back to
     /// the curated map for prose-only impostors, drop macOS-inert values, and
     /// suppress the whole set for a literal-color option. The view derives its
-    /// control from these (and `valueType`) and never re-inspects doc text (R7).
+    /// control from these (and `valueType`) and never re-inspects doc text.
     private static func resolvedEnumValues(name: String, default def: String, documentation: String) -> [String] {
         // A literal-color default (`#RRGGBB`) means any bulleted "Valid values" are
         // format placeholders, not a closed set — never enumerate it. Guarding on
@@ -224,7 +224,7 @@ public enum CatalogParser {
         // A comma-separated default marks a composite multi-flag value
         // (`bell-features = no-system,no-audio,…`): these combine flags (often with
         // `no-` negations) rather than pick one, so a single-select dropdown would
-        // silently drop the other flags the moment the user edits it (R4/KTD6).
+        // silently drop the other flags the moment the user edits it.
         // Keep them free text — value-based so it catches future composite options
         // without a curated list.
         if def.contains(",") { return [] }
