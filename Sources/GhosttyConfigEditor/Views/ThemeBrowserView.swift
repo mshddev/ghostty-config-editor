@@ -66,8 +66,11 @@ enum ThemeSectionPolicy {
         let favorites = showFavorites
             ? filtered.filter { isFavorite($0.name) && !currentNames.contains($0.name) }
             : []
-        // Exclude the pinned set (current + favorites) from the main browsing list.
-        let pinned = currentNames.union(favorites.map(\.name))
+        // Keep the current theme in the main list (it renders its own in-list active state
+        // — accent border + "Current" pill — and also still appears in the pinned "Current
+        // theme" section, 2026-07-09). Only the Favorites band is deduped out of browse, so
+        // a starred theme isn't shown twice.
+        let pinned = Set(favorites.map(\.name))
         let browse = filtered.filter { !pinned.contains($0.name) }
         return Buckets(favorites: favorites, browse: browse)
     }
@@ -179,8 +182,10 @@ struct ThemeBrowserView: View {
 
     // MARK: - Deduped section model (U15 / TH-1, IA-7)
 
-    /// The three browsing buckets after dedupe, computed once so a pinned theme never also
+    /// The three browsing buckets after dedupe, computed once so a favorite never also
     /// appears in the main list (TH-1) and Current never doubles inside Favorites (IA-7).
+    /// The current theme intentionally *stays* in the main list (highlighted in place),
+    /// while also appearing in its pinned "Current theme" section (2026-07-09).
     private struct Sections {
         var current: ThemeSelection?
         var favorites: [ThemeRef]
@@ -221,8 +226,9 @@ struct ThemeBrowserView: View {
         // full-size preview lives, so the list deliberately never enlarges or previews on
         // hover — nothing moves or pops as you scan (2026-07-08).
         List {
-            // E2: the current theme is pinned at the very top and stays visible
-            // even while filtering, so it's never confusable with row selection.
+            // E2: the current theme is pinned at the very top (a quick jump-reference) and
+            // stays visible even while filtering. It ALSO stays in the list below,
+            // highlighted in place, so applying a theme never makes it vanish (2026-07-09).
             if let selection = s.current {
                 Section("Current theme") { currentRows(selection, layout: .row) }
             }

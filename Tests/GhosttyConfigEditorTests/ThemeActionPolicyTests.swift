@@ -58,24 +58,37 @@ final class ThemeActionPolicyTests: XCTestCase {
 
     private func ref(_ name: String) -> ThemeRef { ThemeRef(name: name, source: "resources", path: "/\(name)") }
 
-    // A Current theme is pinned and never doubles into Favorites or the browse list, even when
-    // it is also starred (IA-7).
-    func testCurrentThemeNeverDoublesIntoFavoritesOrBrowse() {
+    // The current theme now STAYS in the browse list (highlighted in place, and also shown in
+    // the pinned "Current theme" section) rather than being pulled out of it — but a
+    // current+favorite theme still never doubles into the Favorites band (IA-7), and a plain
+    // favorite is still deduped out of browse into that band.
+    func testCurrentThemeStaysInBrowseButFavoritesAreDeduped() {
         let filtered = [ref("Nord"), ref("Solarized"), ref("Dracula")]
         let buckets = ThemeSectionPolicy.buckets(
             filtered: filtered,
             currentNames: ["Nord"],
             isFavorite: { $0 == "Nord" || $0 == "Solarized" },   // Nord is current AND favorite
             filter: .all)
-        XCTAssertFalse(buckets.favorites.contains { $0.name == "Nord" }, "current theme must not appear in Favorites")
-        XCTAssertFalse(buckets.browse.contains { $0.name == "Nord" }, "current theme must not appear in browse")
+        XCTAssertTrue(buckets.browse.contains { $0.name == "Nord" }, "current theme stays in the browse list (highlighted, not hidden)")
+        XCTAssertFalse(buckets.favorites.contains { $0.name == "Nord" }, "a current+favorite theme must not double into Favorites")
         XCTAssertTrue(buckets.favorites.contains { $0.name == "Solarized" })
         XCTAssertTrue(buckets.browse.contains { $0.name == "Dracula" })
         XCTAssertFalse(buckets.browse.contains { $0.name == "Solarized" }, "a favorite must not also be in browse")
     }
 
+    // With no favorites, the browse list is the full filtered set — the current theme is not
+    // subtracted from it (2026-07-09: applying a theme must not make it vanish from the list).
+    func testCurrentThemeStaysInBrowseList() {
+        let filtered = [ref("Nord"), ref("Solarized"), ref("Dracula")]
+        let buckets = ThemeSectionPolicy.buckets(
+            filtered: filtered, currentNames: ["Solarized"],
+            isFavorite: { _ in false }, filter: .all)
+        XCTAssertEqual(buckets.browse.map(\.name), ["Nord", "Solarized", "Dracula"],
+                       "the current theme stays in the main list (it also appears pinned on top)")
+    }
+
     // Under a non-`all` filter the Favorites band is suppressed (the filter already scopes the
-    // list) — favorites then live in the main browse list, still deduped against Current.
+    // list) — favorites then live in the main browse list, and the current theme stays in it too.
     func testFavoritesBandSuppressedUnderFilter() {
         let filtered = [ref("Nord"), ref("Solarized")]
         let buckets = ThemeSectionPolicy.buckets(
@@ -84,7 +97,7 @@ final class ThemeActionPolicyTests: XCTestCase {
             isFavorite: { _ in true },
             filter: .favorites)
         XCTAssertTrue(buckets.favorites.isEmpty, "no separate Favorites band under a filter")
-        XCTAssertEqual(buckets.browse.map(\.name), ["Solarized"], "current stays pinned out of the filtered list")
+        XCTAssertEqual(buckets.browse.map(\.name), ["Nord", "Solarized"], "current stays in the filtered list (highlighted), not pinned out")
     }
 
     // Toggling favorite on/off moves a theme between the Favorites band and browse without ever
