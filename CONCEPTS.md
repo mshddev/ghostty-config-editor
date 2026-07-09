@@ -1,6 +1,6 @@
 # Concepts
 
-> Shared domain vocabulary for this project — entities, named processes, and status concepts with project-specific meaning. Seeded with core domain vocabulary, then accretes as ce-compound and ce-compound-refresh process learnings; direct edits are fine. Glossary only, not a spec or catch-all.
+> Shared domain vocabulary for this project — the entities, named processes, and status concepts with project-specific meaning that recur throughout the code and docs. A glossary, not a spec or catch-all.
 
 ## Catalog
 
