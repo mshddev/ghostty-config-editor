@@ -260,6 +260,10 @@ private struct StatusHealthTile: View {
 /// Export writes the current bytes to a chosen file; import reads a file, confirms the
 /// replace (the write engine backs up the current config first and the import is
 /// undoable), and returns the text for `AppModel.importConfig` to validate + commit.
+///
+/// `@MainActor` because these drive AppKit panels/alerts, which are main-actor-isolated;
+/// every caller is a SwiftUI menu or view action, so it is already on the main actor.
+@MainActor
 enum ConfigTransfer {
     static func export(_ text: String) {
         let panel = NSSavePanel()
@@ -295,6 +299,10 @@ enum ConfigTransfer {
 /// not-found/unsupported recovery screens. If the user picks `Ghostty.app`, it
 /// resolves to the inner CLI binary the locator actually probes (`BinaryLocator` wants
 /// an executable, not the bundle).
+///
+/// `@MainActor` because it drives an AppKit open panel, which is main-actor-isolated;
+/// every caller is a SwiftUI menu or view action, so it is already on the main actor.
+@MainActor
 enum BinaryChooser {
     static func choose() -> String? {
         let panel = NSOpenPanel()

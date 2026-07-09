@@ -242,13 +242,14 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         Self.removeFullScreenMenuItem()
         NotificationCenter.default.addObserver(
             forName: NSMenu.didBeginTrackingNotification, object: nil, queue: .main
-        ) { _ in Self.removeFullScreenMenuItem() }
+        ) { _ in MainActor.assumeIsolated { Self.removeFullScreenMenuItem() } }
     }
 
     func applicationShouldTerminateAfterLastWindowClosed(_ sender: NSApplication) -> Bool {
         true
     }
 
+    @MainActor
     private static func removeFullScreenMenuItem() {
         let selector = #selector(NSWindow.toggleFullScreen(_:))
         for submenu in NSApp.mainMenu?.items.compactMap(\.submenu) ?? [] {
