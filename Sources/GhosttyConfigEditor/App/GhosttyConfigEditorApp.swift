@@ -4,8 +4,8 @@ import Combine
 import GhosttyConfigKit
 
 /// Window sizing + content-width metrics kept in one place so the WindowGroup
-/// frame, the status view, and the capped content column stay reconciled
-/// (LAYOUT-1, LAYOUT-4, LAYOUT-14). Previously the minimum lived in two frames
+/// frame, the status view, and the capped content column stay reconciled.
+/// Previously the minimum lived in two frames
 /// and the default was a separate magic number.
 enum WindowMetrics {
     /// Smallest the window may shrink to — the sidebar plus a still-usable detail column.
@@ -17,11 +17,11 @@ enum WindowMetrics {
     /// Height only affects how much of the (scrollable) content shows, never the
     /// label↔value gap, so it's tall enough to fit the whole sidebar — Get started +
     /// Settings + Status — without Problems (which carries the health badge) landing
-    /// under the fold at launch (D1).
+    /// under the fold at launch.
     static let defaultWidth: CGFloat = 780
     static let defaultHeight: CGFloat = 660
     /// Hard ceiling on how wide the window may get (drag-resize; zoom is disabled).
-    /// Raised from 900 (R11/AE6): a form still centers at its readable measure, but Themes
+    /// Raised from 900: a form still centers at its readable measure, but Themes
     /// and Keyboard Shortcuts now use a wider bounded canvas (`ContentWidthPolicy`), so a
     /// maximized window must actually be wide enough to give the grid more columns and the
     /// chords more room — otherwise "expand usefully" has nowhere to expand into. Still a
@@ -32,14 +32,14 @@ enum WindowMetrics {
     /// A grouped form's readable measure — the width it caps at and centers within, so a
     /// wide window never strands a gap between each option's label and its right-aligned
     /// control. Retained as the single source for the form width (`ContentWidthPolicy`
-    /// reads it); Themes/Keyboard Shortcuts opt into the wider canvas instead (R11).
+    /// reads it); Themes/Keyboard Shortcuts opt into the wider canvas instead.
     static let contentMaxWidth: CGFloat = 640
 }
 
 /// The identity of the surface currently shown in the detail column, for the per-surface
-/// width policy (KTD5/R11/AE6). Derived purely from the sidebar selection, the Status
+/// width policy. Derived purely from the sidebar selection, the Status
 /// drill-down destination, and global-Find state so the width math is unit-testable without
-/// SwiftUI (KTD7).
+/// SwiftUI.
 enum ContentSurface: Equatable {
     /// A grouped option form (Recommended, a category, Customized, the Status hub, Problems,
     /// or the Find results list): keeps a readable measure regardless of window width.
@@ -65,11 +65,11 @@ enum ContentSurface: Equatable {
     }
 }
 
-/// Per-surface content-width policy (KTD5/R11/AE6). Grouped forms keep a readable measure so
+/// Per-surface content-width policy. Grouped forms keep a readable measure so
 /// a maximized window never strands a tiny centered island; Themes and Keyboard Shortcuts use
 /// a wider bounded canvas so the grid gains columns and chords gain room. Replaces the old
-/// single 640-cap that every surface shared. Pure, so the AE6 width expectations are
-/// unit-testable without laying out SwiftUI (KTD7).
+/// single 640-cap that every surface shared. Pure, so the width expectations are
+/// unit-testable without laying out SwiftUI.
 enum ContentWidthPolicy {
     /// The readable measure a grouped form caps at (single-sourced from `WindowMetrics` so
     /// 640 lives in one place).
@@ -80,7 +80,7 @@ enum ContentWidthPolicy {
 
     /// The max width a surface's content column caps at — the exact value the live SwiftUI
     /// layout feeds into `.frame(maxWidth:)` (see `SurfaceWidthColumn`). This is the single
-    /// source the AE6 width expectations assert against, so the tests exercise the production
+    /// source the width expectations assert against, so the tests exercise the production
     /// cap rather than a parallel re-derivation.
     static func maxContentWidth(for surface: ContentSurface) -> CGFloat {
         switch surface {
@@ -90,7 +90,7 @@ enum ContentWidthPolicy {
     }
 }
 
-/// Centers a surface in a per-surface bounded column (KTD5/R11): forms cap at the readable
+/// Centers a surface in a per-surface bounded column: forms cap at the readable
 /// measure, Themes/Keyboard Shortcuts at the wider canvas. Below the cap the content fills the
 /// column normally; above it the column centers so no surface strands a tiny island in a
 /// maximized window. Replaces the old uniform 640-cap applied to every destination.
@@ -137,7 +137,7 @@ private struct WindowConfigurator: NSViewRepresentable {
         window.collectionBehavior.insert(.fullScreenNone)
         window.standardWindowButton(.zoomButton)?.isEnabled = false
         window.maxSize = NSSize(width: WindowMetrics.maxWidth, height: WindowMetrics.maxHeight)
-        // Each surface titles itself in its in-content SurfaceHeader (C3), so the
+        // Each surface titles itself in its in-content SurfaceHeader, so the
         // title-bar text is redundant — and with the per-surface navigationTitle gone
         // it would otherwise fall back to the truncated app name.
         window.titleVisibility = .hidden
@@ -184,11 +184,11 @@ private struct ToolbarControl: View {
     }
 }
 
-/// A full-pane status/failure surface at pass-2 parity (GAP-6): the app's own icon as
+/// A full-pane status/failure surface at pass-2 parity: the app's own icon as
 /// the identity moment, a state glyph + surface-title, a plain-language message, and
 /// recovery actions — so a not-found / unverified / load-failed screen looks like the
 /// same product as the happy path, not a bare system empty-state. Tints come from the
-/// caller (token-relative), so light mode stays legible (U25 re-checks).
+/// caller (token-relative), so light mode stays legible.
 private struct StatusScreen<Actions: View>: View {
     var stateIcon: String? = nil
     var stateTint: Color = .secondary
@@ -263,15 +263,15 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 struct GhosttyConfigEditorApp: App {
     @NSApplicationDelegateAdaptor(AppDelegate.self) private var appDelegate
     @State private var model = AppModel()
-    /// The current surface's "focus filter field" action, if it has a filter (U26). Drives
-    /// the "Find…" (⌘F) menu command; nil ⇒ the command disables (B1).
+    /// The current surface's "focus filter field" action, if it has a filter. Drives
+    /// the "Find…" (⌘F) menu command; nil ⇒ the command disables.
     @FocusedValue(\.focusSurfaceFilter) private var focusSurfaceFilter
 
     var body: some Scene {
-        // A single `Window`, not a `WindowGroup` (U35/GAP-5): this is a settings editor,
+        // A single `Window`, not a `WindowGroup`: this is a settings editor,
         // and two windows sharing one `AppModel` made `selection`/`query`/`applyState`
         // global — the windows interfered and could drive each other into stale-on-disk.
-        // One window matches the mental model and makes `@SceneStorage` restoration (G2)
+        // One window matches the mental model and makes `@SceneStorage` restoration
         // unambiguous (there's exactly one window's state to persist).
         Window(AppInfo.productName, id: "main") {
             RootView()
@@ -284,7 +284,12 @@ struct GhosttyConfigEditorApp: App {
         }
         .windowStyle(.titleBar)
         .commands {
-            // Smart context-aware ⌘Z (G2): a focused text field's own undo wins (so
+            // A custom About panel: the standard fields plus the Ghostty version the
+            // app is built against and a link to the project home.
+            CommandGroup(replacing: .appInfo) {
+                Button("About \(AppInfo.productName)") { showAboutPanel() }
+            }
+            // Smart context-aware ⌘Z: a focused text field's own undo wins (so
             // fixing a typo in the hex/search/value field undoes *that*, not the last
             // saved config write — the data-surprising footgun of blanket-replacing
             // `.undoRedo`); with no field-level undo, ⌘Z reverts the last applied write.
@@ -295,22 +300,22 @@ struct GhosttyConfigEditorApp: App {
                 Button("Redo") { smartRedo() }
                     .keyboardShortcut("z", modifiers: [.command, .shift])
             }
-            // Reload from disk (⌘R, G3) and the two search tiers in the View menu, so all
+            // Reload from disk (⌘R) and the two search tiers in the View menu, so all
             // are discoverable in the menu bar, not just via the toolbar/keyboard.
             CommandGroup(after: .sidebar) {
                 Button("Reload from Disk") { Task { await model.reloadFromDisk() } }
                     .keyboardShortcut("r", modifiers: .command)
                 // Standard editor convention (Xcode/VS Code): plain ⌘F searches the
-                // *current* section, ⇧⌘F widens to a global search (B1). ⌘F focuses the
-                // surface's own filter field (U26) and disables where there is none
-                // (Status/Welcome); ⌘⇧F opens the all-options Find overlay (D2).
+                // *current* section, ⇧⌘F widens to a global search. ⌘F focuses the
+                // surface's own filter field and disables where there is none
+                // (Status/Welcome); ⌘⇧F opens the all-options Find overlay.
                 Button("Find…") { focusSurfaceFilter?() }
                     .keyboardShortcut("f", modifiers: .command)
                     .disabled(focusSurfaceFilter == nil)
                 Button("Find in All Sections…") { model.beginFind() }
                     .keyboardShortcut("f", modifiers: [.command, .shift])
             }
-            // Import / export / copy the whole config in the File menu (G4). Import is
+            // Import / export / copy the whole config in the File menu. Import is
             // replace-with-backup (confirmed + undoable); the model validates before writing.
             CommandGroup(replacing: .importExport) {
                 Button("Copy Full Config") { model.copyConfigToPasteboard() }
@@ -323,12 +328,12 @@ struct GhosttyConfigEditorApp: App {
                     if let text = model.primaryConfigText { ConfigTransfer.export(text) }
                 }
             }
-            // Re-open the first-run welcome any time (F2). Replaces the app's
+            // Re-open the first-run welcome any time. Replaces the app's
             // (help-book-less) default Help menu with the one entry that's useful here.
             CommandGroup(replacing: .help) {
                 Button(AppInfo.welcomeTitle) { model.openWelcome() }
             }
-            // ⌘, still works, but there's no Preferences window anymore (G1/G6): it
+            // ⌘, still works, but there's no Preferences window anymore: it
             // selects the in-window Status hub, preserving the macOS muscle-memory
             // affordance for maintenance controls without a separate window.
             CommandGroup(replacing: .appSettings) {
@@ -347,7 +352,7 @@ struct GhosttyConfigEditorApp: App {
     /// ⌘Z: prefer the focused text field's own undo (typo fixes in the hex / search /
     /// value fields), falling back to reverting the last applied config write. Checking
     /// the first responder first is what makes ⌘Z context-aware instead of a blanket
-    /// hijack of every field's undo (G2).
+    /// hijack of every field's undo.
     private func smartUndo() {
         if let textView = NSApp.keyWindow?.firstResponder as? NSTextView,
            let undoManager = textView.undoManager, undoManager.canUndo {
@@ -355,6 +360,18 @@ struct GhosttyConfigEditorApp: App {
             return
         }
         Task { await model.undoLastApply() }  // guarded — a no-op when nothing is undoable
+    }
+
+    /// The standard macOS About panel, plus a credits blurb naming the Ghostty version
+    /// the app is built against and the project's home. Name, version, and copyright
+    /// come from the bundle's Info.plist.
+    private func showAboutPanel() {
+        let credits = NSAttributedString(
+            string: "\(AppInfo.subtitle).\nBuilt for Ghostty \(AppInfo.minimumGhosttyVersion) or newer.\n\(AppInfo.repositoryURL)",
+            attributes: [.font: NSFont.systemFont(ofSize: NSFont.smallSystemFontSize)]
+        )
+        NSApp.orderFrontStandardAboutPanel(options: [.credits: credits])
+        NSApp.activate(ignoringOtherApps: true)
     }
 
     /// ⇧⌘Z: redo applies only to the focused text field — a reverted config write has no
@@ -372,13 +389,13 @@ struct GhosttyConfigEditorApp: App {
 /// inline in the list, so there is no separate detail column.
 struct RootView: View {
     @Environment(AppModel.self) private var model
-    /// Honor Reduce Motion: transient in/out animations are dropped when it's on (H3).
+    /// Honor Reduce Motion: transient in/out animations are dropped when it's on.
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
-    /// Last-visited surface so the app reopens where you left off (G2). `@AppStorage`
-    /// (UserDefaults), not `@SceneStorage`: with a single `Window` (G6) it's app-wide
+    /// Last-visited surface so the app reopens where you left off. `@AppStorage`
+    /// (UserDefaults), not `@SceneStorage`: with a single `Window` it's app-wide
     /// state, and unlike scene restoration it doesn't depend on the OS "close windows on
-    /// quit" setting — so "reopen where you left off" is deterministic (KTD8 sanctions
-    /// either; AppStorage is the reliable one here).
+    /// quit" setting — so "reopen where you left off" is deterministic (AppStorage
+    /// is the reliable one here).
     @AppStorage("lastSelection") private var lastSelectionRaw = ""
 
     var body: some View {
@@ -412,7 +429,7 @@ struct RootView: View {
                 statusView(loadingScreen("Loading options…"))
             case .loaded:
                 browser(environment)
-                    // The first-run welcome overlays the loaded app (F2), animating in/out.
+                    // The first-run welcome overlays the loaded app, animating in/out.
                     .overlay {
                         if model.isShowingWelcome { WelcomeView() }
                     }
@@ -425,7 +442,7 @@ struct RootView: View {
         content.frame(minWidth: WindowMetrics.minWidth, minHeight: WindowMetrics.minHeight)
     }
 
-    /// A loading pane that carries the app-icon identity moment (GAP-6), so even the
+    /// A loading pane that carries the app-icon identity moment, so even the
     /// transient "locating/loading" states read as this product rather than a bare spinner.
     private func loadingScreen(_ title: String) -> some View {
         VStack(spacing: 16) {
@@ -437,7 +454,7 @@ struct RootView: View {
         .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
 
-    /// Recovery actions on the not-found/unsupported/load-failed screens (G1): choose
+    /// Recovery actions on the not-found/unsupported/load-failed screens: choose
     /// the Ghostty binary yourself (the dead-end the old copy pointed at with no UI) or
     /// retry discovery. "Choose Ghostty…" persists the pick and re-bootstraps.
     @ViewBuilder
@@ -453,8 +470,8 @@ struct RootView: View {
         }
     }
 
-    /// The surface identity of what's currently shown, for the per-surface width policy
-    /// (KTD5/R11). Derived from the model's navigation state so forms, Themes, and Keyboard
+    /// The surface identity of what's currently shown, for the per-surface width policy.
+    /// Derived from the model's navigation state so forms, Themes, and Keyboard
     /// Shortcuts each get their own bounded column width.
     private var currentContentSurface: ContentSurface {
         ContentSurface.resolve(selection: model.selection,
@@ -462,15 +479,15 @@ struct RootView: View {
     }
 
     /// The detail surface for the current selection, centered in a per-surface bounded
-    /// column (LAYOUT-1/R11). The cap is applied here — once — keyed to the current surface:
+    /// column. The cap is applied here — once — keyed to the current surface:
     /// forms keep a readable measure while Themes and Keyboard Shortcuts fill a wider canvas,
-    /// so a maximized window no longer strands a tiny centered island (AE6).
+    /// so a maximized window no longer strands a tiny centered island.
     @ViewBuilder
     private func mainColumn(ghosttyVersion: String) -> some View {
         Group {
             if model.isFinding {
                 // Global Find (⇧⌘F) overlays option results *regardless* of the current
-                // surface (D2), so it replaces the detail column while active rather
+                // surface, so it replaces the detail column while active rather
                 // than filtering whatever surface happens to be selected.
                 GlobalFindView()
                     .transition(.opacity)
@@ -481,7 +498,7 @@ struct RootView: View {
                     case .themes: ThemeBrowserView()
                     case .status:
                         // The sidebar stays on `.status` for the hub and both drill-downs;
-                        // the destination decides which sub-surface renders (KTD6). Customized
+                        // the destination decides which sub-surface renders. Customized
                         // reuses the option list (it shows the customized set), Problems its
                         // own surface, and the hub the Status view.
                         switch model.statusDestination {
@@ -496,13 +513,13 @@ struct RootView: View {
                 .transition(.opacity)
             }
         }
-        // MO-8/CB-13: Find cross-fades, keyed to `isFinding` *only* — a plain category
+        // Find cross-fades, keyed to `isFinding` *only* — a plain category
         // switch (selection changes, isFinding stays false) opens no transaction, so
-        // sidebar navigation stays instant. Gated on Reduce Motion via the one U2 helper.
+        // sidebar navigation stays instant. Gated on Reduce Motion via the one helper.
         .animation(MotionSystem.gated(MotionSystem.quickFade, reduceMotion: reduceMotion),
                    value: model.isFinding)
         .surfaceWidthColumn(ContentWidthPolicy.maxContentWidth(for: currentContentSurface))
-        // Each surface titles itself in its in-content SurfaceHeader (C3); an explicit
+        // Each surface titles itself in its in-content SurfaceHeader; an explicit
         // empty title keeps the toolbar from falling back to the truncated app name.
         .navigationTitle("")
     }
@@ -516,7 +533,7 @@ struct RootView: View {
             SidebarView()
         } detail: {
             VStack(spacing: 0) {
-                // A plain first-run explanation while no config exists yet (F2), above
+                // A plain first-run explanation while no config exists yet, above
                 // whatever surface is showing. Disappears once the first change lands.
                 if model.configMissing { FirstRunBanner() }
                 mainColumn(ghosttyVersion: environment.version)
@@ -524,11 +541,11 @@ struct RootView: View {
         }
         // Changing surface clears any lingering apply feedback so the next surface
         // (which may now show its own SurfaceFeedbackBar) doesn't inherit a stale
-        // "Saved" from the previous one (C3), and dismisses the global Find overlay so
-        // picking a sidebar row leaves Find (D2). Centralized here since every surface
+        // "Saved" from the previous one, and dismisses the global Find overlay so
+        // picking a sidebar row leaves Find. Centralized here since every surface
         // can surface feedback now, not just the option list.
-        // Restore the last-visited surface once, on first appearance of the browser
-        // (G2). Guarded to the launch default so it only restores before the user
+        // Restore the last-visited surface once, on first appearance of the browser.
+        // Guarded to the launch default so it only restores before the user
         // navigates — never overriding a live selection on a later layout pass.
         .onAppear {
             if model.selection == .themes,
@@ -539,10 +556,10 @@ struct RootView: View {
         .onChange(of: model.selection) { _, newValue in
             model.resetApplyState()
             model.endFind()
-            // Persist the surface for next launch (G2).
+            // Persist the surface for next launch.
             if let newValue { lastSelectionRaw = newValue.storageString }
         }
-        // On-activate re-sync (G3): coming back to the app after editing the config
+        // On-activate re-sync: coming back to the app after editing the config
         // externally ("Reveal in editor" invites exactly this) reloads from disk — but
         // only when the file actually changed and nothing is mid-apply, so it never
         // clobbers an in-app edit. The guard lives in the model; this only supplies the
@@ -572,13 +589,13 @@ struct RootView: View {
         }
     }
 
-    /// Global Find (⇧⌘F): the second search tier (U20). Distinct from each surface's
+    /// Global Find (⇧⌘F): the second search tier. Distinct from each surface's
     /// own local filter — it searches *all* options regardless of the current surface
     /// and opens a results overlay. Clickable (for pointer users) with a ⇧⌘F equivalent.
     private func findButton() -> some View {
-        // ⇧⌘F lives on the View-menu "Find in All Sections" command now (B1/G2), so the
+        // ⇧⌘F lives on the View-menu "Find in All Sections" command now, so the
         // shortcut isn't declared twice; this stays a click affordance for pointer users.
-        // Routed through the active-capable control (U20/IA-3) so Find-mode is legible *in
+        // Routed through the active-capable control so Find-mode is legible *in
         // the chrome*: its icon and shortcut tint when Find is in progress, and clicking it
         // again ends Find. Toggle trait remains explicit for VoiceOver.
         ToolbarControl(
