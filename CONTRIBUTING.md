@@ -3,6 +3,9 @@
 Thanks for your interest in improving Ghostty Config Editor! Contributions of all kinds are
 welcome — bug reports, feature ideas, documentation, and code.
 
+This project follows a [Code of Conduct](CODE_OF_CONDUCT.md) — please be kind and respectful. To
+report a security issue, see [SECURITY.md](SECURITY.md).
+
 ## Getting set up
 
 You'll need macOS 14+, the Swift 6 toolchain (Xcode 16+), and [Ghostty](https://ghostty.org)
