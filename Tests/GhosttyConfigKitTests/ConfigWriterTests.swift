@@ -372,16 +372,6 @@ final class ConfigWriterTests: XCTestCase {
         XCTAssertFalse(restartNotice.hasPrefix("This takes effect"))
     }
 
-    func testGitContextDetectsWorkingTree() throws {
-        let dir = try tempDir()
-        try write("font-size = 16\n", dir, "config")
-        XCTAssertFalse(GitContext.isInsideWorkingTree(path: dir.appendingPathComponent("config").path))
-
-        try FileManager.default.createDirectory(at: dir.appendingPathComponent(".git"), withIntermediateDirectories: true)
-        XCTAssertTrue(GitContext.isInsideWorkingTree(path: dir.appendingPathComponent("config").path),
-                      "a file under a dir containing .git is in a working tree")
-    }
-
     func testValidateAndApplyRejectsInvalidWithoutWriting() async throws {
         guard let binary = BinaryLocator.locateForTests() else { throw XCTSkip("Ghostty not installed") }
         let dir = try tempDir()

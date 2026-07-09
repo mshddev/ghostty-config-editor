@@ -363,17 +363,16 @@ struct ApplyFeedbackContent: View {
         switch state {
         case .idle, .applying:
             EmptyView()
-        case .succeeded(let headline, let notice, let gitTracked, let reload):
+        case .succeeded(let headline, let notice, let reload):
             VStack(alignment: .leading, spacing: 2) {
                 Label(headline, systemImage: state.feedbackSymbol)
                     .foregroundStyle(state.feedbackTint).font(.caption)
                 if let notice { Text(notice).font(.caption2).foregroundStyle(.secondary) }
+                // Only an *actionable* reload caption shows (needs manual reload / won't
+                // apply yet); the routine "asked to reload" confirmation is suppressed at
+                // the source so a happy-path save reads just "Saved · Undo" (F2).
                 if let reloadMessage = reload.message {
                     Text(reloadMessage).font(.caption2).foregroundStyle(.secondary)
-                }
-                if gitTracked {
-                    Text("This file is git-tracked — commit it in your dotfiles repo.")
-                        .font(.caption2).foregroundStyle(.secondary)
                 }
             }
         case .failed(let presentation):

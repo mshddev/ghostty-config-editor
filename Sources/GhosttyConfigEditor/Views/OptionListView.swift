@@ -441,6 +441,11 @@ struct OptionRow: View {
                     .animation(MotionSystem.gated(MotionSystem.settle, reduceMotion: reduceMotion),
                                value: option.state)
                 Spacer(minLength: 12)
+                // Transient save confirmation, tucked just left of the value control (F2):
+                // it rides in the row's flexible gap, so it never overlaps the control/ⓘ,
+                // never reflows the list, and leaves no residue. A failure or an
+                // info-carrying save falls through to the roomier block below.
+                RowSavePill(option: option)
                 editor
                 infoButton
             }
@@ -552,18 +557,100 @@ struct OptionRow: View {
     }
 }
 
-/// Per-row apply feedback (U6, MO-2). Shown only while this option is the one being
-/// written (`applyingOptionName`), so a single global apply state never decorates the
-/// wrong row. Three behaviors the old inline block lacked:
-///  - the settled feedback **fades in** under the row (`MotionSystem.quickFade` + a
-///    slide from the top); `.applying` appears instantly so "Saving…" doesn't flicker;
-///  - after ~2.5s untouched a *saved* result **collapses to a small static checkmark**,
-///    so the rows below return to place instead of being shoved permanently — ⌘Z stays
-///    the durable undo (a failure never collapses; it holds until the next edit);
-///  - a brief inline **Undo** (after a save) / **Redo** (after a revert) rides along
-///    until the collapse — the time-boxed single-step redo (U6 decision).
-/// The collapse timer keys on `applyState`: every settle is preceded by `.applying`, so
-/// the id always changes between outcomes and the 2.5s window restarts each edit.
+/// The compact, transient save confirmation for an inline edit (F2, U6, MO-2): a pill
+/// overlaid on the trailing end of the edited row. It never reflows the list and clears
+/// completely — no lingering checkmark. Only the happy path lives here ("Saving…", then
+/// "<headline> · Undo"); a save whose caption carries a notice or an actionable reload
+/// message, or a failure, falls through to the roomier `OptionRowFeedback` block below,
+/// where the longer text has space (and a failure stays put until the next edit).
+///
+/// Shown only while this option is the one being written (`applyingOptionName`), so a
+/// single global apply state never decorates the wrong row. `.applying` appears instantly
+/// so "Saving…" doesn't flicker; a saved result dismisses after ~2.5s (⌘Z stays the
+/// durable undo). The dismiss timer keys on `applyState`, so a new edit reopens it.
+private struct RowSavePill: View {
+    @Environment(AppModel.self) private var model
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    let option: MergedOption
+    @State private var dismissed = false
+
+    private var isActiveRow: Bool { model.applyingOptionName == option.option.name }
+
+    private enum Phase { case saving, saved(String) }
+
+    /// The pill only handles the compact happy path; a save carrying extra copy (a notice
+    /// or an actionable reload caption) or a failure is left to the block below.
+    private var phase: Phase? {
+        switch model.applyState {
+        case .applying:
+            return .saving
+        case .succeeded(let headline, let notice, let reload):
+            guard notice == nil, reload.message == nil, !dismissed else { return nil }
+            return .saved(headline)
+        default:
+            return nil
+        }
+    }
+
+    var body: some View {
+        Group {
+            if isActiveRow, let phase {
+                pill(phase)
+                    .transition(.opacity.combined(with: .scale(scale: 0.94)))
+            }
+        }
+        .animation(MotionSystem.gated(MotionSystem.quickFade, reduceMotion: reduceMotion),
+                   value: model.applyState)
+        .animation(MotionSystem.gated(MotionSystem.quickFade, reduceMotion: reduceMotion),
+                   value: dismissed)
+        .task(id: model.applyState) { await runDismissTimer() }
+    }
+
+    @ViewBuilder private func pill(_ phase: Phase) -> some View {
+        HStack(spacing: 8) {
+            switch phase {
+            case .saving:
+                ProgressView().controlSize(.small)
+                Text("Saving…").font(.caption2).foregroundStyle(.secondary)
+            case .saved(let headline):
+                Label(headline, systemImage: model.applyState.feedbackSymbol)
+                    .labelStyle(.titleAndIcon)
+                    .foregroundStyle(model.applyState.feedbackTint)
+                    .font(.caption)
+                if model.canUndo {
+                    Button("Undo") { Task { await model.undoLastApply() } }
+                        .buttonStyle(.link).font(.caption2)
+                } else if model.canRedoApply {
+                    Button("Redo") { Task { await model.redoLastApply() } }
+                        .buttonStyle(.link).font(.caption2)
+                }
+            }
+        }
+        .padding(.horizontal, DesignTokens.Spacing.cozy)
+        .padding(.vertical, DesignTokens.Spacing.tight + 1)
+        // A soft capsule so the pill reads as a distinct, momentary chip in the row gap.
+        .background(DesignTokens.subtleFill, in: Capsule())
+        .fixedSize()
+    }
+
+    /// Reset on every state change, then — only for *this* row's compact saved result —
+    /// wait ~2.5s and clear. Cancelled/restarted whenever `applyState` changes.
+    private func runDismissTimer() async {
+        dismissed = false
+        guard isActiveRow, case .succeeded = model.applyState else { return }
+        try? await Task.sleep(for: .seconds(2.5))
+        guard !Task.isCancelled else { return }
+        withAnimation(MotionSystem.gated(MotionSystem.quickFade, reduceMotion: reduceMotion)) {
+            dismissed = true
+        }
+    }
+}
+
+/// The roomy per-row feedback block, rendered *below* the row (U6). Reserved now for the
+/// cases the compact trailing pill can't hold: a validation **failure** (whose message +
+/// Reload action need space and must persist until the next edit), and a **save that
+/// carries a notice or an actionable reload caption** (Ghostty not running, manual reload
+/// needed). The routine "Saved · Undo" lives in `RowSavePill`, so this stays hidden for it.
 private struct OptionRowFeedback: View {
     @Environment(AppModel.self) private var model
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
@@ -572,9 +659,19 @@ private struct OptionRowFeedback: View {
 
     private var isActiveRow: Bool { model.applyingOptionName == option.option.name }
 
+    /// True while this roomy block should render: a failure, or a save whose caption
+    /// carries a notice / actionable reload message that won't fit the trailing pill.
+    private var showsBlock: Bool {
+        switch model.applyState {
+        case .failed: return true
+        case .succeeded(_, let notice, let reload): return notice != nil || reload.message != nil
+        default: return false
+        }
+    }
+
     var body: some View {
         Group {
-            if isActiveRow {
+            if isActiveRow, showsBlock {
                 content
                     .padding(.leading, 15)
             }
@@ -586,15 +683,8 @@ private struct OptionRowFeedback: View {
 
     @ViewBuilder private var content: some View {
         switch model.applyState {
-        case .idle:
-            EmptyView()
-        case .applying:
-            HStack(spacing: 6) {
-                ProgressView().controlSize(.small)
-                Text("Saving…").font(.caption2).foregroundStyle(.secondary)
-            }
-        case .succeeded(let headline, _, _, _):
-            succeeded(headline: headline)
+        case .succeeded:
+            succeeded()
                 .transition(.opacity.combined(with: .move(edge: .top)))
         case .failed(let presentation):
             HStack(alignment: .firstTextBaseline, spacing: 8) {
@@ -607,18 +697,15 @@ private struct OptionRowFeedback: View {
                 }
             }
             .transition(.opacity.combined(with: .move(edge: .top)))
+        default:
+            EmptyView()
         }
     }
 
-    @ViewBuilder private func succeeded(headline: String) -> some View {
-        if collapsed {
-            // Collapsed: a small static checkmark, so the rows below return to place. The
-            // headline is its accessibility label so VoiceOver still says Saved/Reverted.
-            Image(systemName: model.applyState.feedbackSymbol)
-                .foregroundStyle(model.applyState.feedbackTint)
-                .font(.caption)
-                .accessibilityLabel(headline)
-        } else {
+    @ViewBuilder private func succeeded() -> some View {
+        // Clears completely after the window — no lingering checkmark (F2); the row's reset
+        // glyph still marks it customized and ⌘Z stays the durable undo.
+        if !collapsed {
             VStack(alignment: .leading, spacing: 4) {
                 ApplyFeedbackContent(state: model.applyState)
                 if model.canUndo {
@@ -632,9 +719,8 @@ private struct OptionRowFeedback: View {
         }
     }
 
-    /// Reset on every state change, then — only for *this* row's saved result — wait
-    /// ~2.5s and collapse. Cancelled and restarted whenever `applyState` changes (the
-    /// `.task(id:)` identity), so a new edit reopens the full feedback.
+    /// Reset on every state change, then — only for *this* row's saved result — wait ~2.5s
+    /// and clear (a failure never collapses; it holds until the next edit).
     private func runCollapseTimer() async {
         collapsed = false
         guard isActiveRow, case .succeeded = model.applyState else { return }

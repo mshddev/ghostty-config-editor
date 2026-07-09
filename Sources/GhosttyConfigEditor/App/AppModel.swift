@@ -115,11 +115,10 @@ public final class AppModel {
         case applying
         /// Saved successfully. `headline` is the lead word — "Saved" for an apply,
         /// "Reverted" for an undo — so an undo stops stacking "Saved" over "Reverted"
-        /// (CM-6). `notice` carries a new-surface/restart hint (AE5); `gitTracked` is
-        /// true when the file lives in a git working tree (U7); `reload` is the
+        /// (CM-6). `notice` carries a new-surface/restart hint (AE5); `reload` is the
         /// auto-reload outcome whose kit-derived caption the views stack beneath the
-        /// notice (R1, R6 — see `GhosttyReloader`).
-        case succeeded(headline: String, notice: String?, gitTracked: Bool, reload: ReloadOutcome)
+        /// notice — but only when it's actionable (R1, R6 — see `GhosttyReloader`).
+        case succeeded(headline: String, notice: String?, reload: ReloadOutcome)
         /// A write/validation failure, normalized at the boundary (KTD4/R3): the presentation
         /// carries the plain-language `message`, the raw diagnostic as secondary `detail`,
         /// and `offersReload` (true only for stale-on-disk, where re-reading disk is the fix
@@ -473,13 +472,12 @@ public final class AppModel {
             // apply supersedes a revert that could have been redone (U6).
             lastApplyEdit = (optionName, values)
             redoableApply = nil
-            let gitTracked = GitContext.isInsideWorkingTree(path: receipt.resolvedPath)
             if let catalog { await refreshConfig(environment: environment, catalog: catalog) }
             // Best-effort: ask the running Ghostty to reload now that the new bytes are
             // committed (R1). Never throws — the only throwing call here is the write
             // above — and never downgrades a successful save to a failure (R5/KTD5).
             let reload = reloader.reload(enabled: autoReloadEnabled)
-            applyState = .succeeded(headline: "Saved", notice: option.option.applyNotice, gitTracked: gitTracked, reload: reload)
+            applyState = .succeeded(headline: "Saved", notice: option.option.applyNotice, reload: reload)
         } catch {
             // Normalize every failure at the boundary (KTD4/R3): validation diagnostics,
             // stale-on-disk, line-break refusals, and any other error become plain language
@@ -527,7 +525,7 @@ public final class AppModel {
             let reload = reloader.reload(enabled: autoReloadEnabled)
             // "Reverted" as the headline, so the UI stops stacking "Saved" over the
             // revert message (CM-6); the reload caption still rides beneath if present.
-            applyState = .succeeded(headline: "Reverted", notice: nil, gitTracked: false, reload: reload)
+            applyState = .succeeded(headline: "Reverted", notice: nil, reload: reload)
         } catch {
             applyState = .failed(EditErrorPresentation.present(error))
         }
@@ -795,10 +793,9 @@ public final class AppModel {
             // never offers to redo a stale, unrelated inline edit (U6).
             lastApplyEdit = nil
             redoableApply = nil
-            let gitTracked = GitContext.isInsideWorkingTree(path: receipt.resolvedPath)
             await refreshConfig(environment: environment, catalog: catalog)
             let reload = reloader.reload(enabled: autoReloadEnabled)
-            applyState = .succeeded(headline: "Saved", notice: notice, gitTracked: gitTracked, reload: reload)
+            applyState = .succeeded(headline: "Saved", notice: notice, reload: reload)
         } catch {
             // Batch/import writes carry no single option, so the generic vocabulary applies;
             // still normalized so no raw diagnostic reaches the feedback bar (KTD4/R3).
