@@ -1,6 +1,6 @@
 // Generates AppIcon.iconset PNGs for Ghostty Config Editor — no external image
-// asset needed. Draws a rounded-squircle with an indigo→violet gradient and a
-// bold white ">_" terminal prompt, rendered crisply at every macOS icon size.
+// asset needed. Draws a rounded-squircle with an indigo→violet gradient and three
+// bold white configuration sliders, rendered crisply at every macOS icon size.
 //
 // Usage:  swift packaging/make-icon.swift <iconset-output-dir>
 // Then:   iconutil -c icns <iconset-output-dir> -o packaging/AppIcon.icns
@@ -24,8 +24,6 @@ func render(_ px: Int) -> Data {
     NSGraphicsContext.saveGraphicsState()
     NSGraphicsContext.current = NSGraphicsContext(bitmapImageRep: rep)!
 
-    func pt(_ fx: CGFloat, _ fy: CGFloat) -> NSPoint { NSPoint(x: s * fx, y: s * fy) }
-
     // Squircle background with a diagonal indigo→violet gradient.
     let inset = s * 0.055
     let side = s - 2 * inset
@@ -35,31 +33,31 @@ func render(_ px: Int) -> Data {
     let bottom = NSColor(srgbRed: 0.26, green: 0.16, blue: 0.66, alpha: 1.0) // #4329A8
     NSGradient(starting: top, ending: bottom)!.draw(in: squircle, angle: -90)
 
-    // ">_" prompt in white, with a soft drop shadow for depth.
+    // Three configuration sliders in white, with a soft drop shadow for depth.
     let glow = NSShadow()
     glow.shadowColor = NSColor.black.withAlphaComponent(0.28)
     glow.shadowBlurRadius = s * 0.02
     glow.shadowOffset = NSSize(width: 0, height: -s * 0.012)
     glow.set()
 
-    NSColor.white.setStroke()
-    let lineWidth = s * 0.072
-
-    let chevron = NSBezierPath()
-    chevron.lineWidth = lineWidth
-    chevron.lineCapStyle = .round
-    chevron.lineJoinStyle = .round
-    chevron.move(to: pt(0.33, 0.65))
-    chevron.line(to: pt(0.54, 0.50))
-    chevron.line(to: pt(0.33, 0.35))
-    chevron.stroke()
-
-    let cursor = NSBezierPath()
-    cursor.lineWidth = lineWidth
-    cursor.lineCapStyle = .round
-    cursor.move(to: pt(0.58, 0.355))
-    cursor.line(to: pt(0.72, 0.355))
-    cursor.stroke()
+    // A slider: a translucent white track with a solid white knob at `knob` (0…1).
+    func slider(y: CGFloat, knob: CGFloat) {
+        let x0: CGFloat = 0.28, x1: CGFloat = 0.72
+        let h = s * 0.05
+        let track = NSBezierPath(roundedRect: NSRect(x: s * x0, y: s * y - h / 2,
+                                                     width: s * (x1 - x0), height: h),
+                                 xRadius: h / 2, yRadius: h / 2)
+        NSColor.white.withAlphaComponent(0.32).setFill()
+        track.fill()
+        let r = s * 0.052
+        let kx = s * (x0 + (x1 - x0) * knob)
+        let dot = NSBezierPath(ovalIn: NSRect(x: kx - r, y: s * y - r, width: r * 2, height: r * 2))
+        NSColor.white.setFill()
+        dot.fill()
+    }
+    slider(y: 0.635, knob: 0.62)
+    slider(y: 0.500, knob: 0.34)
+    slider(y: 0.365, knob: 0.72)
 
     NSGraphicsContext.restoreGraphicsState()
     return rep.representation(using: .png, properties: [:])!
