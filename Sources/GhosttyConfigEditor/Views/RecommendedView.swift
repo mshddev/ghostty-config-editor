@@ -31,7 +31,20 @@ struct RecommendedView: View {
             ProgressView("Loading catalog…")
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
         } else {
+            @Bindable var model = model
             Form {
+                // Auto-reload is an *app* behavior, not a Ghostty option key, so it's a
+                // hardcoded toggle here (like `themeRow` and "Next steps") rather than a
+                // recommended catalog row. Surfaced first so a newcomer meets "the app
+                // reloads Ghostty when you save" before changing anything. It also lives on
+                // Status; both bind the same `autoReloadEnabled`, so the two never drift.
+                Section("Live reload") {
+                    Toggle("Automatically reload Ghostty after changes", isOn: $model.autoReloadEnabled)
+                    Text("After each saved change, the app asks the running Ghostty to reload its config so live terminals update right away. Uses Ghostty's reload signal — needs Ghostty 1.2 or newer.")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
                 ForEach(model.recommendedSections()) { section in
                     Section(section.title) {
                         ForEach(section.options) { option in
