@@ -18,5 +18,10 @@ DerivedData/
 # Claude Code machine-local settings
 .claude/settings.local.json
 
-# Local release-prep working doc (not part of the published project)
+# Local release-prep working docs (not part of the published project)
 /RELEASE_CHECKLIST.md
+/RELEASING.md
+
+# Screen recordings — source footage for demo GIFs, not for the repo
+*.mov
+*.mp4
