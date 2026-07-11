@@ -7,6 +7,10 @@
 ![Platform: macOS 14+](https://img.shields.io/badge/macOS-14%2B-black?logo=apple)
 ![Swift 6](https://img.shields.io/badge/Swift-6-f05138?logo=swift&logoColor=white)
 
+<p align="center">
+  <img src="assets/demo.gif" alt="Ghostty Config Editor — browsing the option catalog, searching by intent, and picking a theme from the live previews" width="820">
+</p>
+
 Ghostty is configured through a plain text file — which is fine, right up until you're digging
 through the docs for the exact option name, or you save one typo and the terminal won't start. So
 this app puts a small UI on top of that file: browse every option with its official docs, search by
