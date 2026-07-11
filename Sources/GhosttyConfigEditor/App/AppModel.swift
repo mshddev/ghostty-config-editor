@@ -373,6 +373,10 @@ public final class AppModel {
             self.environment = environment
             environmentState = .ready(environment)
             await loadContent(environment)
+            // Open-file events that arrived before the config was in (cold launch
+            // via Finder / Ghostty's ⌘,) can be evaluated now. A no-op if empty
+            // or if loading failed (the buffer then waits for the next bootstrap).
+            await drainOpenedFiles()
         } catch GhosttyCLIError.binaryNotFound {
             environmentState = .notFound
         } catch GhosttyCLIError.versionUnverified(let output) {
@@ -422,7 +426,8 @@ public final class AppModel {
     }
 
     /// An empty config model targeting the real primary config path, so a
-    /// first-ever write lands at `~/.config/ghostty/config`.
+    /// first-ever write lands at `~/.config/ghostty/config.ghostty` (the
+    /// preferred name — see `ConfigReader.candidateFilenames`).
     private static func emptyModel() -> ConfigModel {
         let path = ConfigReader.configDirectory()
             .appendingPathComponent(ConfigReader.candidateFilenames.first ?? "config").path
@@ -584,6 +589,55 @@ public final class AppModel {
         await reloadFromDisk()
     }
 
+    // MARK: - Files opened via LaunchServices
+
+    /// The mismatch a foreign opened file surfaces: the path the user opened vs.
+    /// the active config this app actually edits. The shell presents it as an
+    /// alert; nil while there is nothing to explain.
+    public struct ForeignOpenedFile: Equatable, Sendable {
+        public let openedPath: String
+        public let activePath: String
+    }
+
+    /// Set when the most recently opened file is NOT part of the active config,
+    /// so the shell can say so instead of silently showing a different file's
+    /// contents. Cleared when the alert is dismissed.
+    public var foreignOpenedFile: ForeignOpenedFile?
+
+    /// Files handed over by LaunchServices — a Finder double-click, or the
+    /// intended path: Ghostty's ⌘, opening `config.ghostty` with this app as its
+    /// default editor. Buffered because deciding "is this the active config?"
+    /// needs the loaded model; `bootstrap()` drains the buffer once content loads.
+    private var pendingOpenedFileURLs: [URL] = []
+
+    /// Entry point for the app delegate's `application(_:open:)`.
+    public func handleOpenedFiles(_ urls: [URL]) async {
+        pendingOpenedFileURLs.append(contentsOf: urls)
+        // Pre-load arrivals wait: a cold-launch open event races the scene's
+        // bootstrap task, and bootstrap drains the buffer when the config is in.
+        guard contentState == .loaded else { return }
+        await drainOpenedFiles()
+    }
+
+    private func drainOpenedFiles() async {
+        guard let browser, !pendingOpenedFileURLs.isEmpty else { return }
+        let urls = pendingOpenedFileURLs
+        pendingOpenedFileURLs = []
+        let model = browser.merged.model
+        // The active config (primary or an include) was opened — the ⌘, case.
+        // The window already shows the right file; just fold in any external
+        // edits, exactly like regaining focus after a "Reveal in editor" trip.
+        if urls.contains(where: { model.containsFile(atPath: $0.path) }) {
+            await syncFromDiskIfChanged()
+        }
+        if let foreign = urls.last(where: { !model.containsFile(atPath: $0.path) }) {
+            foreignOpenedFile = ForeignOpenedFile(
+                openedPath: foreign.path,
+                activePath: model.primary.resolvedPath
+            )
+        }
+    }
+
     // MARK: - Status pane data
 
     /// The resolved Ghostty binary path, shown in the Status "Ghostty" section — nil
@@ -662,6 +716,52 @@ public final class AppModel {
         case .showSetting(let name): focus(optionNamed: name)
         case .openFile(let path, let line): openConfigFile(at: path, line: line)
         }
+    }
+
+    // MARK: - Legacy config filename migration
+
+    /// The rename the Status hub offers — the legacy extension-less `config` →
+    /// `config.ghostty` — or nil when there is nothing to offer (already the
+    /// preferred name, no file yet, or a preferred-name sibling exists). Derived
+    /// fresh from the loaded model so the offer disappears the moment it's done.
+    public var configRenameOffer: (from: String, to: String)? {
+        guard !configMissing, let primary = browser?.merged.model.primary.resolvedPath else { return nil }
+        return ConfigMigration.renameOffer(forPrimaryAt: primary)
+    }
+
+    /// Rename the legacy `config` to `config.ghostty`, then reload so the reader,
+    /// writer, and UI all target the new path. Enqueued like every other disk
+    /// mutation so it never races an in-flight write targeting the old path.
+    public func renameLegacyConfig() async {
+        await writeQueue.submit(key: nil) { [weak self] in
+            await self?.performRenameLegacyConfig()
+        }
+    }
+
+    private func performRenameLegacyConfig() async {
+        guard let offer = configRenameOffer else { return }
+        do {
+            _ = try ConfigMigration.renameLegacyPrimary(at: offer.from)
+        } catch {
+            applyState = .failed(EditErrorPresentation(
+                message: "Couldn't rename the config file.",
+                detail: (error as NSError).localizedDescription
+            ))
+            return
+        }
+        // Any undo/redo replay from before the rename targets the *old* path;
+        // restoring it would resurrect the legacy file next to the new one.
+        lastReceipt = nil
+        lastApplyEdit = nil
+        redoableApply = nil
+        await reloadFromDisk()   // re-targets the new path; also resets applyState
+        // `.disabled` on purpose: the bytes are unchanged and Ghostty ≥ 1.3 reads
+        // the new name on its own, so there is nothing to signal or caption.
+        applyState = .succeeded(
+            headline: "Renamed",
+            notice: "Your config is now config.ghostty — the name Ghostty prefers. If scripts or dotfiles reference the old path, update them.",
+            reload: .disabled
+        )
     }
 
     /// Create an empty config file at the primary path when none exists yet, so a

@@ -228,7 +228,31 @@ private struct StatusScreen<Actions: View>: View {
 /// the process as a background agent and never shows a window. Promote it to a
 /// regular foreground app and bring it to the front. Inside a real bundle this
 /// is a harmless no-op.
+///
+/// Also the receiving end of the packaged app's `.ghostty` document claim
+/// (`scripts/package-app.sh`): LaunchServices delivers opened files here — a
+/// Finder double-click, or the intended path, Ghostty's ⌘, opening
+/// `config.ghostty` with this app as its default editor.
+@MainActor
 final class AppDelegate: NSObject, NSApplicationDelegate {
+    /// Set by the App once the SwiftUI scene exists. On a cold launch the
+    /// open-file event can beat scene construction, so arrivals buffer here
+    /// until the model attaches, then flush.
+    var model: AppModel? { didSet { flushOpenedFiles() } }
+    private var openedFileURLs: [URL] = []
+
+    func application(_ application: NSApplication, open urls: [URL]) {
+        openedFileURLs.append(contentsOf: urls)
+        flushOpenedFiles()
+    }
+
+    private func flushOpenedFiles() {
+        guard let model, !openedFileURLs.isEmpty else { return }
+        let urls = openedFileURLs
+        openedFileURLs = []
+        Task { await model.handleOpenedFiles(urls) }
+    }
+
     func applicationDidFinishLaunching(_ notification: Notification) {
         NSApp.setActivationPolicy(.regular)
         NSApp.activate()
@@ -281,7 +305,25 @@ struct GhosttyConfigEditorApp: App {
                 .background(WindowConfigurator())   // no fullscreen/zoom, bounded max width
                 // Bootstrap, then decide once whether to present the first-run welcome
                 // (needs `configMissing`, known only after the config is read).
-                .task { await model.bootstrap(); model.showWelcomeIfNeeded() }
+                // Attaching the model to the delegate first releases any open-file
+                // events buffered before the scene existed; they drain once the
+                // config is loaded (see `AppModel.handleOpenedFiles`).
+                .task { appDelegate.model = model; await model.bootstrap(); model.showWelcomeIfNeeded() }
+                // A file opened *with* the app (Finder, or Ghostty's ⌘,) that is NOT
+                // part of the active config gets an honest mismatch alert — the app
+                // would otherwise silently keep showing a different file's contents.
+                .alert(
+                    "This isn't your active Ghostty config",
+                    isPresented: Binding(
+                        get: { model.foreignOpenedFile != nil },
+                        set: { if !$0 { model.foreignOpenedFile = nil } }
+                    ),
+                    presenting: model.foreignOpenedFile
+                ) { _ in
+                    Button("OK", role: .cancel) {}
+                } message: { file in
+                    Text("You opened \(homePath(file.openedPath)). \(AppInfo.productName) edits your Ghostty config at \(homePath(file.activePath)), and that's the file shown here.")
+                }
         }
         .windowStyle(.titleBar)
         .commands {
@@ -373,6 +415,11 @@ struct GhosttyConfigEditorApp: App {
         )
         NSApp.orderFrontStandardAboutPanel(options: [.credits: credits])
         NSApp.activate(ignoringOtherApps: true)
+    }
+
+    /// A filesystem path with the home directory abbreviated to `~`, for alert copy.
+    private func homePath(_ path: String) -> String {
+        (path as NSString).abbreviatingWithTildeInPath
     }
 
     /// ⇧⌘Z: redo applies only to the focused text field — a reverted config write has no

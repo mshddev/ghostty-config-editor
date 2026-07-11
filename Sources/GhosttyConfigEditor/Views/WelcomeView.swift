@@ -114,7 +114,7 @@ struct FirstRunBanner: View {
                 .accessibilityHidden(true)
             Text("No Ghostty config yet — your first change will create ")
                 .foregroundStyle(.secondary)
-            + Text("~/.config/ghostty/config").font(.caption.monospaced()).foregroundStyle(.secondary)
+            + Text("~/.config/ghostty/config.ghostty").font(.caption.monospaced()).foregroundStyle(.secondary)
             Spacer(minLength: 0)
         }
         .font(.caption)
@@ -124,6 +124,6 @@ struct FirstRunBanner: View {
         .background(Color.accentColor.opacity(0.08))
         .overlay(alignment: .bottom) { Divider() }
         .accessibilityElement(children: .combine)
-        .accessibilityLabel("No Ghostty config yet. Your first change will create the file at ~/.config/ghostty/config.")
+        .accessibilityLabel("No Ghostty config yet. Your first change will create the file at ~/.config/ghostty/config.ghostty.")
     }
 }

@@ -95,6 +95,46 @@ cat > "${APP_DIR}/Contents/Info.plist" <<PLIST
     <true/>
     <key>NSHumanReadableCopyright</key>
     <string>${COPYRIGHT}</string>
+    <!-- Claim the .ghostty extension (Ghostty >= 1.3 names its config config.ghostty
+         and opens it via the LaunchServices default editor for that extension, so
+         owning it is what routes Ghostty's cmd+, to this app). Nothing else declares
+         the extension — not even Ghostty.app — so Owner rank makes this app the
+         default as soon as LaunchServices registers the bundle. -->
+    <key>CFBundleDocumentTypes</key>
+    <array>
+        <dict>
+            <key>CFBundleTypeName</key>
+            <string>Ghostty Configuration</string>
+            <key>CFBundleTypeRole</key>
+            <string>Editor</string>
+            <key>LSHandlerRank</key>
+            <string>Owner</string>
+            <key>LSItemContentTypes</key>
+            <array>
+                <string>com.mshddev.ghostty-config</string>
+            </array>
+        </dict>
+    </array>
+    <key>UTExportedTypeDeclarations</key>
+    <array>
+        <dict>
+            <key>UTTypeIdentifier</key>
+            <string>com.mshddev.ghostty-config</string>
+            <key>UTTypeDescription</key>
+            <string>Ghostty Configuration</string>
+            <key>UTTypeConformsTo</key>
+            <array>
+                <string>public.plain-text</string>
+            </array>
+            <key>UTTypeTagSpecification</key>
+            <dict>
+                <key>public.filename-extension</key>
+                <array>
+                    <string>ghostty</string>
+                </array>
+            </dict>
+        </dict>
+    </array>
 ${ICON_KEY}
 </dict>
 </plist>

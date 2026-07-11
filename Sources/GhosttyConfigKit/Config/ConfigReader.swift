@@ -224,9 +224,16 @@ public enum ConfigReadError: Error, Equatable, Sendable {
 public struct ConfigReader: Sendable {
 
     /// Config filenames tried in priority order within the config directory.
-    /// `config` is Ghostty's canonical name; `config.ghostty` is also supported
-    /// (and is what this project's author uses).
-    public static let candidateFilenames = ["config", "config.ghostty"]
+    /// Since Ghostty 1.3.0 the default name is `config.ghostty` (and when both
+    /// exist Ghostty reads only that one), so it is preferred here too; the
+    /// extension-less `config` is the pre-1.3 legacy name, still honored.
+    public static let candidateFilenames = ["config.ghostty", "config"]
+
+    /// The preferred (Ghostty ≥ 1.3) primary config filename.
+    public static var preferredFilename: String { candidateFilenames[0] }
+
+    /// The pre-1.3 extension-less filename.
+    public static var legacyFilename: String { candidateFilenames[1] }
 
     public init() {}
 

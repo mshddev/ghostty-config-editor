@@ -1,5 +1,6 @@
 import SwiftUI
 import AppKit
+import UniformTypeIdentifiers
 import GhosttyConfigKit
 
 /// The in-window Status hub. It keeps infrequent environment and maintenance state out
@@ -17,6 +18,11 @@ struct StatusView: View {
     @Environment(AppModel.self) private var model
     let ghosttyVersion: String
     @State private var confirmingReset = false
+    @State private var confirmingRename = false
+    /// Whether this bundle is the LaunchServices default editor for `.ghostty` —
+    /// read on appear and after registering (NSWorkspace state isn't observable).
+    @State private var isDefaultEditor = false
+    @State private var registrationError: String?
 
     var body: some View {
         VStack(spacing: 0) {
@@ -104,6 +110,7 @@ struct StatusView: View {
         Section("Environment") {
             ghosttyRow
             configFileRow
+            ghosttyIntegrationRow
             VStack(alignment: .leading, spacing: DesignTokens.Spacing.tight) {
                 Toggle("Automatically reload Ghostty after changes", isOn: $model.autoReloadEnabled)
                 Text("After each saved change, the app asks the running Ghostty to reload its config so live terminals update right away. Uses Ghostty's reload signal — needs Ghostty 1.2 or newer.")
@@ -161,6 +168,96 @@ struct StatusView: View {
             if model.configMissing {
                 Button("Create") { Task { await model.createConfigFileIfMissing() } }
             }
+        }
+    }
+
+    /// Ghostty ⌘, integration. Ghostty (≥ 1.3) opens its config with the
+    /// LaunchServices default editor for the file's *extension*, so landing its
+    /// Open Config command here takes two independently-completable steps, each
+    /// with its own row state: the config must carry the `.ghostty` name (legacy
+    /// extension-less files get a rename offer), and this app must be the default
+    /// editor for `.ghostty` (a one-click registration). Hidden outside a packaged
+    /// `.app` — `swift run` yields a bare executable LaunchServices can't register.
+    @ViewBuilder
+    private var ghosttyIntegrationRow: some View {
+        if DefaultEditorRegistration.isCapable {
+            HStack(spacing: DesignTokens.Spacing.cozy) {
+                if let offer = model.configRenameOffer {
+                    healthGlyph("circle.dashed", tint: .secondary, label: "Not set up")
+                    VStack(alignment: .leading, spacing: 1) {
+                        Text("Open from Ghostty (⌘,)")
+                        Text("Ghostty opens its config in the editor assigned to .ghostty files. Rename \(fileName(offer.from)) to \(fileName(offer.to)) to enable that here.")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
+                    Spacer(minLength: DesignTokens.Spacing.snug)
+                    Button("Rename…") { confirmingRename = true }
+                } else if primaryHasGhosttyExtension {
+                    if isDefaultEditor {
+                        healthGlyph("checkmark.circle.fill", tint: .green, label: "Ready")
+                        VStack(alignment: .leading, spacing: 1) {
+                            Text("Open from Ghostty (⌘,)")
+                            Text("Ghostty's Open Config command opens this app.")
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+                        }
+                        Spacer(minLength: DesignTokens.Spacing.snug)
+                    } else {
+                        healthGlyph("circle.dashed", tint: .secondary, label: "Not set up")
+                        VStack(alignment: .leading, spacing: 1) {
+                            Text("Open from Ghostty (⌘,)")
+                            Text("Ghostty opens its config in the editor assigned to .ghostty files. Make that this app, and ⌘, in Ghostty lands here.")
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+                                .fixedSize(horizontal: false, vertical: true)
+                            if let registrationError {
+                                Text(registrationError)
+                                    .font(.caption)
+                                    .foregroundStyle(.red)
+                                    .fixedSize(horizontal: false, vertical: true)
+                            }
+                        }
+                        Spacer(minLength: DesignTokens.Spacing.snug)
+                        Button("Use This App") { registerAsDefaultEditor() }
+                    }
+                }
+            }
+            .task { isDefaultEditor = DefaultEditorRegistration.isCurrentDefault }
+            .confirmationDialog(
+                "Rename config to config.ghostty?",
+                isPresented: $confirmingRename, titleVisibility: .visible
+            ) {
+                Button("Rename") { Task { await model.renameLegacyConfig() } }
+                Button("Cancel", role: .cancel) {}
+            } message: {
+                Text("Same file, same contents — only the name changes, and Ghostty (1.3 or newer) keeps reading it. If scripts or dotfiles reference the old path by name, update them afterwards.")
+            }
+        }
+    }
+
+    /// True when the primary config (existing or first-write target) already
+    /// carries the `.ghostty` extension Ghostty's editor lookup keys on.
+    private var primaryHasGhosttyExtension: Bool {
+        guard let path = model.configFilePath else { return false }
+        return (path as NSString).pathExtension == "ghostty"
+    }
+
+    private func fileName(_ path: String) -> String {
+        (path as NSString).lastPathComponent
+    }
+
+    /// Register this bundle as the default `.ghostty` editor, then re-read the
+    /// LaunchServices state so the row flips to Ready (or surfaces the failure).
+    private func registerAsDefaultEditor() {
+        Task {
+            do {
+                try await DefaultEditorRegistration.makeDefault()
+                registrationError = nil
+            } catch {
+                registrationError = "Couldn't set the default editor: \(error.localizedDescription)"
+            }
+            isDefaultEditor = DefaultEditorRegistration.isCurrentDefault
         }
     }
 
@@ -292,6 +389,40 @@ enum ConfigTransfer {
         alert.addButton(withTitle: "Replace")
         alert.addButton(withTitle: "Cancel")
         return alert.runModal() == .alertFirstButtonReturn ? text : nil
+    }
+}
+
+/// LaunchServices state + registration for the `.ghostty` extension — the piece
+/// that makes Ghostty's ⌘, land in this app. Ghostty (≥ 1.3) resolves which
+/// editor opens its config via the default application for the file's extension;
+/// the packaged Info.plist (`scripts/package-app.sh`) declares the UTI and the
+/// Editor claim, and this sets or inspects the user's default-handler choice.
+///
+/// `@MainActor` because its only callers are SwiftUI view actions, matching the
+/// other AppKit-facing helpers in this file.
+@MainActor
+enum DefaultEditorRegistration {
+    /// The type LaunchServices resolves for the `.ghostty` extension — this
+    /// app's exported declaration once the bundle is registered, or a dynamic
+    /// type before that. Either way it is the type Ghostty's lookup resolves.
+    private static var ghosttyType: UTType? { UTType(filenameExtension: "ghostty") }
+
+    /// True when running from a packaged `.app` — the only form LaunchServices
+    /// can register as a handler. `swift run` yields a bare executable, so the
+    /// Status row hides instead of offering a registration that must fail.
+    static var isCapable: Bool { Bundle.main.bundleURL.pathExtension == "app" }
+
+    /// True when this bundle is already the default editor for `.ghostty`.
+    static var isCurrentDefault: Bool {
+        guard let type = ghosttyType,
+              let current = NSWorkspace.shared.urlForApplication(toOpen: type) else { return false }
+        return current.standardizedFileURL.path == Bundle.main.bundleURL.standardizedFileURL.path
+    }
+
+    /// Make this bundle the LaunchServices default editor for `.ghostty` files.
+    static func makeDefault() async throws {
+        guard let type = ghosttyType else { return }
+        try await NSWorkspace.shared.setDefaultApplication(at: Bundle.main.bundleURL, toOpen: type)
     }
 }
 

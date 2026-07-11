@@ -188,4 +188,13 @@ public struct ConfigModel: Sendable {
     public func file(resolvedPath: String) -> ConfigFile? {
         allFiles.first { $0.resolvedPath == resolvedPath }
     }
+
+    /// True when `path` names one of this model's files — the primary or any
+    /// `config-file` include. Canonicalized before comparing, matching how the
+    /// reader stamps `resolvedPath`, so a symlinked spelling of the same file
+    /// still counts. Decides whether a file handed to the app by LaunchServices
+    /// (Finder double-click, Ghostty's ⌘,) is part of the active config.
+    public func containsFile(atPath path: String) -> Bool {
+        file(resolvedPath: ConfigReader.canonicalPath(path)) != nil
+    }
 }

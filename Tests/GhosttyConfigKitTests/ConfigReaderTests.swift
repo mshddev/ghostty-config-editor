@@ -192,14 +192,72 @@ final class ConfigReaderTests: XCTestCase {
         XCTAssertEqual(dir.path, "/Users/x/.config/ghostty")
     }
 
-    func testLocatePrefersCanonicalThenDotGhostty() throws {
+    func testLocatePrefersDotGhosttyOverLegacy() throws {
         let dir = try makeTempConfigDir()
-        try write("font-size = 1\n", to: dir, "config.ghostty")
-        // only config.ghostty exists → it's found
-        XCTAssertEqual(ConfigReader.locatePrimaryConfig(in: dir)?.lastPathComponent, "config.ghostty")
-        // add canonical `config` → it now takes precedence
+        // Only the legacy extension-less `config` exists → it's found.
         try write("font-size = 2\n", to: dir, "config")
         XCTAssertEqual(ConfigReader.locatePrimaryConfig(in: dir)?.lastPathComponent, "config")
+        // Add `config.ghostty` → it takes precedence, matching Ghostty ≥ 1.3
+        // (which reads only the .ghostty file when both exist).
+        try write("font-size = 1\n", to: dir, "config.ghostty")
+        XCTAssertEqual(ConfigReader.locatePrimaryConfig(in: dir)?.lastPathComponent, "config.ghostty")
+    }
+
+    func testModelContainsFileMatchesPrimaryAndIncludes() throws {
+        let dir = try makeTempConfigDir()
+        try write("config-file = extra.conf\n", to: dir, "config")
+        try write("font-size = 20\n", to: dir, "extra.conf")
+        let model = try reader.readModel(primaryPath: dir.appendingPathComponent("config").path)
+        XCTAssertTrue(model.containsFile(atPath: dir.appendingPathComponent("config").path))
+        XCTAssertTrue(model.containsFile(atPath: dir.appendingPathComponent("extra.conf").path))
+        XCTAssertFalse(model.containsFile(atPath: dir.appendingPathComponent("other.conf").path))
+    }
+
+    // MARK: - Legacy filename migration
+
+    func testRenameOfferForLegacyPrimary() throws {
+        let dir = try makeTempConfigDir()
+        try write("font-size = 2\n", to: dir, "config")
+        let offer = ConfigMigration.renameOffer(forPrimaryAt: dir.appendingPathComponent("config").path)
+        XCTAssertEqual(offer?.from, dir.appendingPathComponent("config").path)
+        XCTAssertEqual(offer?.to, dir.appendingPathComponent("config.ghostty").path)
+    }
+
+    func testNoRenameOfferWhenPrimaryAlreadyPreferred() throws {
+        let dir = try makeTempConfigDir()
+        try write("font-size = 1\n", to: dir, "config.ghostty")
+        XCTAssertNil(ConfigMigration.renameOffer(forPrimaryAt: dir.appendingPathComponent("config.ghostty").path))
+    }
+
+    func testNoRenameOfferWhenPreferredSiblingExists() throws {
+        let dir = try makeTempConfigDir()
+        try write("font-size = 2\n", to: dir, "config")
+        try write("font-size = 1\n", to: dir, "config.ghostty")
+        // Renaming would clobber the sibling — and the sibling is the real primary.
+        XCTAssertNil(ConfigMigration.renameOffer(forPrimaryAt: dir.appendingPathComponent("config").path))
+    }
+
+    func testNoRenameOfferWhenPrimaryMissing() throws {
+        let dir = try makeTempConfigDir()
+        XCTAssertNil(ConfigMigration.renameOffer(forPrimaryAt: dir.appendingPathComponent("config").path))
+    }
+
+    func testRenameLegacyPrimaryMovesFile() throws {
+        let dir = try makeTempConfigDir()
+        try write("font-size = 2\n", to: dir, "config")
+        let newPath = try ConfigMigration.renameLegacyPrimary(at: dir.appendingPathComponent("config").path)
+        XCTAssertEqual(newPath, dir.appendingPathComponent("config.ghostty").path)
+        XCTAssertFalse(FileManager.default.fileExists(atPath: dir.appendingPathComponent("config").path))
+        XCTAssertEqual(try String(contentsOf: dir.appendingPathComponent("config.ghostty"), encoding: .utf8),
+                       "font-size = 2\n")
+    }
+
+    func testRenameLegacyPrimaryRevalidatesAtExecution() throws {
+        let dir = try makeTempConfigDir()
+        // Nothing on disk: the stale-offer path must throw, not create anything.
+        XCTAssertThrowsError(try ConfigMigration.renameLegacyPrimary(at: dir.appendingPathComponent("config").path)) {
+            XCTAssertEqual($0 as? ConfigMigration.MigrationError, .nothingToRename)
+        }
     }
 
     // MARK: - Helpers

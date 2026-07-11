@@ -12,10 +12,10 @@ through the docs for the exact option name, or you save one typo and the termina
 this app puts a small UI on top of that file: browse every option with its official docs, search by
 what you actually want, edit with validate-before-write, and preview a theme before you commit to it.
 
-It doesn't reimplement anything. It reads your real config at `~/.config/ghostty/config` and drives
-your local `ghostty` CLI — `+show-config`, `+list-themes`, `+validate-config`, and the rest — so what
-you see always matches the exact Ghostty you have installed. No bundled options list quietly drifting
-out of date.
+It doesn't reimplement anything. It reads your real config at `~/.config/ghostty/config.ghostty`
+(or the pre-1.3 `config`) and drives your local `ghostty` CLI — `+show-config`, `+list-themes`,
+`+validate-config`, and the rest — so what you see always matches the exact Ghostty you have
+installed. No bundled options list quietly drifting out of date.
 
 ## Features
 
@@ -30,6 +30,10 @@ out of date.
   press-the-keys capture.
 - **Live reload** — optionally, it asks Ghostty to reload the moment you save, so your open terminals
   update right away.
+- **Open from Ghostty (⌘,)** — Ghostty opens its config with whatever app is the default editor for
+  `.ghostty` files, and this app claims that role. Set it up once in **Status** (⌘,) — rename a
+  pre-1.3 `config` to `config.ghostty` if needed, then click **Use This App** — and Ghostty's
+  Open Config lands here instead of TextEdit.
 - **Native, and honest about it** — a real SwiftUI Mac app that only ever edits the file you'd edit
   by hand. Nothing more.
 
