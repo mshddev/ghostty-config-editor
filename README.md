@@ -45,8 +45,18 @@ Grab the latest `Ghostty Config Editor.app` from the [Releases](https://github.c
 page, unzip it, and drag it into `/Applications`.
 
 > [!NOTE]
-> **First launch:** the app is signed ad-hoc, so Gatekeeper may call it an "unidentified developer."
-> Right-click the app → **Open** → **Open**, just once — macOS remembers the choice after that.
+> **First launch — the "Apple could not verify…" block.** The app is ad-hoc signed and not
+> notarized, so on first open macOS Gatekeeper blocks it once. Clear it either way (just once —
+> macOS remembers afterward):
+>
+> - **System Settings:** double-click the app, click **Done** on the warning, then open
+>   **System Settings → Privacy & Security**, scroll to **Security**, and click **Open Anyway**
+>   next to the app's name. On macOS 15 (Sequoia) / 26 (Tahoe) this is the reliable route —
+>   the older right-click → **Open** trick no longer works dependably.
+> - **Terminal (fastest):** remove the download quarantine, then open normally:
+>   ```bash
+>   xattr -dr com.apple.quarantine "/Applications/GhosttyConfigEditor.app"
+>   ```
 
 ### Build from source
 
